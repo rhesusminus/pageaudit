@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { stripVTControlCharacters } from 'node:util';
 import assert from 'node:assert/strict';
 import { parse } from '../src/parse.js';
 import { checkImages } from '../src/checks/images.js';
@@ -82,7 +83,7 @@ test('report: summary counts by severity', () => {
     meta: [{ severity: 'warning' }],
   });
   assert.deepEqual(report.summary, { errors: 1, warnings: 2 });
-  assert.match(formatSummary(report), /1 error, 2 warnings/);
+  assert.match(stripVTControlCharacters(formatSummary(report)), /1 error, 2 warnings/);
 });
 
 const fixture = (name) => parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
