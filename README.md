@@ -51,6 +51,29 @@ Rules follow what Google and the W3C actually say, not folklore, so severities a
 
 The length limits (60, 160, 70) are heuristics, not official rules: Google states there is no limit and truncates by pixel width. Empty alt is only an error when it leaves a link or button without any accessible name.
 
+## Where the rules come from
+
+The rules were researched in September 2026 (with the same AI agent that wrote the code) from Google Search Central, web.dev and the W3C Web Accessibility Initiative. The URLs live in `src/sources.js` and every issue links to its source in the JSON output.
+
+| Source | What it says | Rules based on it |
+| ------ | ------------ | ----------------- |
+| [Google: title links](https://developers.google.com/search/docs/appearance/title-link) | Every page should have a `<title>`. "No limit" on length, but it is truncated "typically to fit the device width". No numeric guidance. | `missing-title`, `empty-title`, `long-title` |
+| [Google: snippets and meta descriptions](https://developers.google.com/search/docs/appearance/snippet) | No length limit, truncated to fit the device width. The meta description is only "sometimes" used, snippets mostly come from page content. Descriptions should be unique and specific, and too-short or generic ones are given as bad examples. | `missing-description`, `long-description`, `short-description` |
+| [Google: canonical URLs](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls) | Use absolute URLs, add a self-referencing canonical, only `<head>` is accepted, do not send conflicting signals, fragments are generally not supported. | `missing-canonical`, `multiple-canonicals`, `relative-canonical`, `canonical-fragment`, `empty-canonical` |
+| [Google: image SEO](https://developers.google.com/search/docs/appearance/google-images) | Google finds images in the `src` of `<img>` (not CSS backgrounds). Use short descriptive file names, not `IMG00023.JPG` or `image1.jpg`. Avoid keyword-stuffed alt text. | `missing-src`, `generic-filename`, `alt-is-filename` |
+| [Google: SEO starter guide](https://developers.google.com/search/docs/fundamentals/seo-starter-guide) | Heading order and count do not matter for Search. Good titles and descriptions are unique and concise. Good alt text is "quite important". | `missing-h1`, `multiple-h1` (as best practice only) |
+| [web.dev: optimize CLS](https://web.dev/articles/optimize-cls) | Set `width` and `height` on images so the browser reserves space. Good CLS is 0.1 or less. | `missing-dimensions` |
+| [W3C WAI: decorative images](https://www.w3.org/WAI/tutorials/images/decorative/) | Purely decorative images should have `alt=""`. Omitting `alt` makes some screen readers read out the file name. Only the author can tell if an image is decorative. | `missing-alt`, `empty-alt`, `empty-alt-in-link` |
+| [W3C WAI: headings](https://www.w3.org/WAI/tutorials/page-structure/headings/) | Nest headings by rank, and avoid skipping ranks (an `<h2>` directly followed by an `<h4>`). | `skipped-heading-level`, `empty-heading` |
+
+Judgment calls that are not straight from those pages:
+
+- **Severity of `missing-h1` and `multiple-h1`:** Google's John Mueller has said several times that pages rank fine with no h1 or with several, for example "Your site is going to rank perfectly fine with no H1 tags or with five". These quotes were found through search-result summaries of secondary blogs, not a Google page, so they are the weakest-sourced part. The W3C headings page does not address a single h1.
+- **Length limits (60 and 160 characters, minimum 70):** common SEO heuristics, not Google rules. Real truncation depends on pixel width (roughly 580 to 600px for titles on desktop), so characters are only a proxy.
+- **`empty-alt-in-link` as an error:** derived from the W3C decorative-image guidance. An image that is the only content of a link needs an accessible name, so an empty alt there leaves the link unnamed.
+- **`missing-src` and `generic-filename`:** based on Google's statement that images are found via `src` and its file name advice, but the exact patterns (`IMG`, `DSC`, `image1` and so on) are my own list.
+- **Summaries, not full reads:** the pages were read through an AI summarizer, so exact wording should be checked against the linked page before quoting it.
+
 ## Architecture
 
 ```
