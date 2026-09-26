@@ -105,6 +105,26 @@ test('meta: canonical must be in head, absolute, unique and without fragment', (
   );
 });
 
+test('meta: canonical is found when rel has several tokens or odd case', () => {
+  const head = (link) => `<html><head><title>T</title><meta name="description" content="${'d'.repeat(80)}">${link}</head></html>`;
+  assert.deepEqual(checkMeta(parse(head('<link rel="canonical nofollow" href="https://a.com/x">'))), []);
+  assert.deepEqual(checkMeta(parse(head('<link rel="  Canonical " href="https://a.com/x">'))), []);
+});
+
+test('meta: an empty description does not hide a later real one', () => {
+  const d = 'd'.repeat(80);
+  const html = `<html><head><title>T</title><meta name="description" content=""><meta name="description" content="${d}"><link rel="canonical" href="https://a.com/"></head></html>`;
+  assert.deepEqual(checkMeta(parse(html)), []);
+});
+
+test('meta: several non-empty descriptions are flagged', () => {
+  const d = 'd'.repeat(80);
+  const html = `<html><head><title>T</title><meta name="description" content="${d}"><meta name="description" content="${d}x"><link rel="canonical" href="https://a.com/"></head></html>`;
+  const issues = checkMeta(parse(html));
+  assert.deepEqual(types(issues), ['multiple-descriptions']);
+  assert.equal(issues[0].severity, 'warning');
+});
+
 test('meta: canonical in body is reported as missing from head', () => {
   const html = `<html><head><title>T</title><meta name="description" content="${'d'.repeat(80)}"></head><body><link rel="canonical" href="https://a.com/x"></body></html>`;
   const issues = checkMeta(parse(html));
@@ -140,6 +160,7 @@ test('headings: empty heading is flagged unless it has an image with alt or aria
   assert.deepEqual(types(checkHeadings(parse('<h1> </h1>'))), ['empty-heading']);
   assert.deepEqual(types(checkHeadings(parse('<h1><img src="a.png" alt="Logo"></h1>'))), []);
   assert.deepEqual(types(checkHeadings(parse('<h1 aria-label="Title"></h1>'))), []);
+  assert.deepEqual(types(checkHeadings(parse('<h1 aria-labelledby="t"></h1><p id="t">Title</p>'))), []);
 });
 
 test('headings: skipped level is a warning', () => {

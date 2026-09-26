@@ -27,7 +27,20 @@ export function checkMeta($) {
     });
   }
 
-  const description = $('meta[name="description" i]').first().attr('content')?.trim();
+  const descriptions = $('meta[name="description" i]')
+    .toArray()
+    .map((el) => $(el).attr('content')?.trim())
+    .filter(Boolean);
+  const description = descriptions[0];
+  if (descriptions.length > 1) {
+    add({
+      type: 'multiple-descriptions',
+      severity: 'warning',
+      source: SOURCES.snippet,
+      message: `${descriptions.length} meta descriptions found (only one is used)`,
+      context: descriptions.map((d) => `<meta name="description" content="${d}">`).join(' '),
+    });
+  }
   if (!description) {
     add({
       type: 'missing-description',
@@ -63,8 +76,8 @@ function checkCanonical($) {
   const add = (issue) =>
     issues.push({ category: 'seo', severity: 'warning', source: SOURCES.canonical, ...issue });
 
-  const inHead = $('head link[rel="canonical" i]').toArray();
-  const anywhere = $('link[rel="canonical" i]').toArray();
+  const inHead = $('head link[rel~="canonical" i]').toArray();
+  const anywhere = $('link[rel~="canonical" i]').toArray();
   const outsideHead = anywhere.filter((el) => !inHead.includes(el));
 
   if (inHead.length === 0) {

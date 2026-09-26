@@ -2,7 +2,7 @@ import { SOURCES } from '../sources.js';
 
 function hasAccessibleText($, el) {
   const heading = $(el);
-  if (heading.text().trim() || heading.attr('aria-label')) return true;
+  if (heading.text().trim() || heading.attr('aria-label') || heading.attr('aria-labelledby')) return true;
   return heading.find('img[alt]').toArray().some((img) => $(img).attr('alt').trim() !== '');
 }
 

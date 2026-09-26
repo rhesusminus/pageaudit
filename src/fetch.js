@@ -1,5 +1,27 @@
 const TIMEOUT_MS = 15000;
 
+function fetchError(url, err) {
+  const reason = err.name === 'TimeoutError' ? `timed out after ${TIMEOUT_MS / 1000}s` : (err.cause?.code ?? err.message);
+  return new Error(`Could not fetch ${url}: ${reason}`);
+}
+
+const charsetFromHeader = (contentType) => /charset\s*=\s*["']?([^\s;"']+)/i.exec(contentType)?.[1];
+
+// <meta charset> and <meta http-equiv content="...charset=..."> are only honored near the top of the document.
+function charsetFromMeta(bytes) {
+  const head = new TextDecoder('latin1').decode(bytes.subarray(0, 1024));
+  return /<meta[^>]+charset\s*=\s*["']?([^\s"';>/]+)/i.exec(head)?.[1];
+}
+
+function decode(bytes, contentType) {
+  const label = charsetFromHeader(contentType) ?? charsetFromMeta(bytes) ?? 'utf-8';
+  try {
+    return new TextDecoder(label).decode(bytes);
+  } catch {
+    return new TextDecoder('utf-8').decode(bytes);
+  }
+}
+
 export async function fetchHtml(url) {
   let parsed;
   try {
@@ -19,8 +41,7 @@ export async function fetchHtml(url) {
       headers: { accept: 'text/html,application/xhtml+xml' },
     });
   } catch (err) {
-    const reason = err.name === 'TimeoutError' ? `timed out after ${TIMEOUT_MS / 1000}s` : (err.cause?.code ?? err.message);
-    throw new Error(`Could not fetch ${url}: ${reason}`);
+    throw fetchError(url, err);
   }
 
   if (!res.ok) {
@@ -30,5 +51,12 @@ export async function fetchHtml(url) {
   if (!/html/i.test(type)) {
     throw new Error(`Not an HTML page (content-type: ${type || 'none'})`);
   }
-  return res.text();
+
+  let bytes;
+  try {
+    bytes = new Uint8Array(await res.arrayBuffer());
+  } catch (err) {
+    throw fetchError(url, err);
+  }
+  return decode(bytes, type);
 }

@@ -42,12 +42,13 @@ Rules follow what Google and the W3C actually say, not folklore, so severities a
 | Meta | `long-title`: over 60 characters | warning | seo |
 | Meta | `missing-description` (Google may build the snippet from the page instead) | warning | seo |
 | Meta | `long-description` (over 160) and `short-description` (under 70) | info | seo |
+| Meta | `multiple-descriptions` (only one is used, the first non-empty one is checked) | warning | seo |
 | Meta | `missing-canonical` (also when the link is outside `<head>`, where Google ignores it) | warning | seo |
 | Meta | `multiple-canonicals`, `relative-canonical`, `canonical-fragment`, `empty-canonical` | warning | seo |
 | Headings | `missing-h1` (Google does not require one) | warning | best-practice |
 | Headings | `multiple-h1` (Google does not mind) | info | best-practice |
 | Headings | `skipped-heading-level`: e.g. `<h3>` with no preceding `<h2>` | warning | accessibility |
-| Headings | `empty-heading` (no text, aria-label or image alt) | warning | accessibility |
+| Headings | `empty-heading` (no text, `aria-label`, `aria-labelledby` or image alt) | warning | accessibility |
 
 The length limits (60, 160, 70) are heuristics, not official rules: Google states there is no limit and truncates by pixel width. Empty alt is only an error when it leaves a link or button without any accessible name.
 
