@@ -1,0 +1,21 @@
+{
+  "name": "pageaudit",
+  "version": "0.1.0",
+  "description": "Single-page SEO/HTML checker",
+  "type": "module",
+  "bin": {
+    "pageaudit": "bin/pageaudit.js"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "chalk": "^6.0.0",
+    "cheerio": "^1.2.0",
+    "cli-table3": "^0.6.5",
+    "ora": "^9.4.1"
+  }
+}
