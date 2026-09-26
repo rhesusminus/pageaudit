@@ -20,7 +20,7 @@ test('cli: good.html has no issues and exits 0', async (t) => {
   const { code, stdout } = await runCli(t, [`${FIXTURE_HOST}/good.html`, '--json']);
   const report = JSON.parse(stdout);
   assert.equal(code, 0);
-  assert.deepEqual(report.summary, { errors: 0, warnings: 0 });
+  assert.deepEqual(report.summary, { errors: 0, warnings: 0, infos: 0 });
   assert.deepEqual(issueTypes(report), []);
 });
 
@@ -28,7 +28,7 @@ test('cli: bad-overlong.html reports its issues and exits 1', async (t) => {
   const { code, stdout } = await runCli(t, [`${FIXTURE_HOST}/bad-overlong.html`, '--json']);
   const report = JSON.parse(stdout);
   assert.equal(code, 1);
-  assert.deepEqual(report.summary, { errors: 1, warnings: 7 });
+  assert.deepEqual(report.summary, { errors: 1, warnings: 4, infos: 3 });
   assert.equal(report.categories.images.length, 3);
   assert.equal(report.categories.meta.length, 3);
   assert.equal(report.categories.headings.length, 2);
@@ -38,7 +38,7 @@ test('cli: bad-missing.html reports missing elements and exits 1', async (t) => 
   const { code, stdout } = await runCli(t, [`${FIXTURE_HOST}/bad-missing.html`, '--json']);
   const report = JSON.parse(stdout);
   assert.equal(code, 1);
-  assert.deepEqual(report.summary, { errors: 3, warnings: 1 });
+  assert.deepEqual(report.summary, { errors: 1, warnings: 3, infos: 0 });
   assert.deepEqual(issueTypes(report), ['missing-canonical', 'missing-description', 'missing-h1', 'missing-title']);
 });
 

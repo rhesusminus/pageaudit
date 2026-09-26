@@ -2,20 +2,19 @@ import chalk from 'chalk';
 import Table from 'cli-table3';
 
 const CATEGORY_LABELS = { images: 'Images', meta: 'Meta', headings: 'Headings' };
+const COLORS = { error: chalk.red, warning: chalk.yellow, info: chalk.cyan };
 
 export function buildReport(url, categories) {
-  let errors = 0;
-  let warnings = 0;
+  const summary = { errors: 0, warnings: 0, infos: 0 };
   for (const issues of Object.values(categories)) {
     for (const issue of issues) {
-      if (issue.severity === 'error') errors++;
-      else warnings++;
+      if (issue.severity === 'error') summary.errors++;
+      else if (issue.severity === 'warning') summary.warnings++;
+      else summary.infos++;
     }
   }
-  return { url, categories, summary: { errors, warnings } };
+  return { url, categories, summary };
 }
-
-const paint = (severity) => (severity === 'error' ? chalk.red : chalk.yellow);
 
 export function formatTable(report) {
   const out = [];
@@ -26,15 +25,16 @@ export function formatTable(report) {
       continue;
     }
     const table = new Table({
-      head: ['Severity', 'Issue', 'Context'],
-      colWidths: [10, 46, 60],
+      head: ['Severity', 'Category', 'Issue', 'Context'],
+      colWidths: [10, 15, 38, 46],
       wordWrap: true,
       wrapOnWordBoundary: false,
       style: { head: [] },
     });
     for (const issue of issues) {
       table.push([
-        paint(issue.severity)(issue.severity),
+        COLORS[issue.severity](issue.severity),
+        chalk.dim(issue.category),
         { content: issue.message, wrapOnWordBoundary: true },
         chalk.dim(issue.context),
       ]);
@@ -45,8 +45,11 @@ export function formatTable(report) {
 }
 
 export function formatSummary({ summary }) {
-  const { errors, warnings } = summary;
-  const e = `${errors} error${errors === 1 ? '' : 's'}`;
-  const w = `${warnings} warning${warnings === 1 ? '' : 's'}`;
-  return `\n${errors ? chalk.red(e) : e}, ${warnings ? chalk.yellow(w) : w}`;
+  const { errors, warnings, infos } = summary;
+  const parts = [
+    [`${errors} error${errors === 1 ? '' : 's'}`, errors, chalk.red],
+    [`${warnings} warning${warnings === 1 ? '' : 's'}`, warnings, chalk.yellow],
+    [`${infos} info${infos === 1 ? '' : 's'}`, infos, chalk.cyan],
+  ];
+  return `\n${parts.map(([text, count, color]) => (count ? color(text) : text)).join(', ')}`;
 }

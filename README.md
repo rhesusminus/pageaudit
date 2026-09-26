@@ -21,27 +21,35 @@ npm test
 
 | Code | Meaning |
 | ---- | ------- |
-| 0 | No errors (warnings are allowed) |
+| 0 | No errors (warnings and infos are allowed) |
 | 1 | At least one error found |
 | 2 | Usage error or the page could not be fetched |
 
 ## Checks
 
-| Category | Rule | Severity |
-| -------- | ---- | -------- |
-| Images | `missing-alt`: no `alt` attribute | error |
-| Images | `empty-alt`: `alt=""` (valid for decorative images, flagged for review) | warning |
-| Images | `missing-dimensions`: no `width` or `height` (layout shift) | warning |
-| Meta | `missing-title` | error |
-| Meta | `long-title`: over 60 characters | warning |
-| Meta | `missing-description` | error |
-| Meta | `long-description`: over 160 characters | warning |
-| Meta | `missing-canonical` | warning |
-| Headings | `missing-h1` | error |
-| Headings | `multiple-h1` | warning |
-| Headings | `skipped-heading-level`: e.g. `<h3>` with no preceding `<h2>` | warning |
+Rules follow what Google and the W3C actually say, not folklore, so severities are deliberately soft where Google does not require something. Each issue carries a `severity` (`error`, `warning` or `info`), a `category` (`seo`, `accessibility`, `performance` or `best-practice`) and a `source` URL to the documentation it is based on (see `src/sources.js`). Only errors affect the exit code.
 
-The 60 and 160 character limits are SERP truncation heuristics, not official Google rules.
+| Group | Rule | Severity | Category |
+| ----- | ---- | -------- | -------- |
+| Images | `missing-alt`: no `alt` attribute | error | accessibility |
+| Images | `empty-alt-in-link`: empty alt on an image that is the only content of a link or button | error | accessibility |
+| Images | `empty-alt`: `alt=""` (correct for decorative images, flagged for review) | info | accessibility |
+| Images | `alt-is-filename`: alt text repeats the file name | warning | accessibility |
+| Images | `missing-src`: no `src` or `srcset` | warning | seo |
+| Images | `generic-filename`: e.g. `IMG00023.JPG`, `image1.jpg` | info | seo |
+| Images | `missing-dimensions`: no `width` or `height` (layout shift) | warning | performance |
+| Meta | `missing-title`, `empty-title` | error | seo |
+| Meta | `long-title`: over 60 characters | warning | seo |
+| Meta | `missing-description` (Google may build the snippet from the page instead) | warning | seo |
+| Meta | `long-description` (over 160) and `short-description` (under 70) | info | seo |
+| Meta | `missing-canonical` (also when the link is outside `<head>`, where Google ignores it) | warning | seo |
+| Meta | `multiple-canonicals`, `relative-canonical`, `canonical-fragment`, `empty-canonical` | warning | seo |
+| Headings | `missing-h1` (Google does not require one) | warning | best-practice |
+| Headings | `multiple-h1` (Google does not mind) | info | best-practice |
+| Headings | `skipped-heading-level`: e.g. `<h3>` with no preceding `<h2>` | warning | accessibility |
+| Headings | `empty-heading` (no text, aria-label or image alt) | warning | accessibility |
+
+The length limits (60, 160, 70) are heuristics, not official rules: Google states there is no limit and truncates by pixel width. Empty alt is only an error when it leaves a link or button without any accessible name.
 
 ## Architecture
 
@@ -55,6 +63,7 @@ src/
     images.js           one module per category, each returns an array of issues
     meta.js
     headings.js
+  sources.js            documentation URLs referenced by each issue's `source` field
   report.js             buildReport() aggregates issues, formatTable()/formatSummary() render them
 test/
   checks.test.js        unit tests for each check and the report summary
@@ -71,20 +80,22 @@ Every check returns issues in the same shape, so `report.js` has no per-check sp
 ```js
 {
   type: 'missing-alt',            // machine-readable identifier
-  severity: 'error',              // 'error' | 'warning'
+  severity: 'error',              // 'error' | 'warning' | 'info'
+  category: 'accessibility',      // 'seo' | 'accessibility' | 'performance' | 'best-practice'
+  source: 'https://www.w3.org/WAI/tutorials/images/decorative/',
   message: 'Image missing alt attribute',
   context: '<img src="/a.jpg">'   // snippet for locating the problem
 }
 ```
 
-The JSON report is `{ url, categories: { images, meta, headings }, summary: { errors, warnings } }`.
+The JSON report is `{ url, categories: { images, meta, headings }, summary: { errors, warnings, infos } }`.
 
 ## Testing
 
 Tests use the built-in `node:test` runner with no extra dependencies.
 
 - Unit tests cover each rule firing, not firing and the length boundaries.
-- Three HTML fixtures cover the positive and negative cases: `good.html` has no issues, `bad-overlong.html` triggers the overlong, duplicate and skipped-level rules plus all image rules, and `bad-missing.html` triggers the missing title, description, canonical and h1 rules. Two bad files are needed because a title cannot be both missing and too long.
+- HTML fixtures cover the positive and negative cases: `good.html` has no issues, and the `bad-*.html` files (`overlong`, `missing`, `canonical`, `images`, `empty`) trigger the remaining rules. Several bad files are needed because some rules are mutually exclusive, for example a title cannot be both missing and too long.
 - CLI tests call `run()` with `globalThis.fetch` mocked (`test/helpers/fixture-fetch.js`). Requests to `https://fixtures.test/<name>` are served from `test/fixtures/<name>`, and `/timeout`, `/not-html` and unknown names simulate failures. This exercises the real fetch, parse, check, report and exit-code path without network access.
 
 ## Limitations and out of scope
