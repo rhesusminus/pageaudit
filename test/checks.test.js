@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parse } from '../src/parse.js';
@@ -82,4 +83,36 @@ test('report: summary counts by severity', () => {
   });
   assert.deepEqual(report.summary, { errors: 1, warnings: 2 });
   assert.match(formatSummary(report), /1 error, 2 warnings/);
+});
+
+const fixture = (name) => parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
+const allTypes = ($) => [...checkImages($), ...checkMeta($), ...checkHeadings($)].map((i) => i.type).sort();
+
+test('fixture good.html: no issues', () => {
+  assert.deepEqual(allTypes(fixture('good.html')), []);
+});
+
+test('fixture bad-overlong.html: overlong, duplicate and skipped issues', () => {
+  assert.deepEqual(
+    allTypes(fixture('bad-overlong.html')),
+    [
+      'empty-alt',
+      'long-description',
+      'long-title',
+      'missing-alt',
+      'missing-canonical',
+      'missing-dimensions',
+      'multiple-h1',
+      'skipped-heading-level',
+    ],
+  );
+});
+
+test('fixture bad-missing.html: missing title, description, canonical and h1', () => {
+  assert.deepEqual(allTypes(fixture('bad-missing.html')), [
+    'missing-canonical',
+    'missing-description',
+    'missing-h1',
+    'missing-title',
+  ]);
 });
