@@ -1,12 +1,7 @@
 import { SOURCES } from '../sources.js';
+import { snippet } from './snippet.js';
 
-const MAX_CONTEXT = 120;
 const GENERIC_NAME = /^(img|image|pic|picture|photo|dsc|dscn|untitled|screenshot)[-_ ]?\d*$/i;
-
-function snippet($, el) {
-  const html = $.html(el);
-  return html.length > MAX_CONTEXT ? `${html.slice(0, MAX_CONTEXT - 3)}...` : html;
-}
 
 function fileName(src) {
   if (!src || src.startsWith('data:')) return '';

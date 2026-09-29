@@ -1,5 +1,6 @@
 import { SOURCES } from '../sources.js';
 import { collapseWhitespace } from '../text.js';
+import { snippet, truncate } from './snippet.js';
 
 function hasAccessibleText($, el) {
   const heading = $(el);
@@ -29,7 +30,7 @@ export function checkHeadings($) {
       category: 'best-practice',
       source: SOURCES.starterGuide,
       message: `${h1s.length} <h1> elements found (Google does not mind, one is the common convention)`,
-      context: h1s.map((el) => `<h1>${collapseWhitespace($(el).text())}</h1>`).join(' '),
+      context: truncate(h1s.map((el) => `<h1>${collapseWhitespace($(el).text())}</h1>`).join(' ')),
     });
   }
 
@@ -43,7 +44,7 @@ export function checkHeadings($) {
         category: 'accessibility',
         source: SOURCES.headings,
         message: `Heading level skipped: <h${level}> after ${previous ? `<h${previous}>` : 'no heading'}`,
-        context: `<h${level}>${collapseWhitespace($(el).text())}</h${level}>`,
+        context: truncate(`<h${level}>${collapseWhitespace($(el).text())}</h${level}>`),
       });
     }
     if (!hasAccessibleText($, el)) {
@@ -53,7 +54,7 @@ export function checkHeadings($) {
         category: 'accessibility',
         source: SOURCES.headings,
         message: `Empty <h${level}> heading`,
-        context: $.html(el),
+        context: snippet($, el),
       });
     }
     previous = level;

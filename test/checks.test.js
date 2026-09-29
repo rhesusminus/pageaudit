@@ -319,3 +319,29 @@ test('headings: contexts collapse whitespace', () => {
   assert.equal(issues.find((i) => i.type === 'multiple-h1').context, '<h1>Line one of heading</h1> <h1>Two h1</h1>');
   assert.equal(issues.find((i) => i.type === 'skipped-heading-level').context, '<h4>Skipped level</h4>');
 });
+
+test('headings: empty heading context is truncated for large markup', () => {
+  const paths = '<path d="M0 0L10 10Z"/>'.repeat(200);
+  const issues = checkHeadings(parse(`<h1>Title</h1><h2><svg>${paths}</svg></h2>`));
+  const empty = issues.find((i) => i.type === 'empty-heading');
+  assert.ok(empty.context.length <= 120);
+  assert.ok(empty.context.endsWith('...'));
+});
+
+test('meta: long title, description and canonical contexts are truncated', () => {
+  const long = 'x'.repeat(500);
+  const html = `<html><head><title>${long}</title><meta name="description" content="${long}"><link rel="canonical" href="/${long}"></head></html>`;
+  const issues = checkMeta(parse(html));
+  assert.ok(issues.length > 0);
+  for (const issue of issues) assert.ok(issue.context.length <= 120, `${issue.type}: ${issue.context.length}`);
+});
+
+test('headings: multiple-h1 and skipped-level contexts are truncated for long text', () => {
+  const long = 'x'.repeat(300);
+  const issues = checkHeadings(parse(`<h1>${long}</h1><h1>${long}</h1><h4>${long}</h4>`));
+  for (const type of ['multiple-h1', 'skipped-heading-level']) {
+    const { context } = issues.find((i) => i.type === type);
+    assert.equal(context.length, 120);
+    assert.ok(context.endsWith('...'));
+  }
+});

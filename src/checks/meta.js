@@ -1,5 +1,6 @@
 import { SOURCES } from '../sources.js';
 import { collapseWhitespace } from '../text.js';
+import { truncate } from './snippet.js';
 
 // Heuristics: Google gives no numeric limits, truncation depends on pixel width.
 const TITLE_MAX = 60;
@@ -10,7 +11,7 @@ const ABSOLUTE_URL = /^[a-z][a-z0-9+.-]*:\/\//i;
 
 export function checkMeta($) {
   const issues = [];
-  const add = (issue) => issues.push({ category: 'seo', ...issue });
+  const add = (issue) => issues.push({ category: 'seo', ...issue, context: truncate(issue.context) });
 
   const titleEl = $('title').filter((_, el) => !$(el).closest('svg').length).first();
   const title = collapseWhitespace(titleEl.text());
@@ -74,7 +75,13 @@ export function checkMeta($) {
 function checkCanonical($) {
   const issues = [];
   const add = (issue) =>
-    issues.push({ category: 'seo', severity: 'warning', source: SOURCES.canonical, ...issue });
+    issues.push({
+      category: 'seo',
+      severity: 'warning',
+      source: SOURCES.canonical,
+      ...issue,
+      context: truncate(issue.context),
+    });
 
   const inHead = $('head link[rel~="canonical" i]').toArray();
   const anywhere = $('link[rel~="canonical" i]').toArray();
