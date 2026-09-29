@@ -5,7 +5,8 @@ export const FIXTURE_HOST = 'https://fixtures.test';
 
 // Replaces globalThis.fetch for the duration of a test. Requests to
 // https://fixtures.test/<name> are answered from test/fixtures/<name>.
-// Special paths simulate failures: /not-found, /not-html, /timeout.
+// Special paths simulate failures: /not-html (JSON content type) and /timeout.
+// Unknown names answer 404, and other origins fail like a DNS error (ENOTFOUND).
 export function mockFixtureFetch(t) {
   return t.mock.method(globalThis, 'fetch', async (input) => {
     const url = new URL(input);

@@ -15,7 +15,7 @@ node bin/pageaudit.js <url> --json   # raw JSON report
 npm test
 ```
 
-`--json` is also the default whenever stdout is not a TTY (for example when piped), and the spinner is disabled in that case. The `pageaudit` bin is declared in `package.json`, so `npm link` makes it available as `pageaudit <url>`.
+`--json` is also the default whenever stdout is not a TTY (for example when piped), and the spinner is disabled in that case. The spinner is also skipped on TTYs that report 0 columns. The table width follows the terminal (80 to 114 columns). The `pageaudit` bin is declared in `package.json`, so `npm link` makes it available as `pageaudit <url>`.
 
 ### Exit codes
 
@@ -38,19 +38,25 @@ Rules follow what Google and the W3C actually say, not folklore, so severities a
 | Images | `missing-src`: no `src` or `srcset` | warning | seo |
 | Images | `generic-filename`: e.g. `IMG00023.JPG`, `image1.jpg` | info | seo |
 | Images | `missing-dimensions`: no `width` or `height` (layout shift) | warning | performance |
-| Meta | `missing-title`, `empty-title` | error | seo |
+| Meta | `missing-title`, `empty-title` (the title is also found outside `<head>`, but not inside an `<svg>`) | error | seo |
 | Meta | `long-title`: over 60 characters | warning | seo |
 | Meta | `missing-description` (Google may build the snippet from the page instead) | warning | seo |
 | Meta | `long-description` (over 160) and `short-description` (under 70) | info | seo |
-| Meta | `multiple-descriptions` (only one is used, the first non-empty one is checked) | warning | seo |
+| Meta | `multiple-descriptions` (only one is used, the first non-empty one is checked; empty ones count toward the total) | warning | seo |
 | Meta | `missing-canonical` (also when the link is outside `<head>`, where Google ignores it) | warning | seo |
-| Meta | `multiple-canonicals`, `relative-canonical`, `canonical-fragment`, `empty-canonical` | warning | seo |
+| Meta | `multiple-canonicals`: several canonicals with different hrefs (conflicting signals) | warning | seo |
+| Meta | `multiple-canonicals`: several canonicals with identical hrefs (redundant) | info | seo |
+| Meta | `relative-canonical`, `canonical-fragment`, `empty-canonical` | warning | seo |
 | Headings | `missing-h1` (Google does not require one) | warning | best-practice |
 | Headings | `multiple-h1` (Google does not mind) | info | best-practice |
 | Headings | `skipped-heading-level`: e.g. `<h3>` with no preceding `<h2>` | warning | accessibility |
 | Headings | `empty-heading` (no text, `aria-label`, `aria-labelledby` or image alt) | warning | accessibility |
 
 The length limits (60, 160, 70) are heuristics, not official rules: Google states there is no limit and truncates by pixel width. Empty alt is only an error when it leaves a link or button without any accessible name.
+
+Before checking, `<template>` elements are removed because their content is inert. Whitespace runs in the title, description and heading text are collapsed before measuring, like browsers do, and issue contexts are capped at 120 characters.
+
+`fetchHtml` decodes the body the way browsers do: a BOM wins, then the `Content-Type` charset, then a `<meta charset>` or `http-equiv` prescan of the first 1024 bytes, then UTF-8. Fetch errors report the underlying cause (error code or message), for example `Could not fetch <url>: ENOTFOUND`.
 
 ## Where the rules come from
 
@@ -81,18 +87,22 @@ Judgment calls that are not straight from those pages:
 bin/pageaudit.js        entry point, calls run() and sets the exit code
 src/
   cli.js                arg parsing, spinner, wires the pipeline together
-  fetch.js              fetchHtml(url): URL validation, timeout, status and content-type checks
-  parse.js              parse(html): Cheerio DOM
+  fetch.js              fetchHtml(url): URL validation, timeout, status and content-type checks, encoding sniffing
+  parse.js              parse(html): Cheerio DOM, with inert <template> content removed
+  text.js               collapseWhitespace() shared by the checks
   checks/
     images.js           one module per category, each returns an array of issues
     meta.js
     headings.js
+    snippet.js          truncate()/snippet(): caps issue contexts at 120 characters
   sources.js            documentation URLs referenced by each issue's `source` field
   report.js             buildReport() aggregates issues, formatTable()/formatSummary() render them
 test/
-  checks.test.js        unit tests for each check and the report summary
-  cli.test.js           end-to-end tests of run() against the fixtures
-  fixtures/             good.html, bad-overlong.html, bad-missing.html
+  checks.test.js        unit tests for each check
+  fetch.test.js         unit tests for fetchHtml (encoding sniffing, errors)
+  report.test.js        unit tests for the summary and the table/summary rendering
+  cli.test.js           tests of run() with --json against the fixtures
+  fixtures/             good.html and bad-canonical, bad-empty, bad-images, bad-missing, bad-overlong
   helpers/fixture-fetch.js   mocked fetch that serves the fixtures
 docs/seo-harness-plan.md     the original plan this was built from
 ```
@@ -112,15 +122,15 @@ Every check returns issues in the same shape, so `report.js` has no per-check sp
 }
 ```
 
-The JSON report is `{ url, categories: { images, meta, headings }, summary: { errors, warnings, infos } }`.
+The JSON report is `{ url, categories: { images, meta, headings }, summary: { errors, warnings, infos } }`. `url` is the URL as given on the command line, not the final URL after redirects.
 
 ## Testing
 
-Tests use the built-in `node:test` runner with no extra dependencies.
+Tests use the built-in `node:test` runner with no extra dependencies. `npm test` runs `node --test test/*.test.js`, so helpers in `test/helpers/` are not run as tests.
 
 - Unit tests cover each rule firing, not firing and the length boundaries.
 - HTML fixtures cover the positive and negative cases: `good.html` has no issues, and the `bad-*.html` files (`overlong`, `missing`, `canonical`, `images`, `empty`) trigger the remaining rules. Several bad files are needed because some rules are mutually exclusive, for example a title cannot be both missing and too long.
-- CLI tests call `run()` with `globalThis.fetch` mocked (`test/helpers/fixture-fetch.js`). Requests to `https://fixtures.test/<name>` are served from `test/fixtures/<name>`, and `/timeout`, `/not-html` and unknown names simulate failures. This exercises the real fetch, parse, check, report and exit-code path without network access.
+- CLI tests call `run()` with `--json` and `globalThis.fetch` mocked (`test/helpers/fixture-fetch.js`). Requests to `https://fixtures.test/<name>` are served from `test/fixtures/<name>`, `/timeout` and `/not-html` simulate failures, and unknown names and other hosts fail with a 404 or a network error. This exercises the real fetch, parse, check, report and exit-code path without network access. The table and summary output is not run through `run()`; it is covered by the `test/report.test.js` unit tests, and `fetchHtml` encoding handling by `test/fetch.test.js`.
 
 ## Limitations and out of scope
 
