@@ -1,4 +1,5 @@
 import { SOURCES } from '../sources.js';
+import { collapseWhitespace } from '../text.js';
 
 // Heuristics: Google gives no numeric limits, truncation depends on pixel width.
 const TITLE_MAX = 60;
@@ -12,7 +13,7 @@ export function checkMeta($) {
   const add = (issue) => issues.push({ category: 'seo', ...issue });
 
   const titleEl = $('title').filter((_, el) => !$(el).closest('svg').length).first();
-  const title = titleEl.text().trim();
+  const title = collapseWhitespace(titleEl.text());
   if (!titleEl.length) {
     add({ type: 'missing-title', severity: 'error', source: SOURCES.title, message: 'Missing <title>', context: '<head>' });
   } else if (!title) {
@@ -29,7 +30,7 @@ export function checkMeta($) {
 
   const descriptions = $('meta[name="description" i]')
     .toArray()
-    .map((el) => $(el).attr('content')?.trim() ?? '');
+    .map((el) => collapseWhitespace($(el).attr('content') ?? ''));
   const description = descriptions.find(Boolean);
   if (descriptions.length > 1) {
     add({

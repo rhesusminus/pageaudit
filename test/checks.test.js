@@ -293,3 +293,29 @@ test('headings: headings inside <template> are not audited', () => {
   const html = `<h1>Title</h1><h2>Sub</h2>${TEMPLATE_MARKUP}`;
   assert.deepEqual(checkHeadings(parse(html)), []);
 });
+
+test('meta: title length ignores whitespace runs from multi-line markup', () => {
+  const title = '\n      Gentle Shampoo for all\n      hair types |\n      Example Store Online\n    ';
+  assert.deepEqual(types(checkMeta(parse(goodHead(title)))), []);
+  const long = `\n   ${'word '.repeat(13)}\n   end\n `;
+  const issues = checkMeta(parse(goodHead(long)));
+  assert.deepEqual(types(issues), ['long-title']);
+  assert.match(issues[0].message, /Title is 68 chars/);
+  assert.equal(issues[0].context, `<title>${'word '.repeat(13)}end</title>`);
+});
+
+test('meta: description length and context ignore whitespace runs', () => {
+  const words = 'a'.repeat(50);
+  const spread = `\n     ${words}\n     ${words}\n     ${words}\n   `;
+  assert.deepEqual(types(checkMeta(parse(goodHead('T', spread)))), []);
+  const short = checkMeta(parse(goodHead('T', '\n    short\n    text\n  ')));
+  assert.deepEqual(types(short), ['short-description']);
+  assert.match(short[0].message, /only 10 chars/);
+  assert.equal(short[0].context, '<meta name="description" content="short text">');
+});
+
+test('headings: contexts collapse whitespace', () => {
+  const issues = checkHeadings(parse('<body><h1>Line one\n   of heading</h1><h1>Two\n  h1</h1><h4>Skipped\n    level</h4></body>'));
+  assert.equal(issues.find((i) => i.type === 'multiple-h1').context, '<h1>Line one of heading</h1> <h1>Two h1</h1>');
+  assert.equal(issues.find((i) => i.type === 'skipped-heading-level').context, '<h4>Skipped level</h4>');
+});
