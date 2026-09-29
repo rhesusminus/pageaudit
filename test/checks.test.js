@@ -273,3 +273,23 @@ test('fixture bad-missing.html: missing title, description, canonical and h1', (
     'missing-title',
   ]);
 });
+
+const TEMPLATE_MARKUP =
+  '<template><h4></h4><img src="a.jpg"><template><h6></h6><img src="b.jpg"></template></template>';
+
+test('parse: inert <template> content is dropped, including nested templates', () => {
+  const $ = parse(`<body><h1>Title</h1>${TEMPLATE_MARKUP}</body>`);
+  assert.equal($('template').length, 0);
+  assert.equal($('img').length, 0);
+  assert.equal($('h4, h6').length, 0);
+});
+
+test('images: images inside <template> are not audited', () => {
+  const html = `<img src="ok.jpg" alt="A product" width="1" height="1">${TEMPLATE_MARKUP}`;
+  assert.deepEqual(checkImages(parse(html)), []);
+});
+
+test('headings: headings inside <template> are not audited', () => {
+  const html = `<h1>Title</h1><h2>Sub</h2>${TEMPLATE_MARKUP}`;
+  assert.deepEqual(checkHeadings(parse(html)), []);
+});
