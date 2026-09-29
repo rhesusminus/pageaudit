@@ -87,6 +87,17 @@ test('meta: empty title is an error', () => {
   assert.equal(issues[0].severity, 'error');
 });
 
+test('meta: title after a body-only element in head is still found', () => {
+  const desc = 'A description that is comfortably long enough to pass the short check.';
+  const html = `<html><head><meta charset="utf-8"><div id="x"></div><title>My page</title><meta name="description" content="${desc}"><link rel="canonical" href="https://example.com/"></head><body></body></html>`;
+  assert.ok(!types(checkMeta(parse(html))).includes('missing-title'));
+});
+
+test('meta: a title inside svg is not the page title', () => {
+  const html = '<html><head></head><body><svg><title>Icon</title></svg></body></html>';
+  assert.ok(types(checkMeta(parse(html))).includes('missing-title'));
+});
+
 test('meta: short description is info', () => {
   const issues = checkMeta(parse(goodHead('T', 'Too short')));
   assert.deepEqual(types(issues), ['short-description']);

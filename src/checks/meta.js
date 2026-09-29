@@ -11,7 +11,7 @@ export function checkMeta($) {
   const issues = [];
   const add = (issue) => issues.push({ category: 'seo', ...issue });
 
-  const titleEl = $('head title').first();
+  const titleEl = $('title').filter((_, el) => !$(el).closest('svg').length).first();
   const title = titleEl.text().trim();
   if (!titleEl.length) {
     add({ type: 'missing-title', severity: 'error', source: SOURCES.title, message: 'Missing <title>', context: '<head>' });
