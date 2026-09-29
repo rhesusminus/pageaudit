@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { run } from '../src/cli.js';
+import { canSpin, run } from '../src/cli.js';
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js';
 
 // Runs the CLI against a fixture page and captures what it prints.
@@ -69,4 +69,12 @@ test('cli: unreachable host exits 2', async (t) => {
 test('cli: invalid URL and missing argument exit 2', async (t) => {
   assert.equal((await runCli(t, ['not a url', '--json'])).code, 2);
   assert.equal((await runCli(t, [])).code, 2);
+});
+
+test('cli: spinner is only enabled on a TTY that reports columns', () => {
+  assert.equal(canSpin({ isTTY: true, columns: 80 }), true);
+  assert.equal(canSpin({ isTTY: true, columns: 0 }), false);
+  assert.equal(canSpin({ isTTY: true }), false);
+  assert.equal(canSpin({ isTTY: false, columns: 80 }), false);
+  assert.equal(canSpin({}), false);
 });

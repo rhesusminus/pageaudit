@@ -9,6 +9,12 @@ import { buildReport, formatSummary, formatTable } from './report.js';
 
 const USAGE = 'Usage: pageaudit <url> [--json]';
 
+// ora sizes its line clearing as ceil(width / columns), so a TTY that reports
+// 0 columns (Docker -t, some CI terminals) makes spinner.stop() loop forever.
+export function canSpin(stream) {
+  return Boolean(stream.isTTY) && stream.columns > 0;
+}
+
 export async function run(argv) {
   let values;
   let positionals;
@@ -30,7 +36,10 @@ export async function run(argv) {
 
   const [url] = positionals;
   const json = values.json ?? !process.stdout.isTTY;
-  const spinner = json ? null : ora({ text: `Auditing ${url}`, stream: process.stderr }).start();
+  const spinner =
+    json || !canSpin(process.stderr)
+      ? null
+      : ora({ text: `Auditing ${url}`, stream: process.stderr }).start();
 
   let report;
   try {
