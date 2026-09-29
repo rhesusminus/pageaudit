@@ -1,7 +1,7 @@
 const TIMEOUT_MS = 15000;
 
 function fetchError(url, err) {
-  const reason = err.name === 'TimeoutError' ? `timed out after ${TIMEOUT_MS / 1000}s` : (err.cause?.code ?? err.message);
+  const reason = err.name === 'TimeoutError' ? `timed out after ${TIMEOUT_MS / 1000}s` : (err.cause?.code ?? err.cause?.message ?? err.message);
   return new Error(`Could not fetch ${url}: ${reason}`);
 }
 

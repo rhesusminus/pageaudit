@@ -70,3 +70,17 @@ test('fetch: a timeout while reading the body gets the friendly message', async 
   respond(t, body, 'text/html');
   await assert.rejects(fetchHtml('https://x.test/'), /Could not fetch https:\/\/x\.test\/: timed out after 15s/);
 });
+
+test('fetch: a cause with a message but no code is surfaced', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => {
+    throw new TypeError('fetch failed', { cause: new Error('bad port') });
+  });
+  await assert.rejects(fetchHtml('http://x.test:6000/'), /Could not fetch http:\/\/x\.test:6000\/: bad port/);
+});
+
+test('fetch: a cause with a code prefers the code', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => {
+    throw new TypeError('fetch failed', { cause: Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }) });
+  });
+  await assert.rejects(fetchHtml('http://x.test/'), /Could not fetch http:\/\/x\.test\/: ECONNREFUSED$/);
+});
