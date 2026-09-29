@@ -91,9 +91,14 @@ function checkCanonical($) {
   }
 
   if (inHead.length > 1) {
+    const hrefs = new Set(inHead.map((el) => ($(el).attr('href') ?? '').trim()));
+    const identical = hrefs.size === 1;
     add({
       type: 'multiple-canonicals',
-      message: `${inHead.length} canonical links found (conflicting signals)`,
+      severity: identical ? 'info' : 'warning',
+      message: identical
+        ? `${inHead.length} identical canonical links found (redundant, keep only one)`
+        : `${inHead.length} canonical links found (conflicting signals)`,
       context: inHead.map((el) => $.html(el)).join(' '),
     });
   }

@@ -105,6 +105,18 @@ test('meta: canonical must be in head, absolute, unique and without fragment', (
   );
 });
 
+test('meta: identical duplicate canonicals are redundant (info), differing ones conflict (warning)', () => {
+  const head = (links) => `<html><head><title>T</title><meta name="description" content="${'d'.repeat(80)}">${links}</head><body></body></html>`;
+  const same = checkMeta(parse(head('<link rel="canonical" href="https://a.com/"><link rel="canonical" href=" https://a.com/ ">')));
+  assert.deepEqual(types(same), ['multiple-canonicals']);
+  assert.equal(same[0].severity, 'info');
+  assert.match(same[0].message, /redundant/i);
+  assert.doesNotMatch(same[0].message, /conflicting/i);
+  const diff = checkMeta(parse(head('<link rel="canonical" href="https://a.com/x"><link rel="canonical" href="https://a.com/y">')));
+  assert.equal(diff[0].severity, 'warning');
+  assert.match(diff[0].message, /conflicting signals/);
+});
+
 test('meta: canonical is found when rel has several tokens or odd case', () => {
   const head = (link) => `<html><head><title>T</title><meta name="description" content="${'d'.repeat(80)}">${link}</head></html>`;
   assert.deepEqual(checkMeta(parse(head('<link rel="canonical nofollow" href="https://a.com/x">'))), []);
