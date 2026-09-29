@@ -67,3 +67,24 @@ test('formatTable: fits the terminal width, down to 80 columns', () => {
     }
   }
 });
+
+test('formatTable: wide characters wrap by display width without losing text', () => {
+  const title = `<title>${'日本語のタイトル'.repeat(8)} 😀😀😀 emoji 🎉🎉</title>`;
+  const previous = chalk.level;
+  chalk.level = 1;
+  try {
+    const plain = stripVTControlCharacters(
+      formatTable(buildReport('http://x', { meta: [issue('warning', 'seo', 'Title is long', title)] }), 80),
+    );
+    assert.doesNotMatch(plain, /…/, 'text was clipped');
+    const context = plain
+      .split('\n')
+      .filter((l) => l.startsWith('│'))
+      .slice(1)
+      .map((l) => l.split('│')[4].slice(1).trimEnd())
+      .join('');
+    assert.equal(context.replaceAll(' ', ''), title.replaceAll(' ', ''));
+  } finally {
+    chalk.level = previous;
+  }
+});

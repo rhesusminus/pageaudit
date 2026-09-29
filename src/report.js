@@ -1,7 +1,9 @@
 import chalk from 'chalk';
 import Table from 'cli-table3';
+import wrapAnsi from 'wrap-ansi';
 
 const CATEGORY_LABELS = { images: 'Images', meta: 'Meta', headings: 'Headings' };
+const COLORS = { error: chalk.red, warning: chalk.yellow, info: chalk.cyan };
 const CELL_PADDING = 2;
 // Severity and Category fit their longest values; Issue and Context share the rest.
 const FIXED_WIDTHS = [10, 15];
@@ -15,7 +17,6 @@ function columnWidths(columns) {
   const issue = Math.round((shared * 38) / 84);
   return [...FIXED_WIDTHS, issue, shared - issue];
 }
-const COLORS = { error: chalk.red, warning: chalk.yellow, info: chalk.cyan };
 
 export function buildReport(url, categories) {
   const summary = { errors: 0, warnings: 0, infos: 0 };
@@ -27,20 +28,6 @@ export function buildReport(url, categories) {
     }
   }
   return { url, categories, summary };
-}
-
-// Hard-wraps plain text by character. Must run before coloring: cli-table3's
-// character wrapping counts ANSI escape codes as width and splits them.
-function hardWrap(text, width) {
-  return text
-    .split('\n')
-    .flatMap((line) => {
-      const chars = Array.from(line);
-      const lines = [];
-      for (let i = 0; i < chars.length; i += width) lines.push(chars.slice(i, i + width).join(''));
-      return lines.length ? lines : [''];
-    })
-    .join('\n');
 }
 
 export function formatTable(report, columns) {
@@ -63,10 +50,9 @@ export function formatTable(report, columns) {
         COLORS[issue.severity](issue.severity),
         chalk.dim(issue.category),
         issue.message,
-        hardWrap(issue.context ?? '', widths[3] - CELL_PADDING)
-          .split('\n')
-          .map((line) => chalk.dim(line))
-          .join('\n'),
+        // Wrap ourselves by display width: cli-table3's character wrapping counts ANSI
+        // escape codes as width and clips wide characters instead of wrapping them.
+        wrapAnsi(chalk.dim(issue.context ?? ''), widths[3] - CELL_PADDING, { hard: true, wordWrap: false, trim: false }),
       ]);
     }
     out.push(table.toString());
