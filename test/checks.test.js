@@ -6,6 +6,7 @@ import { parse } from '../src/parse.js';
 import { checkImages } from '../src/checks/images.js';
 import { checkMeta } from '../src/checks/meta.js';
 import { checkHeadings } from '../src/checks/headings.js';
+import { truncate } from '../src/checks/snippet.js';
 import { buildReport, formatSummary } from '../src/report.js';
 
 const types = (issues) => issues.map((i) => i.type);
@@ -344,4 +345,25 @@ test('headings: multiple-h1 and skipped-level contexts are truncated for long te
     assert.equal(context.length, 120);
     assert.ok(context.endsWith('...'));
   }
+});
+
+test('snippet: truncate never splits a surrogate pair', () => {
+  const text = `${'a'.repeat(116)}😀${'b'.repeat(10)}`;
+  const cut = truncate(text);
+  assert.equal(cut, `${'a'.repeat(116)}😀...`);
+  assert.doesNotMatch(cut, /[\ud800-\udbff](?![\udc00-\udfff])/);
+});
+
+test('headings: empty heading context collapses markup whitespace', () => {
+  const issues = checkHeadings(parse('<h1>x</h1><h2>\n      <span></span>\n    </h2>'));
+  assert.equal(issues.find((i) => i.type === 'empty-heading').context, '<h2> <span></span> </h2>');
+});
+
+test('meta: title and description lengths count characters, not UTF-16 code units', () => {
+  const title = `${'a'.repeat(55)}😀😀😀😀😀`;
+  assert.deepEqual(types(checkMeta(parse(goodHead(title)))), []);
+  const issues = checkMeta(parse(goodHead(`${title}b`)));
+  assert.match(issues[0].message, /Title is 61 chars/);
+  const short = checkMeta(parse(goodHead('T', '😀'.repeat(10))));
+  assert.match(short[0].message, /only 10 chars/);
 });

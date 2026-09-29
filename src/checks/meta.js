@@ -1,5 +1,5 @@
 import { SOURCES } from '../sources.js';
-import { collapseWhitespace } from '../text.js';
+import { charCount, collapseWhitespace } from '../text.js';
 import { truncate } from './snippet.js';
 
 // Heuristics: Google gives no numeric limits, truncation depends on pixel width.
@@ -19,12 +19,12 @@ export function checkMeta($) {
     add({ type: 'missing-title', severity: 'error', source: SOURCES.title, message: 'Missing <title>', context: '<head>' });
   } else if (!title) {
     add({ type: 'empty-title', severity: 'error', source: SOURCES.title, message: 'Empty <title>', context: '<title></title>' });
-  } else if (title.length > TITLE_MAX) {
+  } else if (charCount(title) > TITLE_MAX) {
     add({
       type: 'long-title',
       severity: 'warning',
       source: SOURCES.title,
-      message: `Title is ${title.length} chars (over ~${TITLE_MAX}, may be truncated in results)`,
+      message: `Title is ${charCount(title)} chars (over ~${TITLE_MAX}, may be truncated in results)`,
       context: `<title>${title}</title>`,
     });
   }
@@ -50,20 +50,20 @@ export function checkMeta($) {
       message: 'Missing meta description (Google may build the snippet from page content instead)',
       context: '<head>',
     });
-  } else if (description.length > DESCRIPTION_MAX) {
+  } else if (charCount(description) > DESCRIPTION_MAX) {
     add({
       type: 'long-description',
       severity: 'info',
       source: SOURCES.snippet,
-      message: `Meta description is ${description.length} chars (over ~${DESCRIPTION_MAX}, may be truncated)`,
+      message: `Meta description is ${charCount(description)} chars (over ~${DESCRIPTION_MAX}, may be truncated)`,
       context: `<meta name="description" content="${description}">`,
     });
-  } else if (description.length < DESCRIPTION_MIN) {
+  } else if (charCount(description) < DESCRIPTION_MIN) {
     add({
       type: 'short-description',
       severity: 'info',
       source: SOURCES.snippet,
-      message: `Meta description is only ${description.length} chars (under ~${DESCRIPTION_MIN}, may be too vague)`,
+      message: `Meta description is only ${charCount(description)} chars (under ~${DESCRIPTION_MIN}, may be too vague)`,
       context: `<meta name="description" content="${description}">`,
     });
   }
