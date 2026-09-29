@@ -2,8 +2,19 @@ import chalk from 'chalk';
 import Table from 'cli-table3';
 
 const CATEGORY_LABELS = { images: 'Images', meta: 'Meta', headings: 'Headings' };
-const COL_WIDTHS = [10, 15, 38, 46];
 const CELL_PADDING = 2;
+// Severity and Category fit their longest values; Issue and Context share the rest.
+const FIXED_WIDTHS = [10, 15];
+const MIN_WIDTH = 80;
+const MAX_WIDTH = 114;
+const BORDERS = 5;
+
+function columnWidths(columns) {
+  const total = Math.min(Math.max(columns || MAX_WIDTH, MIN_WIDTH), MAX_WIDTH);
+  const shared = total - BORDERS - FIXED_WIDTHS[0] - FIXED_WIDTHS[1];
+  const issue = Math.round((shared * 38) / 84);
+  return [...FIXED_WIDTHS, issue, shared - issue];
+}
 const COLORS = { error: chalk.red, warning: chalk.yellow, info: chalk.cyan };
 
 export function buildReport(url, categories) {
@@ -32,7 +43,8 @@ function hardWrap(text, width) {
     .join('\n');
 }
 
-export function formatTable(report) {
+export function formatTable(report, columns) {
+  const widths = columnWidths(columns);
   const out = [];
   for (const [key, issues] of Object.entries(report.categories)) {
     out.push(chalk.bold(`\n${CATEGORY_LABELS[key] ?? key}`));
@@ -42,7 +54,7 @@ export function formatTable(report) {
     }
     const table = new Table({
       head: ['Severity', 'Category', 'Issue', 'Context'],
-      colWidths: COL_WIDTHS,
+      colWidths: widths,
       wordWrap: true,
       style: { head: [] },
     });
@@ -51,7 +63,7 @@ export function formatTable(report) {
         COLORS[issue.severity](issue.severity),
         chalk.dim(issue.category),
         issue.message,
-        hardWrap(issue.context ?? '', COL_WIDTHS[3] - CELL_PADDING)
+        hardWrap(issue.context ?? '', widths[3] - CELL_PADDING)
           .split('\n')
           .map((line) => chalk.dim(line))
           .join('\n'),

@@ -53,3 +53,17 @@ test('formatTable: all table lines have equal width', () => {
   const widths = new Set(plain.split('\n').filter((l) => /^[│┌├└]/.test(l)).map((l) => l.length));
   assert.equal(widths.size, 1);
 });
+
+test('formatTable: fits the terminal width, down to 80 columns', () => {
+  for (const columns of [80, 100]) {
+    const previous = chalk.level;
+    chalk.level = 1;
+    try {
+      const plain = stripVTControlCharacters(formatTable(buildReport('http://x', categories), columns));
+      const widths = new Set(plain.split('\n').filter((l) => /^[│┌├└]/.test(l)).map((l) => l.length));
+      assert.deepEqual([...widths], [columns]);
+    } finally {
+      chalk.level = previous;
+    }
+  }
+});

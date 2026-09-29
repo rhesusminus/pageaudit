@@ -59,7 +59,7 @@ export async function run(argv) {
   if (json) {
     console.log(JSON.stringify(report, null, 2));
   } else {
-    console.log(formatTable(report));
+    console.log(formatTable(report, process.stdout.columns));
     console.log(formatSummary(report));
   }
   return report.summary.errors > 0 ? 1 : 0;
