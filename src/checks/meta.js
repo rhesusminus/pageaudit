@@ -29,9 +29,8 @@ export function checkMeta($) {
 
   const descriptions = $('meta[name="description" i]')
     .toArray()
-    .map((el) => $(el).attr('content')?.trim())
-    .filter(Boolean);
-  const description = descriptions[0];
+    .map((el) => $(el).attr('content')?.trim() ?? '');
+  const description = descriptions.find(Boolean);
   if (descriptions.length > 1) {
     add({
       type: 'multiple-descriptions',

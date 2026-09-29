@@ -111,10 +111,10 @@ test('meta: canonical is found when rel has several tokens or odd case', () => {
   assert.deepEqual(checkMeta(parse(head('<link rel="  Canonical " href="https://a.com/x">'))), []);
 });
 
-test('meta: an empty description does not hide a later real one', () => {
+test('meta: an empty description does not hide a later real one, but still counts as a duplicate', () => {
   const d = 'd'.repeat(80);
   const html = `<html><head><title>T</title><meta name="description" content=""><meta name="description" content="${d}"><link rel="canonical" href="https://a.com/"></head></html>`;
-  assert.deepEqual(checkMeta(parse(html)), []);
+  assert.deepEqual(types(checkMeta(parse(html))), ['multiple-descriptions']);
 });
 
 test('meta: several non-empty descriptions are flagged', () => {

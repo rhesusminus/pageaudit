@@ -5,21 +5,47 @@ function fetchError(url, err) {
   return new Error(`Could not fetch ${url}: ${reason}`);
 }
 
-const charsetFromHeader = (contentType) => /charset\s*=\s*["']?([^\s;"']+)/i.exec(contentType)?.[1];
+const charsetParam = (value) => /charset\s*=\s*["']?([^\s;"']+)/i.exec(value)?.[1];
 
-// <meta charset> and <meta http-equiv content="...charset=..."> are only honored near the top of the document.
+// Canonical encoding name for a label, or undefined if TextDecoder does not know it.
+function resolve(label) {
+  try {
+    return label && new TextDecoder(label).encoding;
+  } catch {
+    return undefined;
+  }
+}
+
+function charsetFromBom(bytes) {
+  if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) return 'utf-8';
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) return 'utf-16be';
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) return 'utf-16le';
+  return undefined;
+}
+
+const META_TAG = /<meta(?=[\s/])((?:[^>"']|"[^"]*"|'[^']*')*)>/gi;
+const ATTRIBUTE = /([^\s"'>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
+
+// Simplified WHATWG prescan: <meta charset> or <meta http-equiv="content-type" content="...charset=...">
+// within the first 1024 bytes, ignoring comments. A UTF-16 declaration here is treated as UTF-8.
 function charsetFromMeta(bytes) {
-  const head = new TextDecoder('latin1').decode(bytes.subarray(0, 1024));
-  return /<meta[^>]+charset\s*=\s*["']?([^\s"';>/]+)/i.exec(head)?.[1];
+  const head = new TextDecoder('latin1').decode(bytes.subarray(0, 1024)).replace(/<!--[\s\S]*?(?:-->|$)/g, '');
+  for (const [, attrs] of head.matchAll(META_TAG)) {
+    const attr = {};
+    for (const [, name, ...values] of attrs.matchAll(ATTRIBUTE)) {
+      attr[name.toLowerCase()] ??= values.find((v) => v !== undefined) ?? '';
+    }
+    const label =
+      attr.charset ?? (attr['http-equiv']?.toLowerCase() === 'content-type' ? charsetParam(attr.content ?? '') : undefined);
+    const encoding = resolve(label?.trim());
+    if (encoding) return encoding.startsWith('utf-16') ? 'utf-8' : encoding;
+  }
+  return undefined;
 }
 
 function decode(bytes, contentType) {
-  const label = charsetFromHeader(contentType) ?? charsetFromMeta(bytes) ?? 'utf-8';
-  try {
-    return new TextDecoder(label).decode(bytes);
-  } catch {
-    return new TextDecoder('utf-8').decode(bytes);
-  }
+  const encoding = charsetFromBom(bytes) ?? resolve(charsetParam(contentType)) ?? charsetFromMeta(bytes) ?? 'utf-8';
+  return new TextDecoder(encoding).decode(bytes);
 }
 
 export async function fetchHtml(url) {
