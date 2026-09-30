@@ -1,7 +1,7 @@
 {
   "name": "pageaudit",
-  "version": "0.1.0",
-  "description": "Single-page SEO/HTML checker",
+  "version": "2.0.0",
+  "description": "Multi-page SEO/HTML checker",
   "type": "module",
   "bin": {
     "pageaudit": "bin/pageaudit.js"
