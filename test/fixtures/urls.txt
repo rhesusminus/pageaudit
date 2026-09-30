@@ -1,0 +1,10 @@
+# Pages to audit
+https://fixtures.test/good.html
+https://fixtures.test/good.html/   # trailing slash, same page
+HTTPS://FIXTURES.TEST/good.html#reviews
+
+  https://fixtures.test/bad-missing.html?variant=b
+https://fixtures.test/bad-missing.html?variant=b#top
+ftp://fixtures.test/file.txt
+fixtures.test/no-scheme.html
+https://fixtures.test/bad-images.html
