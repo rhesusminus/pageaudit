@@ -9,7 +9,9 @@ export const DEFAULT_DELAY_MS = 200;
 // Fetches and checks one page. A page that cannot be fetched becomes an issue on
 // that page instead of an exception, so one bad page never stops the run.
 export async function auditPage(url, { fetchPage = defaultFetchPage, timeout = DEFAULT_TIMEOUT_MS } = {}) {
-  const withUrl = (issues) => issues.map((issue) => ({ url, ...issue }));
+  // A fixed key order keeps the JSON report stable whichever check built the issue.
+  const withUrl = (issues) =>
+    issues.map(({ type, severity, category, source, message, context }) => ({ url, type, severity, category, source, message, context }));
   let fetched;
   try {
     fetched = await fetchPage(url, { timeout });

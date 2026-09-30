@@ -149,3 +149,11 @@ test('runAudit: runs the real fetch and checks over the fixture pages', async (t
   assert.equal(pages[2].finalUrl, `${FIXTURE_HOST}/good.html`);
   assert.equal(pages[5].issues[0].message, 'Could not fetch the page: timed out after 15s');
 });
+
+test('auditPage: issues have the same key order whichever check built them', async () => {
+  const result = await auditPage('https://a.test/', {
+    fetchPage: async (url) => page(url, { html: '<img src="a.jpg"><h3>x</h3>' }),
+  });
+  const keys = new Set(result.issues.map((i) => Object.keys(i).join()));
+  assert.deepEqual([...keys], ['url,type,severity,category,source,message,context']);
+});

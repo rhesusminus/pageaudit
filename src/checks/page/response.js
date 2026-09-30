@@ -19,6 +19,8 @@ export function checkFetchError(err) {
 // Checks on the HTTP response itself, from a fetchPage() result.
 export function checkResponse({ url, finalUrl, status, redirects, contentType, html }) {
   const issues = [];
+  // The page URL is already known, so only point out where a redirect ended up.
+  const landedOn = finalUrl === url ? '' : finalUrl;
   const chain = [url, ...redirects.map((r) => r.location)].join(' -> ');
   if (redirects.length > 1) {
     issues.push(
@@ -49,7 +51,7 @@ export function checkResponse({ url, finalUrl, status, redirects, contentType, h
         severity: 'error',
         source: SOURCES.httpStatus,
         message: `HTTP ${status} response, page checks skipped`,
-        context: finalUrl,
+        context: landedOn,
       }),
     );
   } else if (html === null) {
@@ -59,7 +61,7 @@ export function checkResponse({ url, finalUrl, status, redirects, contentType, h
         severity: 'info',
         source: SOURCES.fileTypes,
         message: `Not an HTML page (content-type: ${contentType || 'none'}), page checks skipped`,
-        context: finalUrl,
+        context: landedOn,
       }),
     );
   }

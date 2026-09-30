@@ -89,3 +89,11 @@ test('site: pages that failed or returned an error status are ignored', async ()
   });
   assert.deepEqual(checkSite(pages), []);
 });
+
+test('site: inputs that land on the same page report a foreign canonical once', async () => {
+  const pages = await audit({
+    'http://a.test/x': { title: 'X', canonical: 'https://b.test/x', finalUrl: 'https://a.test/x' },
+    'https://a.test/x': { title: 'X', canonical: 'https://b.test/x' },
+  });
+  assert.deepEqual(brief(checkSite(pages)), [['canonical-elsewhere', ['http://a.test/x', 'https://a.test/x']]]);
+});
