@@ -39,3 +39,12 @@ export function resolveUrls(entries, { limit = Infinity } = {}) {
   }
   return { urls: urls.slice(0, limit), skipped, total: urls.length };
 }
+
+// The deduplication key of a URL, or the URL itself when it cannot be normalized.
+export function pageKey(url) {
+  try {
+    return normalize(url).key;
+  } catch {
+    return url;
+  }
+}
