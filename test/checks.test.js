@@ -3,9 +3,9 @@ import { test } from 'node:test';
 import { stripVTControlCharacters } from 'node:util';
 import assert from 'node:assert/strict';
 import { parse } from '../src/parse.js';
-import { checkImages } from '../src/checks/images.js';
-import { checkMeta } from '../src/checks/meta.js';
-import { checkHeadings } from '../src/checks/headings.js';
+import { checkImages } from '../src/checks/page/images.js';
+import { checkMeta } from '../src/checks/page/meta.js';
+import { checkHeadings } from '../src/checks/page/headings.js';
 import { truncate } from '../src/checks/snippet.js';
 import { buildReport, formatSummary } from '../src/report.js';
 

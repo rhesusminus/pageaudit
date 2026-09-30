@@ -1,6 +1,6 @@
-import { SOURCES } from '../sources.js';
-import { charCount, collapseWhitespace } from '../text.js';
-import { truncate } from './snippet.js';
+import { SOURCES } from '../../sources.js';
+import { charCount, collapseWhitespace } from '../../text.js';
+import { truncate } from '../snippet.js';
 
 // Heuristics: Google gives no numeric limits, truncation depends on pixel width.
 const TITLE_MAX = 60;
@@ -9,11 +9,23 @@ const DESCRIPTION_MIN = 70;
 
 const ABSOLUTE_URL = /^[a-z][a-z0-9+.-]*:\/\//i;
 
+// The document title, also when a body-only element in <head> pushed it into <body>, but never an SVG <title>.
+export const titleElement = ($) => $('title').filter((_, el) => !$(el).closest('svg').length).first();
+
+// Every meta description, whitespace collapsed. Only the first non-empty one is used.
+export const descriptionValues = ($) =>
+  $('meta[name="description" i]')
+    .toArray()
+    .map((el) => collapseWhitespace($(el).attr('content') ?? ''));
+
+// Google only reads canonical links inside <head>.
+export const canonicalLinks = ($) => $('head link[rel~="canonical" i]').toArray();
+
 export function checkMeta($) {
   const issues = [];
   const add = (issue) => issues.push({ category: 'seo', ...issue, context: truncate(issue.context) });
 
-  const titleEl = $('title').filter((_, el) => !$(el).closest('svg').length).first();
+  const titleEl = titleElement($);
   const title = collapseWhitespace(titleEl.text());
   if (!titleEl.length) {
     add({ type: 'missing-title', severity: 'error', source: SOURCES.title, message: 'Missing <title>', context: '<head>' });
@@ -29,9 +41,7 @@ export function checkMeta($) {
     });
   }
 
-  const descriptions = $('meta[name="description" i]')
-    .toArray()
-    .map((el) => collapseWhitespace($(el).attr('content') ?? ''));
+  const descriptions = descriptionValues($);
   const description = descriptions.find(Boolean);
   if (descriptions.length > 1) {
     add({
@@ -83,7 +93,7 @@ function checkCanonical($) {
       context: truncate(issue.context),
     });
 
-  const inHead = $('head link[rel~="canonical" i]').toArray();
+  const inHead = canonicalLinks($);
   const anywhere = $('link[rel~="canonical" i]').toArray();
   const outsideHead = anywhere.filter((el) => !inHead.includes(el));
 

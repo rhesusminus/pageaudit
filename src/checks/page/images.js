@@ -1,5 +1,5 @@
-import { SOURCES } from '../sources.js';
-import { snippet } from './snippet.js';
+import { SOURCES } from '../../sources.js';
+import { snippet } from '../snippet.js';
 
 const GENERIC_NAME = /^(img|image|pic|picture|photo|dsc|dscn|untitled|screenshot)[-_ ]?\d*$/i;
 

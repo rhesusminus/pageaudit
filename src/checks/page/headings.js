@@ -1,6 +1,6 @@
-import { SOURCES } from '../sources.js';
-import { collapseWhitespace } from '../text.js';
-import { snippet, truncate } from './snippet.js';
+import { SOURCES } from '../../sources.js';
+import { collapseWhitespace } from '../../text.js';
+import { snippet, truncate } from '../snippet.js';
 
 function hasAccessibleText($, el) {
   const heading = $(el);

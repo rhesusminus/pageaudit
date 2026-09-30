@@ -2,9 +2,9 @@ import { parseArgs } from 'node:util';
 import ora from 'ora';
 import { fetchPage } from './fetch.js';
 import { parse } from './parse.js';
-import { checkImages } from './checks/images.js';
-import { checkMeta } from './checks/meta.js';
-import { checkHeadings } from './checks/headings.js';
+import { checkImages } from './checks/page/images.js';
+import { checkMeta } from './checks/page/meta.js';
+import { checkHeadings } from './checks/page/headings.js';
 import { buildReport, formatSummary, formatTable } from './report.js';
 
 const USAGE = 'Usage: pageaudit <url> [--json]';
