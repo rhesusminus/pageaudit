@@ -6,21 +6,26 @@ import { truncate } from '../snippet.js';
 // title with another member of the group is expected and not reported.
 const canonicalGroup = (page) => pageKey(page.facts.canonical ?? page.finalUrl);
 
-// Values (compared case-insensitively) that appear on pages in more than one canonical group.
+// Values (compared case-insensitively) that appear on pages in more than one canonical
+// group. `pages` counts final pages, so inputs that redirect to the same page count once.
 function shared(pages, valuesOf) {
   const byValue = new Map();
   for (const page of pages) {
+    const seen = new Set();
     for (const value of valuesOf(page.facts)) {
       const key = value.toLowerCase();
-      if (!byValue.has(key)) byValue.set(key, { value, groups: new Map() });
-      const { groups } = byValue.get(key);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (!byValue.has(key)) byValue.set(key, { value, groups: new Map(), finalUrls: new Set() });
+      const { groups, finalUrls } = byValue.get(key);
       const group = canonicalGroup(page);
       groups.set(group, [...(groups.get(group) ?? []), page.url]);
+      finalUrls.add(pageKey(page.finalUrl));
     }
   }
   return [...byValue.values()]
     .filter(({ groups }) => groups.size > 1)
-    .map(({ value, groups }) => ({ value, urls: [...groups.values()].flat() }));
+    .map(({ value, groups, finalUrls }) => ({ value, urls: [...groups.values()].flat(), pages: finalUrls.size }));
 }
 
 const RULES = [
@@ -54,12 +59,12 @@ const RULES = [
 export function checkDuplicates(pages) {
   const audited = pages.filter((page) => page.facts);
   return RULES.flatMap(({ type, category, source, label, values, context }) =>
-    shared(audited, values).map(({ value, urls }) => ({
+    shared(audited, values).map(({ value, urls, pages: count }) => ({
       type,
       severity: 'warning',
       category,
       source,
-      message: `Same ${label} on ${urls.length} pages`,
+      message: `Same ${label} on ${count} pages`,
       context: truncate(context(value)),
       urls,
     })),

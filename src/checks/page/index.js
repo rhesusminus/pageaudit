@@ -22,10 +22,13 @@ export function extractFacts($, finalUrl) {
   const href = canonicalLinks($)
     .map((el) => ($(el).attr('href') ?? '').trim())
     .find(Boolean);
+  // Relative URLs resolve against the first <base href>, like in a browser.
+  const baseHref = ($('base[href]').first().attr('href') ?? '').trim();
+  const baseUrl = (baseHref && absolute(baseHref, finalUrl)) || finalUrl;
   return {
     title: collapseWhitespace(titleElement($).text()) || null,
     description: descriptionValues($).find(Boolean) ?? null,
     h1s: [...new Set($('h1').toArray().map((el) => collapseWhitespace($(el).text())).filter(Boolean))],
-    canonical: href ? absolute(href, finalUrl) : null,
+    canonical: href ? absolute(href, baseUrl) : null,
   };
 }

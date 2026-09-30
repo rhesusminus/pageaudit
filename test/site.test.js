@@ -97,3 +97,40 @@ test('site: inputs that land on the same page report a foreign canonical once', 
   });
   assert.deepEqual(brief(checkSite(pages)), [['canonical-elsewhere', ['http://a.test/x', 'https://a.test/x']]]);
 });
+
+test('site: a page repeating an h1 in different cases is listed once', async () => {
+  const pages = await audit({
+    'https://a.test/x': { title: 'X', h1s: ['Home', 'HOME'] },
+    'https://a.test/y': { title: 'Y', h1s: ['home'] },
+  });
+  const issues = checkSite(pages);
+  assert.deepEqual(brief(issues), [['duplicate-h1', ['https://a.test/x', 'https://a.test/y']]]);
+  assert.equal(issues[0].message, 'Same <h1> on 2 pages');
+});
+
+test('site: the page count ignores inputs that land on the same final page', async () => {
+  const pages = await audit({
+    'http://a.test/x': { title: 'Shop', finalUrl: 'https://a.test/x' },
+    'https://a.test/x': { title: 'Shop' },
+    'https://a.test/y': { title: 'Shop' },
+  });
+  const issues = checkSite(pages);
+  assert.deepEqual(brief(issues), [['duplicate-title', ['http://a.test/x', 'https://a.test/x', 'https://a.test/y']]]);
+  assert.equal(issues[0].message, 'Same title on 2 pages');
+});
+
+test('site: a relative canonical is resolved against <base href>', async () => {
+  const fetchPage = async (url) => ({
+    url,
+    finalUrl: url,
+    status: 200,
+    redirects: [],
+    contentType: 'text/html',
+    html: '<html><head><base href="https://b.test/dir/"><title>T</title><link rel="canonical" href="p"></head><body></body></html>',
+  });
+  const [page] = await runAudit(['https://a.test/x'], { fetchPage, delay: 0 });
+  assert.equal(page.facts.canonical, 'https://b.test/dir/p');
+  const relativeBase = async (url) => ({ ...(await fetchPage(url)), html: '<html><head><base href="/dir/"><link rel="canonical" href="p"></head></html>' });
+  const [other] = await runAudit(['https://a.test/x'], { fetchPage: relativeBase, delay: 0 });
+  assert.equal(other.facts.canonical, 'https://a.test/dir/p');
+});
