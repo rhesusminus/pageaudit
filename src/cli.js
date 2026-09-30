@@ -1,6 +1,6 @@
 import { parseArgs } from 'node:util';
 import ora from 'ora';
-import { fetchHtml } from './fetch.js';
+import { fetchPage } from './fetch.js';
 import { parse } from './parse.js';
 import { checkImages } from './checks/images.js';
 import { checkMeta } from './checks/meta.js';
@@ -43,7 +43,10 @@ export async function run(argv) {
 
   let report;
   try {
-    const $ = parse(await fetchHtml(url));
+    const page = await fetchPage(url);
+    if (page.status !== 200) throw new Error(`Could not fetch ${url}: HTTP ${page.status}`);
+    if (page.html === null) throw new Error(`Not an HTML page (content-type: ${page.contentType || 'none'})`);
+    const $ = parse(page.html);
     report = buildReport(url, {
       images: checkImages($),
       meta: checkMeta($),

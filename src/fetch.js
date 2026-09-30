@@ -1,8 +1,81 @@
-const TIMEOUT_MS = 15000;
+import pkg from '../package.json' with { type: 'json' };
 
-function fetchError(url, err) {
-  const reason = err.name === 'TimeoutError' ? `timed out after ${TIMEOUT_MS / 1000}s` : (err.cause?.code ?? err.cause?.message ?? err.message);
-  return new Error(`Could not fetch ${url}: ${reason}`);
+export const USER_AGENT = `pageaudit/${pkg.version} (+https://github.com/rhesusminus/pageaudit)`;
+export const DEFAULT_TIMEOUT_MS = 15000;
+const MAX_REDIRECTS = 10;
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
+export class FetchError extends Error {
+  constructor(url, reason) {
+    super(`Could not fetch ${url}: ${reason}`);
+    this.name = 'FetchError';
+    this.reason = reason;
+  }
+}
+
+function fetchError(url, err, timeout) {
+  if (err instanceof FetchError) return err;
+  const reason =
+    err.name === 'TimeoutError' ? `timed out after ${timeout / 1000}s` : (err.cause?.code ?? err.cause?.message ?? err.message);
+  return new FetchError(url, reason);
+}
+
+// Throws unless value is an absolute http or https URL.
+function httpUrl(url, value, what) {
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new FetchError(url, `invalid ${what} ${JSON.stringify(value)}`);
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new FetchError(url, `unsupported protocol ${parsed.protocol} in ${what}`);
+  }
+  return parsed;
+}
+
+// GET that follows redirects by hand so every hop is recorded. One timeout covers
+// the whole chain and the body. Network failures throw a FetchError, HTTP error
+// statuses do not.
+export async function request(url, { timeout = DEFAULT_TIMEOUT_MS, accept = '*/*' } = {}) {
+  const signal = AbortSignal.timeout(timeout);
+  const redirects = [];
+  let current = httpUrl(url, url, 'URL');
+  try {
+    for (;;) {
+      const res = await fetch(current, { redirect: 'manual', signal, headers: { accept, 'user-agent': USER_AGENT } });
+      const location = res.headers.get('location');
+      if (!REDIRECT_STATUSES.has(res.status) || location === null) {
+        return {
+          finalUrl: current.href,
+          status: res.status,
+          redirects,
+          headers: res.headers,
+          async bytes() {
+            try {
+              return new Uint8Array(await res.arrayBuffer());
+            } catch (err) {
+              throw fetchError(url, err, timeout);
+            }
+          },
+          discard: () => res.body?.cancel().catch(() => {}),
+        };
+      }
+      await res.body?.cancel();
+      if (redirects.length === MAX_REDIRECTS) throw new FetchError(url, `more than ${MAX_REDIRECTS} redirects`);
+      let target;
+      try {
+        target = new URL(location, current).href;
+      } catch {
+        target = location;
+      }
+      const next = httpUrl(url, target, 'redirect location');
+      redirects.push({ url: current.href, status: res.status, location: next.href });
+      current = next;
+    }
+  } catch (err) {
+    throw fetchError(url, err, timeout);
+  }
 }
 
 const charsetParam = (value) => /charset\s*=\s*["']?([^\s;"']+)/i.exec(value)?.[1];
@@ -48,41 +121,17 @@ function decode(bytes, contentType) {
   return new TextDecoder(encoding).decode(bytes);
 }
 
-export async function fetchHtml(url) {
-  let parsed;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new Error(`Invalid URL: ${url}`);
+// The page-fetching interface the runner depends on. A headless browser can
+// replace it later as long as it returns the same shape. html is null unless
+// the response is a 200 with an HTML content type.
+export async function fetchPage(url, { timeout } = {}) {
+  const res = await request(url, { timeout, accept: 'text/html,application/xhtml+xml' });
+  const contentType = res.headers.get('content-type') ?? '';
+  let html = null;
+  if (res.status === 200 && /html/i.test(contentType)) {
+    html = decode(await res.bytes(), contentType);
+  } else {
+    await res.discard();
   }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error(`Unsupported protocol: ${parsed.protocol}`);
-  }
-
-  let res;
-  try {
-    res = await fetch(parsed, {
-      redirect: 'follow',
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { accept: 'text/html,application/xhtml+xml' },
-    });
-  } catch (err) {
-    throw fetchError(url, err);
-  }
-
-  if (!res.ok) {
-    throw new Error(`Could not fetch ${url}: HTTP ${res.status}`);
-  }
-  const type = res.headers.get('content-type') ?? '';
-  if (!/html/i.test(type)) {
-    throw new Error(`Not an HTML page (content-type: ${type || 'none'})`);
-  }
-
-  let bytes;
-  try {
-    bytes = new Uint8Array(await res.arrayBuffer());
-  } catch (err) {
-    throw fetchError(url, err);
-  }
-  return decode(bytes, type);
+  return { url, finalUrl: res.finalUrl, status: res.status, redirects: res.redirects, contentType, html };
 }
