@@ -1,8 +1,8 @@
 # pageaudit
 
-> **Note:** this project is my testing ground for agentic coding. It was planned and built together with an AI coding agent (Claude Code), from a plan written in a chat (`docs/seo-harness-plan.md`) through implementation, tests and git workflow. Treat it as an experiment, not a polished product.
+> **Note:** this project is my testing ground for agentic coding. It was planned and built together with an AI coding agent (Claude Code), from a plan written in a chat (`docs/seo-harness-plan.md`, and `docs/pageaudit-v2-plan.md` for multi-page auditing) through implementation, tests and git workflow. Treat it as an experiment, not a polished product.
 
-A small Node.js CLI that fetches a single URL, parses the static HTML and reports basic SEO/HTML issues in three categories: images, meta tags and headings.
+A small Node.js CLI that fetches one or more pages, parses the static HTML and reports basic SEO/HTML issues: images, meta tags, headings and the HTTP response of each page, plus cross-page checks such as duplicate titles.
 
 ## Usage
 
@@ -10,24 +10,67 @@ Requires Node 24 (see `.nvmrc`).
 
 ```sh
 npm install
-node bin/pageaudit.js <url>          # color-coded table
-node bin/pageaudit.js <url> --json   # raw JSON report
+node bin/pageaudit.js https://example.com                       # one page
+node bin/pageaudit.js https://a.com/x https://a.com/y           # several pages
+node bin/pageaudit.js --urls-file urls.txt                      # one URL per line, # for comments
+cat urls.txt | node bin/pageaudit.js --urls-file -              # the same list from stdin
+node bin/pageaudit.js --sitemap https://example.com/sitemap.xml
+node bin/pageaudit.js https://example.com --json                # raw JSON report
 npm test
 ```
 
-`--json` is also the default whenever stdout is not a TTY (for example when piped), and the spinner is disabled in that case. The spinner is also skipped on TTYs that report 0 columns. The table width follows the terminal (80 to 114 columns). The `pageaudit` bin is declared in `package.json`, so `npm link` makes it available as `pageaudit <url>`.
+The `pageaudit` bin is declared in `package.json`, so `npm link` makes it available as `pageaudit`.
+
+### Inputs
+
+Arguments, `--urls-file` and `--sitemap` can be combined, and the last two can be repeated. All URLs are merged in that order and deduplicated: the host is compared case-insensitively, fragments (`#...`) are dropped, query strings are kept and a trailing slash on the path is ignored, so `/x` and `/x/` are the same page. The first spelling seen is the one fetched.
+
+- Inputs that are not `http` or `https` URLs are skipped with the reason and where they came from (for example `urls.txt:8`). One bad URL never aborts the run, but a URL file that cannot be read or a sitemap that cannot be fetched exits 2.
+- A sitemap index is followed one level deep. Child sitemaps that fail, or that are themselves indexes, are skipped with the reason. Gzipped sitemap files (`.xml.gz`) are supported.
+- `--limit <n>` audits only the first `n` URLs after deduplication.
+
+Link-following crawling is not supported.
+
+### Options
+
+| Option | Default | Meaning |
+| ------ | ------- | ------- |
+| `--urls-file <path>` | | Read URLs from a file, one per line. `#` starts a comment at the start of a line or after whitespace. `-` reads stdin. |
+| `--sitemap <url>` | | Read URLs from a sitemap or sitemap index. |
+| `--limit <n>` | all | Audit at most `n` pages. |
+| `--concurrency <n>` | 3 | Pages fetched at the same time. |
+| `--delay <ms>` | 200 | Minimum time between starting requests to the same host. |
+| `--fail-on <level>` | `error` | `warning` makes warnings fail the run too (for CI). |
+| `--json` | | Print the JSON report. Also the default when stdout is not a TTY. |
+
+Each request has a 15 s timeout (covering redirects and the body), follows up to 10 redirects and sends `User-Agent: pageaudit/<version> (+https://github.com/rhesusminus/pageaudit)`.
+
+### Output
+
+In a terminal a spinner shows `Auditing 12/40 pages...` on stderr (skipped for JSON output and on TTYs that report 0 columns). Skipped inputs are listed on stderr before the audit starts. The report then shows:
+
+1. A summary table of every page (URL, status, errors, warnings, infos), worst first.
+2. The issues of each page that has any, worst page first. Pages with no issues are collapsed into `N pages clean`.
+3. A `Site` section with the cross-page issues.
+4. A final line such as `40 pages, 6 errors, 19 warnings, 3 infos`.
+
+Tables follow the terminal width (80 to 114 columns).
 
 ### Exit codes
 
 | Code | Meaning |
 | ---- | ------- |
-| 0 | No errors (warnings and infos are allowed) |
-| 1 | At least one error found |
-| 2 | Usage error or the page could not be fetched |
+| 0 | No errors (warnings and infos are allowed, unless `--fail-on warning`) |
+| 1 | At least one error, or a warning with `--fail-on warning` |
+| 2 | Usage error, an unreadable URL file or sitemap, or no valid URL to audit |
+
+A page that cannot be fetched or returns an error status is an error on that page (exit 1), not a reason to stop.
 
 ## Checks
 
-Rules follow what Google and the W3C actually say, not folklore, so severities are deliberately soft where Google does not require something. Each issue carries a `severity` (`error`, `warning` or `info`), a `category` (`seo`, `accessibility`, `performance` or `best-practice`) and a `source` URL to the documentation it is based on (see `src/sources.js`). Only errors affect the exit code.
+Rules follow what Google and the W3C actually say, not folklore, so severities are deliberately soft where Google does not require something. Each issue carries a `severity` (`error`, `warning` or `info`), a `category` (`seo`, `accessibility`, `performance` or `best-practice`) and a `source` URL to the documentation it is based on (see `src/sources.js`). Only errors affect the exit code, unless `--fail-on warning` is given.
+
+### Page checks
 
 | Group | Rule | Severity | Category |
 | ----- | ---- | -------- | -------- |
@@ -51,12 +94,30 @@ Rules follow what Google and the W3C actually say, not folklore, so severities a
 | Headings | `multiple-h1` (Google does not mind) | info | best-practice |
 | Headings | `skipped-heading-level`: e.g. `<h3>` with no preceding `<h2>` | warning | accessibility |
 | Headings | `empty-heading` (no text, `aria-label`, `aria-labelledby` or image alt) | warning | accessibility |
+| Response | `fetch-failed`: network error, timeout or more than 10 redirects | error | seo |
+| Response | `http-status`: any status other than 200 (the HTML checks are skipped) | error | seo |
+| Response | `not-html`: the content type is not HTML, for example a PDF in a sitemap (the HTML checks are skipped) | info | seo |
+| Response | `redirect-chain`: more than one redirect before the final page | warning | seo |
+| Response | `redirect`: one redirect (the final URL is audited) | info | seo |
+
+### Site checks
+
+These run after every page is audited and compare the pages that returned HTML. Site issues list the pages involved in `urls` instead of a single `url`.
+
+| Rule | Severity | Category |
+| ---- | -------- | -------- |
+| `duplicate-title`: the same title (ignoring case and whitespace runs) on several pages | warning | seo |
+| `duplicate-description`: the same meta description on several pages | warning | seo |
+| `duplicate-h1`: the same `<h1>` text on several pages | warning | best-practice |
+| `canonical-elsewhere`: the canonical points to a different URL (often intentional, so informational) | info | seo |
+
+Pages count as one page when they end up at the same final URL or declare the same canonical, so `/list` and `/list?sort=asc` with a canonical of `/list` are not duplicates of each other. Missing or empty values are never duplicates, they are already reported per page.
 
 The length limits (60, 160, 70) are heuristics, not official rules: Google states there is no limit and truncates by pixel width. Empty alt is only an error when it leaves a link or button without any accessible name.
 
 Before checking, `<template>` elements are removed because their content is inert. Whitespace runs in the title, description and heading text are collapsed before measuring, like browsers do, and issue contexts are capped at 120 characters.
 
-`fetchHtml` decodes the body the way browsers do: a BOM wins, then the `Content-Type` charset, then a `<meta charset>` or `http-equiv` prescan of the first 1024 bytes, then UTF-8. Fetch errors report the underlying cause (error code or message), for example `Could not fetch <url>: ENOTFOUND`.
+`fetchPage` decodes the body the way browsers do: a BOM wins, then the `Content-Type` charset, then a `<meta charset>` or `http-equiv` prescan of the first 1024 bytes, then UTF-8. Fetch failures report the underlying cause (error code or message), for example `Could not fetch the page: ENOTFOUND`.
 
 ## Where the rules come from
 
@@ -64,11 +125,14 @@ The rules were researched in September 2026 (with the same AI agent that wrote t
 
 | Source | What it says | Rules based on it |
 | ------ | ------------ | ----------------- |
-| [Google: title links](https://developers.google.com/search/docs/appearance/title-link) | Every page should have a `<title>`. "No limit" on length, but it is truncated "typically to fit the device width". No numeric guidance. | `missing-title`, `empty-title`, `long-title` |
-| [Google: snippets and meta descriptions](https://developers.google.com/search/docs/appearance/snippet) | No length limit, truncated to fit the device width. The meta description is only "sometimes" used, snippets mostly come from page content. Descriptions should be unique and specific, and too-short or generic ones are given as bad examples. | `missing-description`, `long-description`, `short-description` |
-| [Google: canonical URLs](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls) | Use absolute URLs, add a self-referencing canonical, only `<head>` is accepted, do not send conflicting signals, fragments are generally not supported. | `missing-canonical`, `multiple-canonicals`, `relative-canonical`, `canonical-fragment`, `empty-canonical` |
+| [Google: title links](https://developers.google.com/search/docs/appearance/title-link) | Every page should have a `<title>`, and each page's title should be distinct. "No limit" on length, but it is truncated "typically to fit the device width". No numeric guidance. | `missing-title`, `empty-title`, `long-title`, `duplicate-title` |
+| [Google: snippets and meta descriptions](https://developers.google.com/search/docs/appearance/snippet) | No length limit, truncated to fit the device width. The meta description is only "sometimes" used, snippets mostly come from page content. Descriptions should be unique and specific, and too-short or generic ones are given as bad examples. | `missing-description`, `long-description`, `short-description`, `duplicate-description` |
+| [Google: canonical URLs](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls) | Use absolute URLs, add a self-referencing canonical, only `<head>` is accepted, do not send conflicting signals, fragments are generally not supported. | `missing-canonical`, `multiple-canonicals`, `relative-canonical`, `canonical-fragment`, `empty-canonical`, `canonical-elsewhere` |
 | [Google: image SEO](https://developers.google.com/search/docs/appearance/google-images) | Google finds images in the `src` of `<img>` (not CSS backgrounds). Use short descriptive file names, not `IMG00023.JPG` or `image1.jpg`. Avoid keyword-stuffed alt text. | `missing-src`, `generic-filename`, `alt-is-filename` |
-| [Google: SEO starter guide](https://developers.google.com/search/docs/fundamentals/seo-starter-guide) | Heading order and count do not matter for Search. Good titles and descriptions are unique and concise. Good alt text is "quite important". | `missing-h1`, `multiple-h1` (as best practice only) |
+| [Google: redirects](https://developers.google.com/search/docs/crawling-indexing/301-redirects) | Explains permanent and temporary redirects and recommends server-side redirects. | `redirect`, `redirect-chain` |
+| [Google: HTTP status codes and network errors](https://developers.google.com/search/docs/crawling-indexing/http-network-errors) | Google's crawlers follow up to 10 redirect hops. Content from URLs that return a 4xx status is not used, and even a 2xx does not guarantee indexing. | `http-status`, `fetch-failed`, the 10-redirect limit |
+| [Google: indexable file types](https://developers.google.com/search/docs/crawling-indexing/indexable-file-types) | Lists the non-HTML file types Google can index, such as PDF, so a non-HTML URL is not a problem in itself. | `not-html` |
+| [Google: SEO starter guide](https://developers.google.com/search/docs/fundamentals/seo-starter-guide) | Heading order and count do not matter for Search. Good titles and descriptions are unique and concise. Good alt text is "quite important". | `missing-h1`, `multiple-h1`, `duplicate-h1` (as best practice only) |
 | [web.dev: optimize CLS](https://web.dev/articles/optimize-cls) | Set `width` and `height` on images so the browser reserves space. Good CLS is 0.1 or less. | `missing-dimensions` |
 | [W3C WAI: decorative images](https://www.w3.org/WAI/tutorials/images/decorative/) | Purely decorative images should have `alt=""`. Omitting `alt` makes some screen readers read out the file name. Only the author can tell if an image is decorative. | `missing-alt`, `empty-alt`, `empty-alt-in-link` |
 | [W3C WAI: headings](https://www.w3.org/WAI/tutorials/page-structure/headings/) | Nest headings by rank, and avoid skipping ranks (an `<h2>` directly followed by an `<h4>`). | `skipped-heading-level`, `empty-heading` |
@@ -79,6 +143,7 @@ Judgment calls that are not straight from those pages:
 - **Length limits (60 and 160 characters, minimum 70):** common SEO heuristics, not Google rules. Real truncation depends on pixel width (roughly 580 to 600px for titles on desktop), so characters are only a proxy.
 - **`empty-alt-in-link` as an error:** derived from the W3C decorative-image guidance. An image that is the only content of a link needs an accessible name, so an empty alt there leaves the link unnamed.
 - **`missing-src` and `generic-filename`:** based on Google's statement that images are found via `src` and its file name advice, but the exact patterns (`IMG`, `DSC`, `image1` and so on) are my own list.
+- **Response and site severities:** `redirect-chain` and the duplicate rules as warnings, `redirect`, `not-html` and `canonical-elsewhere` as infos, and every non-200 status as an error are my own calls. Google's redirect page does not warn against chains, flagging them follows from the hop limit and from each hop being an extra request.
 - **Summaries, not full reads:** the pages were read through an AI summarizer, so exact wording should be checked against the linked page before quoting it.
 
 ## Architecture
@@ -87,32 +152,52 @@ Judgment calls that are not straight from those pages:
 bin/pageaudit.js        entry point, calls run() and sets the exit code
 src/
   cli.js                arg parsing, spinner, wires the pipeline together
-  fetch.js              fetchHtml(url): URL validation, timeout, status and content-type checks, encoding sniffing
+  input/
+    args.js             URLs from CLI arguments
+    file.js             URLs from --urls-file (or stdin)
+    sitemap.js          URLs from --sitemap, following a sitemap index one level deep
+    resolve.js          merge, normalize, dedupe, apply --limit
+  fetch.js              fetchPage(url): redirects, timeout, User-Agent, encoding sniffing
   parse.js              parse(html): Cheerio DOM, with inert <template> content removed
-  text.js               collapseWhitespace() shared by the checks
+  runner.js             runs the page checks over all URLs with concurrency and a per-host delay
+  text.js               collapseWhitespace() and charCount() shared by the checks
   checks/
-    images.js           one module per category, each returns an array of issues
-    meta.js
-    headings.js
+    page/               checks on one page, each returns an array of issues
+      images.js
+      meta.js
+      headings.js
+      response.js       status, redirects, content type and fetch failures
+      index.js          checkHtml() and extractFacts() for the site checks
+    site/               checks across pages, run after every page is done
+      duplicates.js
+      canonical.js
+      index.js          checkSite()
     snippet.js          truncate()/snippet(): caps issue contexts at 120 characters
   sources.js            documentation URLs referenced by each issue's `source` field
-  report.js             buildReport() aggregates issues, formatTable()/formatSummary() render them
+  report.js             buildReport() for JSON, formatReport() for the terminal
 test/
-  checks.test.js        unit tests for each check
-  fetch.test.js         unit tests for fetchHtml (encoding sniffing, errors)
-  report.test.js        unit tests for the summary and the table/summary rendering
-  cli.test.js           tests of run() with --json against the fixtures
-  fixtures/             good.html and bad-canonical, bad-empty, bad-images, bad-missing, bad-overlong
+  input.test.js         URL files, sitemaps and normalization, against fixtures
+  runner.test.js        runner with a mocked fetchPage: concurrency, delay, failures
+  site.test.js          site checks over runner results
+  checks.test.js        unit tests for each page check
+  fetch.test.js         fetchPage: redirects, User-Agent, encoding sniffing, errors
+  report.test.js        summary, tables and wrapping
+  cli.test.js           run() end to end with --json against the fixtures
+  fixtures/             HTML pages, sitemap.xml, sitemap-index.xml and urls.txt
   helpers/fixture-fetch.js   mocked fetch that serves the fixtures
-docs/seo-harness-plan.md     the original plan this was built from
+docs/seo-harness-plan.md     the original v1 plan
+docs/pageaudit-v2-plan.md    the v2 (multi-page) plan
 ```
 
-Pipeline: `fetchHtml` -> `parse` -> `checkImages` / `checkMeta` / `checkHeadings` -> `buildReport` -> table or JSON.
+Pipeline: inputs -> `resolveUrls` -> `runAudit` (`fetchPage` -> `checkResponse` -> `parse` -> `checkHtml` per page) -> `checkSite` -> `buildReport` -> table or JSON.
 
-Every check returns issues in the same shape, so `report.js` has no per-check special cases:
+`fetchPage(url, { timeout })` returns `{ url, finalUrl, status, redirects, contentType, html }` and only throws for network failures. It is the only thing the runner needs from the network layer, so a headless browser can replace it without touching the checks or the runner.
+
+Every page issue has the same shape, so `report.js` has no per-check special cases:
 
 ```js
 {
+  url: 'https://example.com/',    // the page, as given in the input
   type: 'missing-alt',            // machine-readable identifier
   severity: 'error',              // 'error' | 'warning' | 'info'
   category: 'accessibility',      // 'seo' | 'accessibility' | 'performance' | 'best-practice'
@@ -122,20 +207,37 @@ Every check returns issues in the same shape, so `report.js` has no per-check sp
 }
 ```
 
-The JSON report is `{ url, categories: { images, meta, headings }, summary: { errors, warnings, infos } }`. `url` is the URL as given on the command line, not the final URL after redirects.
+Site issues have the same fields except that `url` is replaced by `urls`, the list of pages involved.
+
+The JSON report is meant to be handed to a human or an LLM for prioritizing fixes, so its shape is kept stable:
+
+```js
+{
+  pages: [{ url, finalUrl, status, redirects: [{ url, status, location }], issues: [...] }],
+  site: [...],                    // site issues
+  skipped: [{ input, source, reason }],
+  summary: { pages, errors, warnings, infos }
+}
+```
+
+`status` and `finalUrl` are `null` when the page could not be fetched at all.
 
 ## Testing
 
-Tests use the built-in `node:test` runner with no extra dependencies. `npm test` runs `node --test test/*.test.js`, so helpers in `test/helpers/` are not run as tests.
+Tests use the built-in `node:test` runner with no extra dependencies. `npm test` runs `node --test test/*.test.js`, so helpers in `test/helpers/` are not run as tests. Nothing touches the network.
 
 - Unit tests cover each rule firing, not firing and the length boundaries.
-- HTML fixtures cover the positive and negative cases: `good.html` has no issues, and the `bad-*.html` files (`overlong`, `missing`, `canonical`, `images`, `empty`) trigger the remaining rules. Several bad files are needed because some rules are mutually exclusive, for example a title cannot be both missing and too long.
-- CLI tests call `run()` with `--json` and `globalThis.fetch` mocked (`test/helpers/fixture-fetch.js`). Requests to `https://fixtures.test/<name>` are served from `test/fixtures/<name>`, `/timeout` and `/not-html` simulate failures, and unknown names and other hosts fail with a 404 or a network error. This exercises the real fetch, parse, check, report and exit-code path without network access. The table and summary output is not run through `run()`; it is covered by the `test/report.test.js` unit tests, and `fetchHtml` encoding handling by `test/fetch.test.js`.
+- HTML fixtures cover the positive and negative cases: `good.html` has no issues, `duplicate.html` shares its title, description and h1 with `good.html`, and the `bad-*.html` files (`overlong`, `missing`, `canonical`, `images`, `empty`) trigger the remaining rules. Several bad files are needed because some rules are mutually exclusive, for example a title cannot be both missing and too long.
+- Input tests read `urls.txt` (comments, duplicates, invalid lines), `sitemap.xml` and `sitemap-index.xml` (which lists itself as a nested index and a missing child sitemap).
+- Runner and site check tests pass a mocked `fetchPage` to `runAudit`, so concurrency, the per-host delay and failures are tested without HTTP.
+- CLI tests call `run()` with `--json` and `globalThis.fetch` mocked (`test/helpers/fixture-fetch.js`). Requests to `https://fixtures.test/<name>` are served from `test/fixtures/<name>`, `/timeout`, `/not-html`, `/redirect-once` and `/redirect-twice` simulate other responses, and unknown names and other hosts fail with a 404 or a network error. This exercises the real input, fetch, parse, check, report and exit-code path. The terminal output is not run through `run()`; it is covered by the `test/report.test.js` unit tests.
 
 ## Limitations and out of scope
 
-- Only the raw HTML from the initial fetch is inspected (Cheerio, no JavaScript execution), so client-side rendered content is not seen. The fix would be swapping the fetch layer for a headless browser.
-- Not included in v1: multi-page crawling, headless browser, any LLM calls, Lighthouse or performance metrics, config files or plugins. The report is meant to be handed to a human or an LLM afterwards for judgment calls.
+- Only the raw HTML from the initial fetch is inspected (Cheerio, no JavaScript execution), so client-side rendered content is not seen. The fix would be swapping `fetchPage` for a headless browser.
+- Pages are only discovered from arguments, URL files and sitemaps. Following links to discover pages is not supported.
+- `robots.txt` is not read, so pages it disallows are audited like any other.
+- Not included: headless browser, any LLM calls, Lighthouse or performance metrics, config files or plugins. The report is meant to be handed to a human or an LLM afterwards for judgment calls.
 
 ## Workflow
 

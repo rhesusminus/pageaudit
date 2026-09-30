@@ -1,13 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { stripVTControlCharacters } from 'node:util';
 import assert from 'node:assert/strict';
 import { parse } from '../src/parse.js';
-import { checkImages } from '../src/checks/images.js';
-import { checkMeta } from '../src/checks/meta.js';
-import { checkHeadings } from '../src/checks/headings.js';
+import { checkImages } from '../src/checks/page/images.js';
+import { checkMeta } from '../src/checks/page/meta.js';
+import { checkHeadings } from '../src/checks/page/headings.js';
 import { truncate } from '../src/checks/snippet.js';
-import { buildReport, formatSummary } from '../src/report.js';
 
 const types = (issues) => issues.map((i) => i.type);
 
@@ -194,15 +192,6 @@ test('headings: skipped level is a warning', () => {
 test('headings: h3 before any h2 is flagged, going back up is fine', () => {
   assert.deepEqual(types(checkHeadings(parse('<h1>a</h1><h2>b</h2><h3>c</h3><h2>d</h2>'))), []);
   assert.deepEqual(types(checkHeadings(parse('<h3>c</h3><h1>a</h1>'))), ['skipped-heading-level']);
-});
-
-test('report: summary counts by severity', () => {
-  const report = buildReport('http://x', {
-    images: [{ severity: 'error' }, { severity: 'warning' }],
-    meta: [{ severity: 'warning' }, { severity: 'info' }],
-  });
-  assert.deepEqual(report.summary, { errors: 1, warnings: 2, infos: 1 });
-  assert.match(stripVTControlCharacters(formatSummary(report)), /1 error, 2 warnings, 1 info/);
 });
 
 const fixture = (name) => parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));

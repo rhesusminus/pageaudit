@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchHtml } from '../src/fetch.js';
+import { fetchPage, USER_AGENT } from '../src/fetch.js';
+
+const fetchHtml = async (url) => (await fetchPage(url)).html;
 
 const respond = (t, body, contentType) =>
   t.mock.method(globalThis, 'fetch', async () => new Response(body, { headers: { 'content-type': contentType } }));
@@ -83,4 +85,80 @@ test('fetch: a cause with a code prefers the code', async (t) => {
     throw new TypeError('fetch failed', { cause: Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }) });
   });
   await assert.rejects(fetchHtml('http://x.test/'), /Could not fetch http:\/\/x\.test\/: ECONNREFUSED$/);
+});
+
+// Answers each request from a map of URL -> Response factory and records the requests.
+function serve(t, routes) {
+  const requests = [];
+  t.mock.method(globalThis, 'fetch', async (input, init) => {
+    requests.push({ url: String(input), init });
+    const route = routes[String(input)];
+    if (!route) throw new TypeError('fetch failed', { cause: { code: 'ENOTFOUND' } });
+    return route();
+  });
+  return requests;
+}
+
+const html = (body = '<title>ok</title>') => () => new Response(body, { headers: { 'content-type': 'text/html' } });
+const redirect = (location, status = 301) => () => new Response(null, { status, headers: { location } });
+
+test('fetch: sends the pageaudit User-Agent and does not let fetch follow redirects', async (t) => {
+  const requests = serve(t, { 'https://x.test/': html() });
+  await fetchPage('https://x.test/');
+  assert.match(USER_AGENT, /^pageaudit\/\d+\.\d+\.\d+ /);
+  assert.equal(requests[0].init.headers['user-agent'], USER_AGENT);
+  assert.equal(requests[0].init.redirect, 'manual');
+});
+
+test('fetch: follows redirects and records every hop', async (t) => {
+  serve(t, {
+    'http://x.test/a': redirect('https://x.test/a'),
+    'https://x.test/a': redirect('/b', 302),
+    'https://x.test/b': html(),
+  });
+  const page = await fetchPage('http://x.test/a');
+  assert.equal(page.url, 'http://x.test/a');
+  assert.equal(page.finalUrl, 'https://x.test/b');
+  assert.equal(page.status, 200);
+  assert.equal(page.html, '<title>ok</title>');
+  assert.deepEqual(page.redirects, [
+    { url: 'http://x.test/a', status: 301, location: 'https://x.test/a' },
+    { url: 'https://x.test/a', status: 302, location: 'https://x.test/b' },
+  ]);
+});
+
+test('fetch: a redirect loop stops after 10 hops', async (t) => {
+  serve(t, { 'https://x.test/a': redirect('/b'), 'https://x.test/b': redirect('/a') });
+  await assert.rejects(fetchPage('https://x.test/a'), (err) => err.reason === 'more than 10 redirects');
+});
+
+test('fetch: a redirect to a non-http protocol fails', async (t) => {
+  serve(t, { 'https://x.test/': redirect('ftp://x.test/file') });
+  await assert.rejects(fetchPage('https://x.test/'), /unsupported protocol ftp: in redirect location/);
+});
+
+test('fetch: error statuses and non-HTML responses return no html', async (t) => {
+  serve(t, {
+    'https://x.test/missing': () => new Response('gone', { status: 404, headers: { 'content-type': 'text/html' } }),
+    'https://x.test/data': () => new Response('{}', { headers: { 'content-type': 'application/json' } }),
+  });
+  assert.deepEqual(await fetchPage('https://x.test/missing'), {
+    url: 'https://x.test/missing',
+    finalUrl: 'https://x.test/missing',
+    status: 404,
+    redirects: [],
+    contentType: 'text/html',
+    html: null,
+  });
+  const data = await fetchPage('https://x.test/data');
+  assert.equal(data.status, 200);
+  assert.equal(data.contentType, 'application/json');
+  assert.equal(data.html, null);
+});
+
+test('fetch: invalid and non-http URLs are rejected before any request', async (t) => {
+  const requests = serve(t, {});
+  await assert.rejects(fetchPage('not a url'), /invalid URL "not a url"/);
+  await assert.rejects(fetchPage('ftp://x.test/'), /unsupported protocol ftp: in URL/);
+  assert.equal(requests.length, 0);
 });

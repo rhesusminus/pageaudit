@@ -2,7 +2,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { stripVTControlCharacters } from 'node:util';
 import chalk from 'chalk';
-import { buildReport, formatTable } from '../src/report.js';
+import {
+  buildReport,
+  formatIssueTable,
+  formatPagesTable,
+  formatReport,
+  formatSiteTable,
+  formatSummary,
+} from '../src/report.js';
 
 const CONTEXT = '<img src="/averyveryverylongimagefilename-that-goes-on-and-on-and-on/hero-banner-final-v2.png">';
 
@@ -10,37 +17,38 @@ const issue = (severity, category, message, context) => ({ type: 't', severity, 
 
 // chalk disables colors when stdout is not a TTY, which hides ANSI-related
 // wrapping bugs, so force them on for the duration of the render.
-function renderColored(categories) {
+function colored(render) {
   const previous = chalk.level;
   chalk.level = 1;
   try {
-    const colored = formatTable(buildReport('http://x', categories));
-    assert.match(colored, /\x1b\[/, 'expected colored output');
-    return colored;
+    const output = render();
+    assert.match(output, /\x1b\[/, 'expected colored output');
+    return output;
   } finally {
     chalk.level = previous;
   }
 }
 
-const categories = {
-  images: [
-    issue('error', 'accessibility', 'Image missing alt attribute', CONTEXT),
-    issue('warning', 'performance', 'Image missing width/height (causes layout shift)', CONTEXT),
-    issue('info', 'accessibility', 'Image has empty alt (correct if decorative, review)', '<img alt="">'),
-  ],
-  meta: [],
-};
+const plainColored = (render) => stripVTControlCharacters(colored(render));
+const tableWidths = (plain) => new Set(plain.split('\n').filter((l) => /^[│┌├└]/.test(l)).map((l) => l.length));
 
-test('formatTable: colored cells are never split or leak escape fragments', () => {
-  const plain = stripVTControlCharacters(renderColored(categories));
+const images = [
+  issue('error', 'accessibility', 'Image missing alt attribute', CONTEXT),
+  issue('warning', 'performance', 'Image missing width/height (causes layout shift)', CONTEXT),
+  issue('info', 'accessibility', 'Image has empty alt (correct if decorative, review)', '<img alt="">'),
+];
+const renderColored = () => colored(() => formatIssueTable(images));
+
+test('formatIssueTable: colored cells are never split or leak escape fragments', () => {
+  const plain = stripVTControlCharacters(renderColored());
   assert.doesNotMatch(plain, /\x1b|\[\d+m/, 'stray escape fragment');
   for (const word of ['error', 'warning', 'info', 'accessibility', 'performance']) {
     assert.match(plain, new RegExp(`│ ${word} +│`), `${word} was split`);
   }
 });
 
-test('formatTable: context wraps at the full column width and keeps its text', () => {
-  const plain = stripVTControlCharacters(renderColored(categories));
+test('formatIssueTable: context wraps at the full column width and keeps its text', () => {
+  const plain = stripVTControlCharacters(renderColored());
   const rows = plain.split('\n').filter((l) => l.startsWith('│'));
   const contextLines = rows.map((l) => l.split('│')[4].slice(1, -1).trimEnd());
   assert.ok(contextLines.every((l) => l.length <= 44));
@@ -48,43 +56,127 @@ test('formatTable: context wraps at the full column width and keeps its text', (
   assert.equal(contextLines.join('').split(CONTEXT).length - 1, 2);
 });
 
-test('formatTable: all table lines have equal width', () => {
-  const plain = stripVTControlCharacters(renderColored(categories));
+test('formatIssueTable: all table lines have equal width', () => {
+  const plain = stripVTControlCharacters(renderColored());
   const widths = new Set(plain.split('\n').filter((l) => /^[│┌├└]/.test(l)).map((l) => l.length));
   assert.equal(widths.size, 1);
 });
 
-test('formatTable: fits the terminal width, down to 80 columns', () => {
+test('formatIssueTable: fits the terminal width, down to 80 columns', () => {
   for (const columns of [80, 100]) {
-    const previous = chalk.level;
-    chalk.level = 1;
-    try {
-      const plain = stripVTControlCharacters(formatTable(buildReport('http://x', categories), columns));
-      const widths = new Set(plain.split('\n').filter((l) => /^[│┌├└]/.test(l)).map((l) => l.length));
-      assert.deepEqual([...widths], [columns]);
-    } finally {
-      chalk.level = previous;
-    }
+    assert.deepEqual([...tableWidths(plainColored(() => formatIssueTable(images, columns)))], [columns]);
   }
 });
 
-test('formatTable: wide characters wrap by display width without losing text', () => {
+test('formatIssueTable: wide characters wrap by display width without losing text', () => {
   const title = `<title>${'日本語のタイトル'.repeat(8)} 😀😀😀 emoji 🎉🎉</title>`;
-  const previous = chalk.level;
-  chalk.level = 1;
-  try {
-    const plain = stripVTControlCharacters(
-      formatTable(buildReport('http://x', { meta: [issue('warning', 'seo', 'Title is long', title)] }), 80),
-    );
-    assert.doesNotMatch(plain, /…/, 'text was clipped');
-    const context = plain
-      .split('\n')
-      .filter((l) => l.startsWith('│'))
-      .slice(1)
-      .map((l) => l.split('│')[4].slice(1).trimEnd())
-      .join('');
-    assert.equal(context.replaceAll(' ', ''), title.replaceAll(' ', ''));
-  } finally {
-    chalk.level = previous;
-  }
+  const plain = plainColored(() => formatIssueTable([issue('warning', 'seo', 'Title is long', title)], 80));
+  assert.doesNotMatch(plain, /…/, 'text was clipped');
+  const context = plain
+    .split('\n')
+    .filter((l) => l.startsWith('│'))
+    .slice(1)
+    .map((l) => l.split('│')[4].slice(1).trimEnd())
+    .join('');
+  assert.equal(context.replaceAll(' ', ''), title.replaceAll(' ', ''));
+});
+
+test('formatIssueTable: lists errors first, then warnings, then infos', () => {
+  const plain = stripVTControlCharacters(formatIssueTable([images[2], images[1], images[0]]));
+  const severities = plain.match(/│ (error|warning|info) /g).map((m) => m.slice(2, -1));
+  assert.deepEqual(severities, ['error', 'warning', 'info']);
+});
+
+const page = (url, severities, fields = {}) => ({
+  url,
+  finalUrl: url,
+  status: 200,
+  redirects: [],
+  issues: severities.map((severity) => ({ url, ...issue(severity, 'seo', `A ${severity}`, '<x>') })),
+  facts: { title: 'T' },
+  ...fields,
+});
+
+const pages = [
+  page('https://a.test/clean', []),
+  page('https://a.test/warn', ['warning', 'warning', 'info']),
+  page('https://a.test/down', ['error'], { status: null }),
+  page('https://a.test/also-clean', []),
+  page('https://a.test/mixed', ['error', 'warning']),
+];
+
+const site = [
+  {
+    type: 'duplicate-title',
+    severity: 'warning',
+    category: 'seo',
+    message: 'Same title on 2 pages',
+    context: '<title>T</title>',
+    urls: ['https://a.test/warn', `https://a.test/${'long-path/'.repeat(8)}`],
+  },
+];
+
+test('buildReport: totals pages and severities, including site issues, and drops internal facts', () => {
+  const report = buildReport({ pages, site, skipped: [{ input: 'x', source: 'argument', reason: 'not a valid URL' }] });
+  assert.deepEqual(report.summary, { pages: 5, errors: 2, warnings: 4, infos: 1 });
+  assert.deepEqual(Object.keys(report), ['pages', 'site', 'skipped', 'summary']);
+  assert.deepEqual(Object.keys(report.pages[0]), ['url', 'finalUrl', 'status', 'redirects', 'issues']);
+  assert.equal(report.skipped.length, 1);
+});
+
+test('formatPagesTable: worst pages first with right-aligned counts', () => {
+  const plain = plainColored(() => formatPagesTable(pages, 100));
+  const rows = plain.split('\n').filter((l) => l.startsWith('│')).slice(1);
+  assert.deepEqual(
+    rows.map((l) => l.split('│').slice(1, -1).map((c) => c.trim())),
+    [
+      ['https://a.test/mixed', '200', '1', '1', '0'],
+      ['https://a.test/down', 'failed', '1', '0', '0'],
+      ['https://a.test/warn', '200', '0', '2', '1'],
+      ['https://a.test/clean', '200', '0', '0', '0'],
+      ['https://a.test/also-clean', '200', '0', '0', '0'],
+    ],
+  );
+  assert.match(rows[0], /│ +1 │ +1 │ +0 │$/);
+  assert.deepEqual([...tableWidths(plain)], [100]);
+});
+
+test('formatPagesTable: long URLs wrap inside the URL column', () => {
+  const url = `https://a.test/${'segment/'.repeat(20)}`;
+  const plain = plainColored(() => formatPagesTable([page(url, ['error'])], 80));
+  assert.deepEqual([...tableWidths(plain)], [80]);
+  const cells = plain.split('\n').filter((l) => l.startsWith('│')).slice(1).map((l) => l.split('│')[1].trim());
+  assert.equal(cells.join(''), url);
+});
+
+test('formatSiteTable: lists every page involved, one per line', () => {
+  const plain = plainColored(() => formatSiteTable(site, 90));
+  assert.deepEqual([...tableWidths(plain)], [90]);
+  const pagesColumn = plain.split('\n').filter((l) => l.startsWith('│')).slice(1).map((l) => l.split('│')[4].trim());
+  assert.equal(pagesColumn[0], 'https://a.test/warn');
+  assert.equal(pagesColumn.slice(1).join(''), site[0].urls[1]);
+  assert.match(plain, /Same title on 2 pages/);
+  assert.match(plain, /<title>T<\/title>/);
+});
+
+test('formatReport: details only for pages with issues, clean pages collapsed, site section and totals last', () => {
+  const plain = plainColored(() => formatReport(buildReport({ pages, site }), 100));
+  const headings = plain.split('\n').filter((l) => /^https:\/\//.test(l));
+  assert.deepEqual(headings, ['https://a.test/mixed', 'https://a.test/down', 'https://a.test/warn']);
+  assert.match(plain, /\n2 pages clean\n/);
+  assert.ok(plain.indexOf('\nSite\n') > plain.indexOf('2 pages clean'));
+  assert.ok(plain.trimEnd().endsWith('5 pages, 2 errors, 4 warnings, 1 info'));
+});
+
+test('formatReport: says so when there are no cross-page issues', () => {
+  const plain = stripVTControlCharacters(formatReport(buildReport({ pages: [pages[0]], site: [] }), 100));
+  assert.match(plain, /Site\n  No cross-page issues/);
+  assert.match(plain, /1 page clean/);
+  assert.ok(plain.trimEnd().endsWith('1 page, 0 errors, 0 warnings, 0 infos'));
+});
+
+test('formatSummary: pluralizes each count', () => {
+  const line = (summary) => stripVTControlCharacters(formatSummary({ summary }));
+  assert.equal(line({ pages: 1, errors: 1, warnings: 1, infos: 1 }), '\n1 page, 1 error, 1 warning, 1 info');
+  assert.equal(line({ pages: 40, errors: 6, warnings: 19, infos: 0 }), '\n40 pages, 6 errors, 19 warnings, 0 infos');
 });
