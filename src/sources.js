@@ -10,5 +10,5 @@ export const SOURCES = {
   starterGuide: 'https://developers.google.com/search/docs/fundamentals/seo-starter-guide',
   cls: 'https://web.dev/articles/optimize-cls',
   decorativeImages: 'https://www.w3.org/WAI/tutorials/images/decorative/',
-  headings: 'https://www.w3.org/WAI/tutorials/page-structure/headings/',
-};
+  headings: 'https://www.w3.org/WAI/tutorials/page-structure/headings/'
+}
