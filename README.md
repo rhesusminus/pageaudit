@@ -33,15 +33,15 @@ Link-following crawling is not supported.
 
 ### Options
 
-| Option | Default | Meaning |
-| ------ | ------- | ------- |
-| `--urls-file <path>` | | Read URLs from a file, one per line. `#` starts a comment at the start of a line or after whitespace. `-` reads stdin. |
-| `--sitemap <url>` | | Read URLs from a sitemap or sitemap index. |
-| `--limit <n>` | all | Audit at most `n` pages. |
-| `--concurrency <n>` | 3 | Pages fetched at the same time. |
-| `--delay <ms>` | 200 | Minimum time between starting requests to the same host. |
-| `--fail-on <level>` | `error` | `warning` makes warnings fail the run too (for CI). |
-| `--json` | | Print the JSON report. Also the default when stdout is not a TTY. |
+| Option               | Default | Meaning                                                                                                                |
+| -------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `--urls-file <path>` |         | Read URLs from a file, one per line. `#` starts a comment at the start of a line or after whitespace. `-` reads stdin. |
+| `--sitemap <url>`    |         | Read URLs from a sitemap or sitemap index.                                                                             |
+| `--limit <n>`        | all     | Audit at most `n` pages.                                                                                               |
+| `--concurrency <n>`  | 3       | Pages fetched at the same time.                                                                                        |
+| `--delay <ms>`       | 200     | Minimum time between starting requests to the same host.                                                               |
+| `--fail-on <level>`  | `error` | `warning` makes warnings fail the run too (for CI).                                                                    |
+| `--json`             |         | Print the JSON report. Also the default when stdout is not a TTY.                                                      |
 
 Each request has a 15 s timeout (covering redirects and the body), follows up to 10 redirects and sends `User-Agent: pageaudit/<version> (+https://github.com/rhesusminus/pageaudit)`.
 
@@ -58,11 +58,11 @@ Tables follow the terminal width (80 to 114 columns).
 
 ### Exit codes
 
-| Code | Meaning |
-| ---- | ------- |
-| 0 | No errors (warnings and infos are allowed, unless `--fail-on warning`) |
-| 1 | At least one error, or a warning with `--fail-on warning` |
-| 2 | Usage error, an unreadable URL file or sitemap, or no valid URL to audit |
+| Code | Meaning                                                                  |
+| ---- | ------------------------------------------------------------------------ |
+| 0    | No errors (warnings and infos are allowed, unless `--fail-on warning`)   |
+| 1    | At least one error, or a warning with `--fail-on warning`                |
+| 2    | Usage error, an unreadable URL file or sitemap, or no valid URL to audit |
 
 A page that cannot be fetched or returns an error status is an error on that page (exit 1), not a reason to stop.
 
@@ -72,44 +72,44 @@ Rules follow what Google and the W3C actually say, not folklore, so severities a
 
 ### Page checks
 
-| Group | Rule | Severity | Category |
-| ----- | ---- | -------- | -------- |
-| Images | `missing-alt`: no `alt` attribute | error | accessibility |
-| Images | `empty-alt-in-link`: empty alt on an image that is the only content of a link or button | error | accessibility |
-| Images | `empty-alt`: `alt=""` (correct for decorative images, flagged for review) | info | accessibility |
-| Images | `alt-is-filename`: alt text repeats the file name | warning | accessibility |
-| Images | `missing-src`: no `src` or `srcset` | warning | seo |
-| Images | `generic-filename`: e.g. `IMG00023.JPG`, `image1.jpg` | info | seo |
-| Images | `missing-dimensions`: no `width` or `height` (layout shift) | warning | performance |
-| Meta | `missing-title`, `empty-title` (the title is also found outside `<head>`, but not inside an `<svg>`) | error | seo |
-| Meta | `long-title`: over 60 characters | warning | seo |
-| Meta | `missing-description` (Google may build the snippet from the page instead) | warning | seo |
-| Meta | `long-description` (over 160) and `short-description` (under 70) | info | seo |
-| Meta | `multiple-descriptions` (only one is used, the first non-empty one is checked; empty ones count toward the total) | warning | seo |
-| Meta | `missing-canonical` (also when the link is outside `<head>`, where Google ignores it) | warning | seo |
-| Meta | `multiple-canonicals`: several canonicals with different hrefs (conflicting signals) | warning | seo |
-| Meta | `multiple-canonicals`: several canonicals with identical hrefs (redundant) | info | seo |
-| Meta | `relative-canonical`, `canonical-fragment`, `empty-canonical` | warning | seo |
-| Headings | `missing-h1` (Google does not require one) | warning | best-practice |
-| Headings | `multiple-h1` (Google does not mind) | info | best-practice |
-| Headings | `skipped-heading-level`: e.g. `<h3>` with no preceding `<h2>` | warning | accessibility |
-| Headings | `empty-heading` (no text, `aria-label`, `aria-labelledby` or image alt) | warning | accessibility |
-| Response | `fetch-failed`: network error, timeout or more than 10 redirects | error | seo |
-| Response | `http-status`: any status other than 200 (the HTML checks are skipped) | error | seo |
-| Response | `not-html`: the content type is not HTML, for example a PDF in a sitemap (the HTML checks are skipped) | info | seo |
-| Response | `redirect-chain`: more than one redirect before the final page | warning | seo |
-| Response | `redirect`: one redirect (the final URL is audited) | info | seo |
+| Group    | Rule                                                                                                              | Severity | Category      |
+| -------- | ----------------------------------------------------------------------------------------------------------------- | -------- | ------------- |
+| Images   | `missing-alt`: no `alt` attribute                                                                                 | error    | accessibility |
+| Images   | `empty-alt-in-link`: empty alt on an image that is the only content of a link or button                           | error    | accessibility |
+| Images   | `empty-alt`: `alt=""` (correct for decorative images, flagged for review)                                         | info     | accessibility |
+| Images   | `alt-is-filename`: alt text repeats the file name                                                                 | warning  | accessibility |
+| Images   | `missing-src`: no `src` or `srcset`                                                                               | warning  | seo           |
+| Images   | `generic-filename`: e.g. `IMG00023.JPG`, `image1.jpg`                                                             | info     | seo           |
+| Images   | `missing-dimensions`: no `width` or `height` (layout shift)                                                       | warning  | performance   |
+| Meta     | `missing-title`, `empty-title` (the title is also found outside `<head>`, but not inside an `<svg>`)              | error    | seo           |
+| Meta     | `long-title`: over 60 characters                                                                                  | warning  | seo           |
+| Meta     | `missing-description` (Google may build the snippet from the page instead)                                        | warning  | seo           |
+| Meta     | `long-description` (over 160) and `short-description` (under 70)                                                  | info     | seo           |
+| Meta     | `multiple-descriptions` (only one is used, the first non-empty one is checked; empty ones count toward the total) | warning  | seo           |
+| Meta     | `missing-canonical` (also when the link is outside `<head>`, where Google ignores it)                             | warning  | seo           |
+| Meta     | `multiple-canonicals`: several canonicals with different hrefs (conflicting signals)                              | warning  | seo           |
+| Meta     | `multiple-canonicals`: several canonicals with identical hrefs (redundant)                                        | info     | seo           |
+| Meta     | `relative-canonical`, `canonical-fragment`, `empty-canonical`                                                     | warning  | seo           |
+| Headings | `missing-h1` (Google does not require one)                                                                        | warning  | best-practice |
+| Headings | `multiple-h1` (Google does not mind)                                                                              | info     | best-practice |
+| Headings | `skipped-heading-level`: e.g. `<h3>` with no preceding `<h2>`                                                     | warning  | accessibility |
+| Headings | `empty-heading` (no text, `aria-label`, `aria-labelledby` or image alt)                                           | warning  | accessibility |
+| Response | `fetch-failed`: network error, timeout or more than 10 redirects                                                  | error    | seo           |
+| Response | `http-status`: any status other than 200 (the HTML checks are skipped)                                            | error    | seo           |
+| Response | `not-html`: the content type is not HTML, for example a PDF in a sitemap (the HTML checks are skipped)            | info     | seo           |
+| Response | `redirect-chain`: more than one redirect before the final page                                                    | warning  | seo           |
+| Response | `redirect`: one redirect (the final URL is audited)                                                               | info     | seo           |
 
 ### Site checks
 
 These run after every page is audited and compare the pages that returned HTML. Site issues list the pages involved in `urls` instead of a single `url`.
 
-| Rule | Severity | Category |
-| ---- | -------- | -------- |
-| `duplicate-title`: the same title (ignoring case and whitespace runs) on several pages | warning | seo |
-| `duplicate-description`: the same meta description on several pages | warning | seo |
-| `duplicate-h1`: the same `<h1>` text on several pages | warning | best-practice |
-| `canonical-elsewhere`: the canonical points to a different URL (often intentional, so informational) | info | seo |
+| Rule                                                                                                 | Severity | Category      |
+| ---------------------------------------------------------------------------------------------------- | -------- | ------------- |
+| `duplicate-title`: the same title (ignoring case and whitespace runs) on several pages               | warning  | seo           |
+| `duplicate-description`: the same meta description on several pages                                  | warning  | seo           |
+| `duplicate-h1`: the same `<h1>` text on several pages                                                | warning  | best-practice |
+| `canonical-elsewhere`: the canonical points to a different URL (often intentional, so informational) | info     | seo           |
 
 Pages count as one page when they end up at the same final URL or declare the same canonical, so `/list` and `/list?sort=asc` with a canonical of `/list` are not duplicates of each other. Missing or empty values are never duplicates, they are already reported per page.
 
@@ -123,19 +123,19 @@ Before checking, `<template>` elements are removed because their content is iner
 
 The rules were researched in September 2026 (with the same AI agent that wrote the code) from Google Search Central, web.dev and the W3C Web Accessibility Initiative. The URLs live in `src/sources.js` and every issue links to its source in the JSON output.
 
-| Source | What it says | Rules based on it |
-| ------ | ------------ | ----------------- |
-| [Google: title links](https://developers.google.com/search/docs/appearance/title-link) | Every page should have a `<title>`, and each page's title should be distinct. "No limit" on length, but it is truncated "typically to fit the device width". No numeric guidance. | `missing-title`, `empty-title`, `long-title`, `duplicate-title` |
-| [Google: snippets and meta descriptions](https://developers.google.com/search/docs/appearance/snippet) | No length limit, truncated to fit the device width. The meta description is only "sometimes" used, snippets mostly come from page content. Descriptions should be unique and specific, and too-short or generic ones are given as bad examples. | `missing-description`, `long-description`, `short-description`, `duplicate-description` |
-| [Google: canonical URLs](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls) | Use absolute URLs, add a self-referencing canonical, only `<head>` is accepted, do not send conflicting signals, fragments are generally not supported. | `missing-canonical`, `multiple-canonicals`, `relative-canonical`, `canonical-fragment`, `empty-canonical`, `canonical-elsewhere` |
-| [Google: image SEO](https://developers.google.com/search/docs/appearance/google-images) | Google finds images in the `src` of `<img>` (not CSS backgrounds). Use short descriptive file names, not `IMG00023.JPG` or `image1.jpg`. Avoid keyword-stuffed alt text. | `missing-src`, `generic-filename`, `alt-is-filename` |
-| [Google: redirects](https://developers.google.com/search/docs/crawling-indexing/301-redirects) | Explains permanent and temporary redirects and recommends server-side redirects. | `redirect`, `redirect-chain` |
-| [Google: HTTP status codes and network errors](https://developers.google.com/search/docs/crawling-indexing/http-network-errors) | Google's crawlers follow up to 10 redirect hops. Content from URLs that return a 4xx status is not used, and even a 2xx does not guarantee indexing. | `http-status`, `fetch-failed`, the 10-redirect limit |
-| [Google: indexable file types](https://developers.google.com/search/docs/crawling-indexing/indexable-file-types) | Lists the non-HTML file types Google can index, such as PDF, so a non-HTML URL is not a problem in itself. | `not-html` |
-| [Google: SEO starter guide](https://developers.google.com/search/docs/fundamentals/seo-starter-guide) | Heading order and count do not matter for Search. Good titles and descriptions are unique and concise. Good alt text is "quite important". | `missing-h1`, `multiple-h1`, `duplicate-h1` (as best practice only) |
-| [web.dev: optimize CLS](https://web.dev/articles/optimize-cls) | Set `width` and `height` on images so the browser reserves space. Good CLS is 0.1 or less. | `missing-dimensions` |
-| [W3C WAI: decorative images](https://www.w3.org/WAI/tutorials/images/decorative/) | Purely decorative images should have `alt=""`. Omitting `alt` makes some screen readers read out the file name. Only the author can tell if an image is decorative. | `missing-alt`, `empty-alt`, `empty-alt-in-link` |
-| [W3C WAI: headings](https://www.w3.org/WAI/tutorials/page-structure/headings/) | Nest headings by rank, and avoid skipping ranks (an `<h2>` directly followed by an `<h4>`). | `skipped-heading-level`, `empty-heading` |
+| Source                                                                                                                          | What it says                                                                                                                                                                                                                                    | Rules based on it                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| [Google: title links](https://developers.google.com/search/docs/appearance/title-link)                                          | Every page should have a `<title>`, and each page's title should be distinct. "No limit" on length, but it is truncated "typically to fit the device width". No numeric guidance.                                                               | `missing-title`, `empty-title`, `long-title`, `duplicate-title`                                                                  |
+| [Google: snippets and meta descriptions](https://developers.google.com/search/docs/appearance/snippet)                          | No length limit, truncated to fit the device width. The meta description is only "sometimes" used, snippets mostly come from page content. Descriptions should be unique and specific, and too-short or generic ones are given as bad examples. | `missing-description`, `long-description`, `short-description`, `duplicate-description`                                          |
+| [Google: canonical URLs](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls)                | Use absolute URLs, add a self-referencing canonical, only `<head>` is accepted, do not send conflicting signals, fragments are generally not supported.                                                                                         | `missing-canonical`, `multiple-canonicals`, `relative-canonical`, `canonical-fragment`, `empty-canonical`, `canonical-elsewhere` |
+| [Google: image SEO](https://developers.google.com/search/docs/appearance/google-images)                                         | Google finds images in the `src` of `<img>` (not CSS backgrounds). Use short descriptive file names, not `IMG00023.JPG` or `image1.jpg`. Avoid keyword-stuffed alt text.                                                                        | `missing-src`, `generic-filename`, `alt-is-filename`                                                                             |
+| [Google: redirects](https://developers.google.com/search/docs/crawling-indexing/301-redirects)                                  | Explains permanent and temporary redirects and recommends server-side redirects.                                                                                                                                                                | `redirect`, `redirect-chain`                                                                                                     |
+| [Google: HTTP status codes and network errors](https://developers.google.com/search/docs/crawling-indexing/http-network-errors) | Google's crawlers follow up to 10 redirect hops. Content from URLs that return a 4xx status is not used, and even a 2xx does not guarantee indexing.                                                                                            | `http-status`, `fetch-failed`, the 10-redirect limit                                                                             |
+| [Google: indexable file types](https://developers.google.com/search/docs/crawling-indexing/indexable-file-types)                | Lists the non-HTML file types Google can index, such as PDF, so a non-HTML URL is not a problem in itself.                                                                                                                                      | `not-html`                                                                                                                       |
+| [Google: SEO starter guide](https://developers.google.com/search/docs/fundamentals/seo-starter-guide)                           | Heading order and count do not matter for Search. Good titles and descriptions are unique and concise. Good alt text is "quite important".                                                                                                      | `missing-h1`, `multiple-h1`, `duplicate-h1` (as best practice only)                                                              |
+| [web.dev: optimize CLS](https://web.dev/articles/optimize-cls)                                                                  | Set `width` and `height` on images so the browser reserves space. Good CLS is 0.1 or less.                                                                                                                                                      | `missing-dimensions`                                                                                                             |
+| [W3C WAI: decorative images](https://www.w3.org/WAI/tutorials/images/decorative/)                                               | Purely decorative images should have `alt=""`. Omitting `alt` makes some screen readers read out the file name. Only the author can tell if an image is decorative.                                                                             | `missing-alt`, `empty-alt`, `empty-alt-in-link`                                                                                  |
+| [W3C WAI: headings](https://www.w3.org/WAI/tutorials/page-structure/headings/)                                                  | Nest headings by rank, and avoid skipping ranks (an `<h2>` directly followed by an `<h4>`).                                                                                                                                                     | `skipped-heading-level`, `empty-heading`                                                                                         |
 
 Judgment calls that are not straight from those pages:
 
