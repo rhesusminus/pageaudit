@@ -16,14 +16,10 @@ export function checkFetchError(err) {
   ]
 }
 
-// Checks on the HTTP response itself, from a fetchPage() result.
-export function checkResponse({ url, finalUrl, status, redirects, contentType, html }) {
-  const issues = []
-  // The page URL is already known, so only point out where a redirect ended up.
-  const landedOn = finalUrl === url ? '' : finalUrl
+function checkRedirects({ url, redirects }) {
   const chain = [url, ...redirects.map((r) => r.location)].join(' -> ')
   if (redirects.length > 1) {
-    issues.push(
+    return [
       issue({
         type: 'redirect-chain',
         severity: 'warning',
@@ -31,9 +27,10 @@ export function checkResponse({ url, finalUrl, status, redirects, contentType, h
         message: `Redirect chain of ${redirects.length} hops (${redirects.map((r) => r.status).join(', ')}), link to the final URL directly`,
         context: chain
       })
-    )
-  } else if (redirects.length === 1) {
-    issues.push(
+    ]
+  }
+  if (redirects.length === 1) {
+    return [
       issue({
         type: 'redirect',
         severity: 'info',
@@ -41,11 +38,16 @@ export function checkResponse({ url, finalUrl, status, redirects, contentType, h
         message: `Redirects (${redirects[0].status}), the final URL was audited`,
         context: chain
       })
-    )
+    ]
   }
+  return []
+}
 
+function checkStatus({ url, finalUrl, status, contentType, html }) {
+  // The page URL is already known, so only point out where a redirect ended up.
+  const landedOn = finalUrl === url ? '' : finalUrl
   if (status !== 200) {
-    issues.push(
+    return [
       issue({
         type: 'http-status',
         severity: 'error',
@@ -53,9 +55,10 @@ export function checkResponse({ url, finalUrl, status, redirects, contentType, h
         message: `HTTP ${status} response, page checks skipped`,
         context: landedOn
       })
-    )
-  } else if (html === null) {
-    issues.push(
+    ]
+  }
+  if (html === null) {
+    return [
       issue({
         type: 'not-html',
         severity: 'info',
@@ -63,7 +66,12 @@ export function checkResponse({ url, finalUrl, status, redirects, contentType, h
         message: `Not an HTML page (content-type: ${contentType || 'none'}), page checks skipped`,
         context: landedOn
       })
-    )
+    ]
   }
-  return issues
+  return []
+}
+
+// Checks on the HTTP response itself, from a fetchPage() result.
+export function checkResponse(response) {
+  return [...checkRedirects(response), ...checkStatus(response)]
 }

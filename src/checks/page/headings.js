@@ -11,32 +11,38 @@ function hasAccessibleText($, el) {
     .some((img) => $(img).attr('alt').trim() !== '')
 }
 
-export function checkHeadings($) {
-  const issues = []
-  const headings = $('h1, h2, h3, h4, h5, h6').toArray()
+// Google says a page ranks fine with no h1 or several, so these are best practice only.
+function checkH1s($, headings) {
   const h1s = headings.filter((el) => el.tagName === 'h1')
-
-  // Google says a page ranks fine with no h1 or several, so these are best practice only.
   if (h1s.length === 0) {
-    issues.push({
-      type: 'missing-h1',
-      severity: 'warning',
-      category: 'best-practice',
-      source: SOURCES.starterGuide,
-      message: 'No <h1> on the page (not required by Google, but recommended)',
-      context: '<body>'
-    })
-  } else if (h1s.length > 1) {
-    issues.push({
-      type: 'multiple-h1',
-      severity: 'info',
-      category: 'best-practice',
-      source: SOURCES.starterGuide,
-      message: `${h1s.length} <h1> elements found (Google does not mind, one is the common convention)`,
-      context: truncate(h1s.map((el) => `<h1>${collapseWhitespace($(el).text())}</h1>`).join(' '))
-    })
+    return [
+      {
+        type: 'missing-h1',
+        severity: 'warning',
+        category: 'best-practice',
+        source: SOURCES.starterGuide,
+        message: 'No <h1> on the page (not required by Google, but recommended)',
+        context: '<body>'
+      }
+    ]
   }
+  if (h1s.length > 1) {
+    return [
+      {
+        type: 'multiple-h1',
+        severity: 'info',
+        category: 'best-practice',
+        source: SOURCES.starterGuide,
+        message: `${h1s.length} <h1> elements found (Google does not mind, one is the common convention)`,
+        context: truncate(h1s.map((el) => `<h1>${collapseWhitespace($(el).text())}</h1>`).join(' '))
+      }
+    ]
+  }
+  return []
+}
 
+function checkHeadingOrder($, headings) {
+  const issues = []
   let previous = 0
   for (const el of headings) {
     const level = Number(el.tagName[1])
@@ -63,4 +69,9 @@ export function checkHeadings($) {
     previous = level
   }
   return issues
+}
+
+export function checkHeadings($) {
+  const headings = $('h1, h2, h3, h4, h5, h6').toArray()
+  return [...checkH1s($, headings), ...checkHeadingOrder($, headings)]
 }

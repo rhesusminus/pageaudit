@@ -89,6 +89,49 @@ async function readInputs(options, stdin, spinner) {
   return { ...resolved, skipped: [...skipped, ...resolved.skipped] }
 }
 
+// Resolves the URLs to audit. Returns { inputs } or { exitCode } when reading the inputs failed.
+async function loadInputs(options, stdin, startSpinner) {
+  const spinner = options.sitemaps.length || options.files.includes('-') ? startSpinner('Reading URLs') : null
+  try {
+    const inputs = await readInputs(options, stdin, spinner)
+    spinner?.stop()
+    return { inputs }
+  } catch (err) {
+    spinner?.fail(err.message)
+    if (!spinner) console.error(err.message)
+    return { exitCode: 2 }
+  }
+}
+
+// Reports skipped and limited inputs. Returns false when there is nothing to audit.
+function announceInputs({ urls, skipped, total }, options) {
+  for (const { input, source, reason } of skipped) {
+    console.error(chalk.yellow(`Skipped ${input} (${source}): ${reason}`))
+  }
+  if (!urls.length) {
+    console.error('No URLs to audit.')
+    return false
+  }
+  if (total > urls.length) {
+    console.error(`Auditing the first ${urls.length} of ${total} URLs (--limit ${options.limit}).`)
+  }
+  return true
+}
+
+async function auditUrls(urls, options, startSpinner) {
+  const progress = (done) => `Auditing ${done}/${urls.length} pages...`
+  const spinner = startSpinner(progress(0))
+  const pages = await runAudit(urls, {
+    concurrency: options.concurrency,
+    delay: options.delay,
+    onProgress: (done) => {
+      if (spinner) spinner.text = progress(done)
+    }
+  })
+  spinner?.stop()
+  return pages
+}
+
 export async function run(argv, { stdin = process.stdin } = {}) {
   let options
   try {
@@ -110,41 +153,12 @@ export async function run(argv, { stdin = process.stdin } = {}) {
   const spin = !json && canSpin(process.stderr)
   const startSpinner = (text) => (spin ? ora({ text, stream: process.stderr }).start() : null)
 
-  let inputs
-  let spinner = options.sitemaps.length || options.files.includes('-') ? startSpinner('Reading URLs') : null
-  try {
-    inputs = await readInputs(options, stdin, spinner)
-  } catch (err) {
-    spinner?.fail(err.message)
-    if (!spinner) console.error(err.message)
-    return 2
-  }
-  spinner?.stop()
+  const { inputs, exitCode } = await loadInputs(options, stdin, startSpinner)
+  if (exitCode) return exitCode
+  if (!announceInputs(inputs, options)) return 2
 
-  const { urls, skipped, total } = inputs
-  for (const { input, source, reason } of skipped) {
-    console.error(chalk.yellow(`Skipped ${input} (${source}): ${reason}`))
-  }
-  if (!urls.length) {
-    console.error('No URLs to audit.')
-    return 2
-  }
-  if (total > urls.length) {
-    console.error(`Auditing the first ${urls.length} of ${total} URLs (--limit ${options.limit}).`)
-  }
-
-  const progress = (done) => `Auditing ${done}/${urls.length} pages...`
-  spinner = startSpinner(progress(0))
-  const pages = await runAudit(urls, {
-    concurrency: options.concurrency,
-    delay: options.delay,
-    onProgress: (done) => {
-      if (spinner) spinner.text = progress(done)
-    }
-  })
-  spinner?.stop()
-
-  const report = buildReport({ pages, site: checkSite(pages), skipped })
+  const pages = await auditUrls(inputs.urls, options, startSpinner)
+  const report = buildReport({ pages, site: checkSite(pages), skipped: inputs.skipped })
   console.log(json ? JSON.stringify(report, null, 2) : formatReport(report, process.stdout.columns))
 
   const { errors, warnings } = report.summary
