@@ -23,86 +23,104 @@ function isOnlyLinkContent($, el) {
   return images[0] === el && images.every((img) => ($(img).attr('alt') ?? '').trim() === '')
 }
 
-export function checkImages($) {
-  const issues = []
-  $('img').each((_, el) => {
-    const context = snippet($, el)
-    const img = $(el)
-    const add = (issue) => issues.push({ context, ...issue })
-
-    const alt = img.attr('alt')
-    if (alt === undefined) {
-      add({
+function checkAlt($, el, alt) {
+  if (alt === undefined) {
+    return [
+      {
         type: 'missing-alt',
         severity: 'error',
         category: 'accessibility',
         source: SOURCES.decorativeImages,
         message: 'Image missing alt attribute'
-      })
-    } else if (alt.trim() === '') {
-      if (isOnlyLinkContent($, el)) {
-        add({
-          type: 'empty-alt-in-link',
-          severity: 'error',
-          category: 'accessibility',
-          source: SOURCES.decorativeImages,
-          message: 'Image is the only content of a link/button but has empty alt'
-        })
-      } else {
-        add({
-          type: 'empty-alt',
-          severity: 'info',
-          category: 'accessibility',
-          source: SOURCES.decorativeImages,
-          message: 'Image has empty alt (correct if decorative, review)'
-        })
       }
+    ]
+  }
+  if (alt.trim() !== '') return []
+  if (isOnlyLinkContent($, el)) {
+    return [
+      {
+        type: 'empty-alt-in-link',
+        severity: 'error',
+        category: 'accessibility',
+        source: SOURCES.decorativeImages,
+        message: 'Image is the only content of a link/button but has empty alt'
+      }
+    ]
+  }
+  return [
+    {
+      type: 'empty-alt',
+      severity: 'info',
+      category: 'accessibility',
+      source: SOURCES.decorativeImages,
+      message: 'Image has empty alt (correct if decorative, review)'
     }
+  ]
+}
 
+function checkSrc(img, src) {
+  if (src || img.attr('srcset')) return []
+  return [
+    {
+      type: 'missing-src',
+      severity: 'warning',
+      category: 'seo',
+      source: SOURCES.googleImages,
+      message: 'Image has no src or srcset (Google finds images via src)'
+    }
+  ]
+}
+
+function checkFileName(src, alt) {
+  const name = fileName(src)
+  if (!name) return []
+  const issues = []
+  const stem = name.replace(/\.[a-z0-9]+$/i, '')
+  if (GENERIC_NAME.test(stem)) {
+    issues.push({
+      type: 'generic-filename',
+      severity: 'info',
+      category: 'seo',
+      source: SOURCES.googleImages,
+      message: `Generic image file name "${name}" (use a short descriptive name)`
+    })
+  }
+  const altText = (alt ?? '').trim().toLowerCase()
+  if (altText && (altText === name.toLowerCase() || altText === stem.toLowerCase())) {
+    issues.push({
+      type: 'alt-is-filename',
+      severity: 'warning',
+      category: 'accessibility',
+      source: SOURCES.googleImages,
+      message: 'Alt text repeats the file name instead of describing the image'
+    })
+  }
+  return issues
+}
+
+function checkDimensions(img) {
+  if (img.attr('width') !== undefined && img.attr('height') !== undefined) return []
+  return [
+    {
+      type: 'missing-dimensions',
+      severity: 'warning',
+      category: 'performance',
+      source: SOURCES.cls,
+      message: 'Image missing width/height (causes layout shift)'
+    }
+  ]
+}
+
+export function checkImages($) {
+  const issues = []
+  $('img').each((_, el) => {
+    const img = $(el)
+    const alt = img.attr('alt')
     const src = (img.attr('src') ?? '').trim()
-    if (!src && !img.attr('srcset')) {
-      add({
-        type: 'missing-src',
-        severity: 'warning',
-        category: 'seo',
-        source: SOURCES.googleImages,
-        message: 'Image has no src or srcset (Google finds images via src)'
-      })
-    }
-
-    const name = fileName(src)
-    if (name) {
-      const stem = name.replace(/\.[a-z0-9]+$/i, '')
-      if (GENERIC_NAME.test(stem)) {
-        add({
-          type: 'generic-filename',
-          severity: 'info',
-          category: 'seo',
-          source: SOURCES.googleImages,
-          message: `Generic image file name "${name}" (use a short descriptive name)`
-        })
-      }
-      const altText = (alt ?? '').trim().toLowerCase()
-      if (altText && (altText === name.toLowerCase() || altText === stem.toLowerCase())) {
-        add({
-          type: 'alt-is-filename',
-          severity: 'warning',
-          category: 'accessibility',
-          source: SOURCES.googleImages,
-          message: 'Alt text repeats the file name instead of describing the image'
-        })
-      }
-    }
-
-    if (img.attr('width') === undefined || img.attr('height') === undefined) {
-      add({
-        type: 'missing-dimensions',
-        severity: 'warning',
-        category: 'performance',
-        source: SOURCES.cls,
-        message: 'Image missing width/height (causes layout shift)'
-      })
-    }
+    const found = [...checkAlt($, el, alt), ...checkSrc(img, src), ...checkFileName(src, alt), ...checkDimensions(img)]
+    if (!found.length) return
+    const context = snippet($, el)
+    issues.push(...found.map((issue) => ({ context, ...issue })))
   })
   return issues
 }
