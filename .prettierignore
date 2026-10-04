@@ -1,0 +1,8 @@
+# .prettierignore
+node_modules
+dist
+coverage
+package-lock.json
+CHANGELOG.md
+docs/
+test/fixtures
