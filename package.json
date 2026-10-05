@@ -26,7 +26,9 @@
   "dependencies": {
     "chalk": "^6.0.0",
     "cheerio": "^1.2.0",
+    "chrome-launcher": "^1.2.2",
     "cli-table3": "^0.6.5",
+    "lighthouse": "^13.5.0",
     "ora": "^9.4.1",
     "wrap-ansi": "^10.0.2"
   },

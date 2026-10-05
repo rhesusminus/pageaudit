@@ -6,6 +6,7 @@ import { fromArgs } from './input/args.js'
 import { fromFile } from './input/file.js'
 import { resolveUrls } from './input/resolve.js'
 import { fromSitemap } from './input/sitemap.js'
+import { lighthouseFailed, runLighthouse } from './lighthouse.js'
 import { buildReport, formatReport } from './report.js'
 import { DEFAULT_CONCURRENCY, DEFAULT_DELAY_MS, runAudit } from './runner.js'
 
@@ -23,6 +24,7 @@ Options:
   --limit <n>          audit at most n pages
   --concurrency <n>    pages fetched at the same time (default ${DEFAULT_CONCURRENCY})
   --delay <ms>         minimum time between requests to the same host (default ${DEFAULT_DELAY_MS})
+  --lighthouse         also run Lighthouse (needs Chrome) on every page that returned HTML, one at a time
   --fail-on <level>    exit 1 on any "error" (default) or on any "warning" or error
   --json               print the report as JSON (default when stdout is not a TTY)
   -h, --help           show this help
@@ -35,6 +37,7 @@ const OPTIONS = {
   limit: { type: 'string' },
   concurrency: { type: 'string' },
   delay: { type: 'string' },
+  lighthouse: { type: 'boolean' },
   'fail-on': { type: 'string' },
   json: { type: 'boolean' },
   help: { type: 'boolean', short: 'h' }
@@ -69,6 +72,7 @@ function parseOptions(argv) {
     concurrency: integer('concurrency', values.concurrency, 1),
     delay: integer('delay', values.delay, 0),
     failOn,
+    lighthouse: values.lighthouse,
     json: values.json
   }
 }
@@ -132,7 +136,28 @@ async function auditUrls(urls, options, startSpinner) {
   return pages
 }
 
-export async function run(argv, { stdin = process.stdin } = {}) {
+// Runs Lighthouse on the pages that returned HTML and attaches the outcome to each page.
+async function addLighthouse(pages, startSpinner, runner) {
+  const targets = pages.filter((page) => page.facts !== null)
+  if (!targets.length) return
+  const progress = (done) => `Lighthouse ${done}/${targets.length} pages...`
+  const spinner = startSpinner(progress(0))
+  const results = await runner(
+    targets.map((page) => page.finalUrl),
+    {
+      onProgress: (done) => {
+        if (spinner) spinner.text = progress(done)
+      }
+    }
+  )
+  spinner?.stop()
+  targets.forEach((page, i) => {
+    page.lighthouse = results[i].summary ?? null
+    if (results[i].error) page.issues.push(lighthouseFailed(page.url, results[i].error))
+  })
+}
+
+export async function run(argv, { stdin = process.stdin, lighthouse = runLighthouse } = {}) {
   let options
   try {
     options = parseOptions(argv)
@@ -158,6 +183,7 @@ export async function run(argv, { stdin = process.stdin } = {}) {
   if (!announceInputs(inputs, options)) return 2
 
   const pages = await auditUrls(inputs.urls, options, startSpinner)
+  if (options.lighthouse) await addLighthouse(pages, startSpinner, lighthouse)
   const report = buildReport({ pages, site: checkSite(pages), skipped: inputs.skipped })
   console.log(json ? JSON.stringify(report, null, 2) : formatReport(report, process.stdout.columns))
 
