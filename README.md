@@ -44,6 +44,10 @@ Link-following crawling is not supported.
 | `--fail-on <level>`  | `error` | `warning` makes warnings fail the run too (for CI).                                                                    |
 | `--lighthouse`       | off     | Also run Lighthouse on every page that returned HTML. Needs a local Chrome or Chromium. See below.                     |
 | `--out <path>`       |         | Also write the JSON report to a file, for example to hand to Claude. Exits 2 if the file cannot be written.            |
+| `--html <path>`      |         | Also write a report for customers as one self-contained HTML file. See below.                                          |
+| `--title <text>`     |         | Report title in the HTML report (default `Website audit`). Needs `--html`.                                             |
+| `--client <name>`    |         | Client name in the HTML report. Needs `--html`.                                                                        |
+| `--logo <file>`      |         | Logo for the HTML report: png, jpg, gif, webp or svg, at most 512 KB. Needs `--html`.                                  |
 | `--json`             |         | Print the JSON report. Also the default when stdout is not a TTY.                                                      |
 
 Each request has a 15 s timeout (covering redirects and the body), follows up to 10 redirects and sends `User-Agent: pageaudit/<version> (+https://github.com/rhesusminus/pageaudit)`.
@@ -68,6 +72,19 @@ Tables follow the terminal width (80 to 114 columns).
 | 2    | Usage error, an unreadable URL file or sitemap, or no valid URL to audit |
 
 A page that cannot be fetched or returns an error status is an error on that page (exit 1), not a reason to stop.
+
+### HTML report
+
+`--html report.html` writes a report that is meant to be shown to a customer: one self-contained file with inline CSS, no JavaScript needed to read it and no network requests, so it can be emailed, opened offline or printed to PDF (all sections open up for printing). It follows the system light or dark setting and works down to phone width.
+
+```sh
+node bin/pageaudit.js --sitemap https://example.com/sitemap.xml --limit 20 --lighthouse \
+  --html report.html --title "Website audit" --client "Acme Oy" --logo logo.svg
+```
+
+It has a cover with the client, the date, a one-sentence verdict and, with `--lighthouse`, the four average scores. Then a summary of how many pages have problems, a ranked **What to fix** list, a section per page and a short note on how the audit was done. Findings are written in plain language (`src/html/advice.js`: what is wrong, why it matters and how to fix it), and the technical message and documentation link stay on each page. The same problem on many pages is one line in the list, with every affected page behind **Show where**. Site-wide problems such as duplicate titles are part of the same list. Severity is shown by a word and a shape, never by color alone.
+
+All text taken from audited sites is escaped, and the logo is embedded as a data URI. A logo that cannot be read, or one over the size limit, exits 2 before any page is fetched.
 
 ### Using the output with Claude
 
@@ -196,6 +213,14 @@ src/
     resolve.js          merge, normalize, dedupe, apply --limit
   lighthouse.js         runLighthouse(urls): optional Lighthouse run, trimmed to scores, metrics and failing audits
   output.js             writeReportFile(): writes a report file without throwing
+  html/                 the customer-facing HTML report
+    render.js           renderHtml(): the whole document
+    sections.js         cover, summary, what to fix, pages and method sections
+    model.js            grouping issues, page health, average scores, metric bands
+    advice.js           plain-language title, why and fix for every issue type
+    styles.js           the stylesheet (light, dark and print)
+    escape.js           the markup tag that escapes everything it is given
+    logo.js             reads a logo file into a data URI
   fetch.js              fetchPage(url): redirects, timeout, User-Agent, encoding sniffing
   parse.js              parse(html): Cheerio DOM, with inert <template> content removed
   runner.js             runs the page checks over all URLs with concurrency and a per-host delay
@@ -222,6 +247,8 @@ test/
   checks.test.js        unit tests for each page check
   fetch.test.js         fetchPage: redirects, User-Agent, encoding sniffing, errors
   report.test.js        summary, tables and wrapping
+  html.test.js          HTML report: sections, escaping, self-containment, advice coverage
+  signals.test.js       content and metadata signals of a page
   cli.test.js           run() end to end with --json against the fixtures
   fixtures/             HTML pages, sitemap.xml, sitemap-index.xml and urls.txt
   helpers/fixture-fetch.js   mocked fetch that serves the fixtures
