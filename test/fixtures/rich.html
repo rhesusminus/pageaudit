@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="fi-FI">
+<head>
+  <meta charset="utf-8">
+  <title>Rich page</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="index, follow">
+  <meta property="og:title" content="Rich OG title">
+  <meta property="og:image" content="https://fixtures.test/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <base href="https://fixtures.test/shop/">
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization"},{"@type":["Product","Thing"]}]}</script>
+  <script type="application/ld+json">{ not json</script>
+</head>
+<body>
+  <h1>Rich   page</h1>
+  <script>var ignored = "these words do not count"</script>
+  <p>One two three four.</p>
+  <a href="item">relative internal</a>
+  <a href="https://www.fixtures.test/about">www is internal</a>
+  <a href="https://other.test/x" rel="nofollow noopener">external nofollow</a>
+  <a href="#top">fragment</a>
+  <a href="mailto:a@b.test">mail</a>
+  <a href="javascript:void(0)">js</a>
+  <img src="a.png" alt="A">
+  <img src="b.png" alt="">
+  <img src="c.png">
+</body>
+</html>

@@ -129,11 +129,12 @@ const site = [
   }
 ]
 
-test('buildReport: totals pages and severities, including site issues, and drops internal facts', () => {
+test('buildReport: totals pages and severities, including site issues, and keeps facts and a timestamp', () => {
   const report = buildReport({ pages, site, skipped: [{ input: 'x', source: 'argument', reason: 'not a valid URL' }] })
   assert.deepEqual(report.summary, { pages: 5, errors: 2, warnings: 4, infos: 1 })
-  assert.deepEqual(Object.keys(report), ['pages', 'site', 'skipped', 'summary'])
-  assert.deepEqual(Object.keys(report.pages[0]), ['url', 'finalUrl', 'status', 'redirects', 'issues'])
+  assert.deepEqual(Object.keys(report), ['generatedAt', 'pages', 'site', 'skipped', 'summary'])
+  assert.deepEqual(Object.keys(report.pages[0]), ['url', 'finalUrl', 'status', 'redirects', 'issues', 'facts'])
+  assert.match(report.generatedAt, /^\d{4}-\d{2}-\d{2}T/)
   assert.equal(report.skipped.length, 1)
 })
 

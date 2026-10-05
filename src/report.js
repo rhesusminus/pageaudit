@@ -41,16 +41,19 @@ export function countSeverities(issues) {
   return counts
 }
 
-// The JSON report. Facts used by the site checks are internal and left out.
-export function buildReport({ pages, site, skipped = [] }) {
+// The JSON report, which doubles as the data handed to Claude. `facts` is null for
+// pages that returned no HTML.
+export function buildReport({ pages, site, skipped = [], now = new Date() }) {
   const totals = countSeverities([...pages.flatMap((page) => page.issues), ...site])
   return {
-    pages: pages.map(({ url, finalUrl, status, redirects, issues, lighthouse }) => ({
+    generatedAt: now.toISOString(),
+    pages: pages.map(({ url, finalUrl, status, redirects, issues, facts, lighthouse }) => ({
       url,
       finalUrl,
       status,
       redirects,
       issues,
+      facts,
       // Only present when --lighthouse was used.
       ...(lighthouse === undefined ? {} : { lighthouse })
     })),

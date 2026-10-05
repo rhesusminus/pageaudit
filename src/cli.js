@@ -7,6 +7,7 @@ import { fromFile } from './input/file.js'
 import { resolveUrls } from './input/resolve.js'
 import { fromSitemap } from './input/sitemap.js'
 import { lighthouseFailed, runLighthouse } from './lighthouse.js'
+import { writeReportFile } from './output.js'
 import { buildReport, formatReport } from './report.js'
 import { DEFAULT_CONCURRENCY, DEFAULT_DELAY_MS, runAudit } from './runner.js'
 
@@ -26,6 +27,7 @@ Options:
   --delay <ms>         minimum time between requests to the same host (default ${DEFAULT_DELAY_MS})
   --lighthouse         also run Lighthouse (needs Chrome) on every page that returned HTML, one at a time
   --fail-on <level>    exit 1 on any "error" (default) or on any "warning" or error
+  --out <path>         also write the JSON report to a file, for example to hand to Claude
   --json               print the report as JSON (default when stdout is not a TTY)
   -h, --help           show this help
 
@@ -38,6 +40,7 @@ const OPTIONS = {
   concurrency: { type: 'string' },
   delay: { type: 'string' },
   lighthouse: { type: 'boolean' },
+  out: { type: 'string' },
   'fail-on': { type: 'string' },
   json: { type: 'boolean' },
   help: { type: 'boolean', short: 'h' }
@@ -73,6 +76,7 @@ function parseOptions(argv) {
     delay: integer('delay', values.delay, 0),
     failOn,
     lighthouse: values.lighthouse,
+    out: values.out,
     json: values.json
   }
 }
@@ -186,6 +190,13 @@ export async function run(argv, { stdin = process.stdin, lighthouse = runLightho
   if (options.lighthouse) await addLighthouse(pages, startSpinner, lighthouse)
   const report = buildReport({ pages, site: checkSite(pages), skipped: inputs.skipped })
   console.log(json ? JSON.stringify(report, null, 2) : formatReport(report, process.stdout.columns))
+  if (options.out) {
+    const failure = await writeReportFile(options.out, `${JSON.stringify(report, null, 2)}\n`)
+    if (failure) {
+      console.error(failure)
+      return 2
+    }
+  }
 
   const { errors, warnings } = report.summary
   return errors > 0 || (options.failOn === 'warning' && warnings > 0) ? 1 : 0

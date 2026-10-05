@@ -21,19 +21,18 @@ const types = (result) => result.issues.map((i) => i.type)
 
 test('auditPage: a good page has no issues and exposes facts for the site checks', async () => {
   const result = await auditPage('https://a.test/good', { fetchPage: async (url) => page(url) })
-  assert.deepEqual(result, {
+  const { facts, ...rest } = result
+  assert.deepEqual(rest, {
     url: 'https://a.test/good',
     finalUrl: 'https://a.test/good',
     status: 200,
     redirects: [],
-    issues: [],
-    facts: {
-      title: 'Good page title here',
-      description: result.facts.description,
-      h1s: ['Hello'],
-      canonical: 'https://a.test/good'
-    }
+    issues: []
   })
+  assert.equal(facts.title, 'Good page title here')
+  assert.deepEqual(facts.h1s, ['Hello'])
+  assert.equal(facts.canonical, 'https://a.test/good')
+  assert.ok(facts.wordCount > 0)
 })
 
 test('auditPage: every issue carries the page URL', async () => {

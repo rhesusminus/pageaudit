@@ -1,5 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import { canSpin, run } from '../src/cli.js'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
@@ -26,12 +29,43 @@ async function runJson(t, args, options) {
 
 const pageTypes = (page) => page.issues.map((i) => i.type).sort()
 
-test('cli: good.html has no issues and exits 0', async (t) => {
+const GOOD_FACTS = {
+  title: 'Gentle Shampoo - Example Store',
+  description: 'A gentle daily shampoo for all hair types, made with plant-based ingredients.',
+  h1s: ['Gentle Shampoo'],
+  canonical: fixtureUrl('good.html'),
+  lang: 'en',
+  viewport: null,
+  robots: null,
+  headings: [
+    { level: 1, text: 'Gentle Shampoo' },
+    { level: 2, text: 'Ingredients' },
+    { level: 3, text: 'Plant-based' },
+    { level: 2, text: 'Reviews' }
+  ],
+  wordCount: 5,
+  links: { internal: 0, external: 0, nofollow: 0 },
+  images: { total: 1, missingAlt: 0 },
+  openGraph: { title: null, description: null, image: null, type: null, url: null },
+  twitterCard: null,
+  jsonLdTypes: []
+}
+
+test('cli: good.html has no issues, exposes its facts and exits 0', async (t) => {
   const { code, report } = await runJson(t, [fixtureUrl('good.html')])
   assert.equal(code, 0)
-  assert.deepEqual(report, {
+  const { generatedAt, ...rest } = report
+  assert.ok(!Number.isNaN(Date.parse(generatedAt)))
+  assert.deepEqual(rest, {
     pages: [
-      { url: fixtureUrl('good.html'), finalUrl: fixtureUrl('good.html'), status: 200, redirects: [], issues: [] }
+      {
+        url: fixtureUrl('good.html'),
+        finalUrl: fixtureUrl('good.html'),
+        status: 200,
+        redirects: [],
+        issues: [],
+        facts: GOOD_FACTS
+      }
     ],
     site: [],
     skipped: [],
@@ -263,4 +297,19 @@ test('cli: Lighthouse audits the final URL once and the failure keeps the input 
     failures.map((issue) => issue.url),
     urls
   )
+})
+
+test('cli: --out writes the same JSON report to a file', async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), 'pageaudit-'))
+  t.after(() => rm(dir, { recursive: true, force: true }))
+  const path = join(dir, 'report.json')
+  const { stdout } = await runCli(t, [fixtureUrl('good.html'), '--json', '--out', path])
+  assert.deepEqual(JSON.parse(await readFile(path, 'utf8')), JSON.parse(stdout))
+})
+
+test('cli: --out to an unwritable path exits 2 but still prints the report', async (t) => {
+  const { code, stdout, stderr } = await runCli(t, [fixtureUrl('good.html'), '--json', '--out', '/no/such/dir/r.json'])
+  assert.equal(code, 2)
+  assert.match(stderr, /Could not write \/no\/such\/dir\/r.json: ENOENT/)
+  assert.equal(JSON.parse(stdout).summary.pages, 1)
 })
