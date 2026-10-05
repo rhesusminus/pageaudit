@@ -5,6 +5,8 @@ export const CATEGORIES = ['performance', 'accessibility', 'best-practices', 'se
 // Audits scoring below this are kept. Lighthouse itself calls 0.9 and up "good".
 const GOOD_SCORE = 0.9
 const MAX_ITEMS = 3
+// Display modes that carry a real score. Informative and manual audits have none.
+const SCORED_MODES = new Set(['binary', 'numeric', 'metricSavings'])
 const METRICS = {
   fcp: 'first-contentful-paint',
   lcp: 'largest-contentful-paint',
@@ -53,7 +55,7 @@ export function summarize(lhr) {
     scores: Object.fromEntries(Object.entries(lhr.categories).map(([id, { score }]) => [id, percent(score)])),
     metrics: Object.fromEntries(Object.entries(METRICS).map(([key, id]) => [key, metricValue(lhr.audits[id])])),
     audits: audits
-      .filter((a) => ['binary', 'numeric'].includes(a.scoreDisplayMode) && a.score !== null && a.score < GOOD_SCORE)
+      .filter((a) => SCORED_MODES.has(a.scoreDisplayMode) && a.score !== null && a.score < GOOD_SCORE)
       .filter((a) => categoryOf.has(a.id))
       .sort((a, b) => a.score - b.score)
       .map((a) => summarizeAudit(a, categoryOf.get(a.id))),
@@ -100,7 +102,8 @@ export async function runLighthouse(urls, { launch, lighthouse, onProgress = () 
     }
     return results
   } finally {
-    await chrome.kill()
+    // A Chrome that already died must not throw away the results.
+    await chrome.kill().catch(() => {})
   }
 }
 

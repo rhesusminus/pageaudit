@@ -233,3 +233,19 @@ test('formatReport: shows Lighthouse scores, metrics and failing audits', () => 
   assert.match(text, /No meta description/)
   assert.doesNotMatch(text, /page clean/)
 })
+
+test('formatReport: a missing Lighthouse metric is shown as n/a', () => {
+  const metrics = { fcp: null, lcp: 900, tbt: null, cls: null, speedIndex: null }
+  const lighthouse = { scores: { seo: 90 }, metrics, audits: [], warnings: [] }
+  const page = {
+    url: 'https://a.test/',
+    finalUrl: 'https://a.test/',
+    status: 200,
+    redirects: [],
+    issues: [],
+    lighthouse
+  }
+  const text = stripVTControlCharacters(formatReport(buildReport({ pages: [page], site: [] }), 100))
+  assert.match(text, /FCP n\/a, LCP 900 ms, TBT n\/a, CLS n\/a, SI n\/a/)
+  assert.doesNotMatch(text, /null/)
+})

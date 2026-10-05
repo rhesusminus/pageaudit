@@ -6,7 +6,10 @@ const audit = (id, score, extra = {}) => ({ id, title: `Title ${id}`, score, sco
 
 const LHR = {
   categories: {
-    performance: { score: 0.91, auditRefs: [{ id: 'largest-contentful-paint' }, { id: 'unused-css' }] },
+    performance: {
+      score: 0.91,
+      auditRefs: [{ id: 'largest-contentful-paint' }, { id: 'unused-css' }, { id: 'unminified-js' }]
+    },
     seo: { score: 0.5, auditRefs: [{ id: 'meta-description' }, { id: 'is-crawlable' }] },
     accessibility: { score: null, auditRefs: [] }
   },
@@ -22,6 +25,7 @@ const LHR = {
       scoreDisplayMode: 'numeric',
       details: { items: [{ url: 'a.css' }, { node: { snippet: '<b>' } }, { label: 'c' }, { url: 'd.css' }, {}] }
     }),
+    'unminified-js': audit('unminified-js', 0.3, { scoreDisplayMode: 'metricSavings' }),
     'manual-check': audit('manual-check', null, { scoreDisplayMode: 'manual' }),
     'not-in-category': audit('not-in-category', 0)
   },
@@ -41,6 +45,7 @@ test('summarize: keeps only failing audits that belong to a category, worst firs
     audits.map((a) => [a.id, a.category, a.score]),
     [
       ['meta-description', 'seo', 0],
+      ['unminified-js', 'performance', 30],
       ['largest-contentful-paint', 'performance', 40],
       ['unused-css', 'performance', 60]
     ]
@@ -95,6 +100,13 @@ test('runLighthouse: Chrome that cannot start fails every page without throwing'
   }
   const results = await runLighthouse(['https://a.test/', 'https://b.test/'], { launch, lighthouse: async () => ({}) })
   assert.deepEqual(results, Array(2).fill({ error: 'Could not start Chrome: no Chrome installations found' }))
+})
+
+test('runLighthouse: a Chrome that fails to close still returns the results', async () => {
+  const f = fakes()
+  const launch = async () => ({ port: 9222, kill: async () => Promise.reject(new Error('already dead')) })
+  const results = await runLighthouse(['https://a.test/'], { ...f, launch })
+  assert.equal(results[0].summary.scores.seo, 50)
 })
 
 test('lighthouseFailed: builds a warning with the same keys as other page issues', () => {

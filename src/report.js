@@ -139,8 +139,10 @@ export function formatSiteTable(issues, columns) {
 
 const MAX_AUDITS = 8
 const scoreColor = (score) => (score >= 90 ? chalk.green : score >= 50 ? chalk.yellow : chalk.red)
-const metricText = ({ fcp, lcp, tbt, cls, speedIndex }) =>
-  `FCP ${fcp} ms, LCP ${lcp} ms, TBT ${tbt} ms, CLS ${cls}, SI ${speedIndex} ms`
+const metricText = ({ fcp, lcp, tbt, cls, speedIndex }) => {
+  const ms = (value) => (value === null ? 'n/a' : `${value} ms`)
+  return `FCP ${ms(fcp)}, LCP ${ms(lcp)}, TBT ${ms(tbt)}, CLS ${cls ?? 'n/a'}, SI ${ms(speedIndex)}`
+}
 
 // Scores, core metrics and the worst failing audits of one page's Lighthouse run.
 export function formatLighthouse({ scores, metrics, audits }, columns) {
