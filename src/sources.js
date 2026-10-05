@@ -8,6 +8,7 @@ export const SOURCES = {
   fileTypes: 'https://developers.google.com/search/docs/crawling-indexing/indexable-file-types',
   googleImages: 'https://developers.google.com/search/docs/appearance/google-images',
   starterGuide: 'https://developers.google.com/search/docs/fundamentals/seo-starter-guide',
+  lighthouse: 'https://developer.chrome.com/docs/lighthouse/overview',
   cls: 'https://web.dev/articles/optimize-cls',
   decorativeImages: 'https://www.w3.org/WAI/tutorials/images/decorative/',
   headings: 'https://www.w3.org/WAI/tutorials/page-structure/headings/'

@@ -209,3 +209,67 @@ test('formatSummary: pluralizes each count', () => {
   assert.equal(line({ pages: 1, errors: 1, warnings: 1, infos: 1 }), '\n1 page, 1 error, 1 warning, 1 info')
   assert.equal(line({ pages: 40, errors: 6, warnings: 19, infos: 0 }), '\n40 pages, 6 errors, 19 warnings, 0 infos')
 })
+
+test('formatReport: shows Lighthouse scores, metrics and failing audits', () => {
+  const lighthouse = {
+    scores: { performance: 95, seo: null },
+    metrics: { fcp: 700, lcp: 900, tbt: 10, cls: 0.01, speedIndex: 800 },
+    audits: [{ id: 'a', category: 'seo', title: 'No meta description', score: 0, displayValue: null, items: [] }],
+    warnings: []
+  }
+  const page = {
+    url: 'https://a.test/',
+    finalUrl: 'https://a.test/',
+    status: 200,
+    redirects: [],
+    issues: [],
+    lighthouse
+  }
+  const report = buildReport({ pages: [page], site: [] })
+  assert.deepEqual(report.pages[0].lighthouse, lighthouse)
+  const text = stripVTControlCharacters(formatReport(report, 100))
+  assert.match(text, /Lighthouse: performance 95 {2}seo n\/a/)
+  assert.match(text, /LCP 900 ms, TBT 10 ms, CLS 0.01/)
+  assert.match(text, /No meta description/)
+  assert.doesNotMatch(text, /page clean/)
+})
+
+test('formatReport: a missing Lighthouse metric is shown as n/a', () => {
+  const metrics = { fcp: null, lcp: 900, tbt: null, cls: null, speedIndex: null }
+  const lighthouse = { scores: { seo: 90 }, metrics, audits: [], warnings: [] }
+  const page = {
+    url: 'https://a.test/',
+    finalUrl: 'https://a.test/',
+    status: 200,
+    redirects: [],
+    issues: [],
+    lighthouse
+  }
+  const text = stripVTControlCharacters(formatReport(buildReport({ pages: [page], site: [] }), 100))
+  assert.match(text, /FCP n\/a, LCP 900 ms, TBT n\/a, CLS n\/a, SI n\/a/)
+  assert.doesNotMatch(text, /null/)
+})
+
+test('formatReport: Lighthouse cells are wrapped, not truncated', () => {
+  const audit = {
+    id: 'a',
+    category: 'best-practices',
+    title: 'Serve images in next-gen formats',
+    score: 40,
+    displayValue: 'Est savings of 1,230 KiB',
+    items: []
+  }
+  const lighthouse = { scores: { seo: 90 }, metrics: {}, audits: [audit], warnings: [] }
+  const page = {
+    url: 'https://a.test/',
+    finalUrl: 'https://a.test/',
+    status: 200,
+    redirects: [],
+    issues: [],
+    lighthouse
+  }
+  const text = stripVTControlCharacters(formatReport(buildReport({ pages: [page], site: [] }), 80))
+  assert.match(text, /best-practices/)
+  assert.doesNotMatch(text, /…/)
+  assert.match(text, /1,230/)
+})

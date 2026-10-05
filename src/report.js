@@ -45,7 +45,15 @@ export function countSeverities(issues) {
 export function buildReport({ pages, site, skipped = [] }) {
   const totals = countSeverities([...pages.flatMap((page) => page.issues), ...site])
   return {
-    pages: pages.map(({ url, finalUrl, status, redirects, issues }) => ({ url, finalUrl, status, redirects, issues })),
+    pages: pages.map(({ url, finalUrl, status, redirects, issues, lighthouse }) => ({
+      url,
+      finalUrl,
+      status,
+      redirects,
+      issues,
+      // Only present when --lighthouse was used.
+      ...(lighthouse === undefined ? {} : { lighthouse })
+    })),
     site,
     skipped,
     summary: { pages: pages.length, ...totals }
@@ -129,13 +137,49 @@ export function formatSiteTable(issues, columns) {
   return table.toString()
 }
 
+const MAX_AUDITS = 8
+const scoreColor = (score) => (score >= 90 ? chalk.green : score >= 50 ? chalk.yellow : chalk.red)
+const metricText = ({ fcp, lcp, tbt, cls, speedIndex }) => {
+  const ms = (value) => (value === null ? 'n/a' : `${value} ms`)
+  return `FCP ${ms(fcp)}, LCP ${ms(lcp)}, TBT ${ms(tbt)}, CLS ${cls ?? 'n/a'}, SI ${ms(speedIndex)}`
+}
+
+// Scores, core metrics and the worst failing audits of one page's Lighthouse run.
+export function formatLighthouse({ scores, metrics, audits }, columns) {
+  const scoreLine = Object.entries(scores)
+    .map(([id, score]) => `${id} ${score === null ? chalk.dim('n/a') : scoreColor(score)(String(score))}`)
+    .join('  ')
+  const widths = columnWidths(columns, [{ width: 7 }, { width: 16 }, { weight: 1 }, { width: 22 }])
+  const table = new Table({ head: ['Score', 'Category', 'Audit', 'Value'], colWidths: widths, style: { head: [] } })
+  for (const a of audits.slice(0, MAX_AUDITS)) {
+    table.push([
+      String(a.score),
+      chalk.dim(a.category),
+      wrap(a.title, widths[2]),
+      wrap(a.displayValue ?? '', widths[3])
+    ])
+  }
+  const more =
+    audits.length > MAX_AUDITS ? chalk.dim(`  ...and ${audits.length - MAX_AUDITS} more in the JSON report`) : ''
+  return [
+    `  Lighthouse: ${scoreLine}`,
+    chalk.dim(`  ${metricText(metrics)}`),
+    audits.length ? table.toString() : '',
+    more
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
 export function formatReport(report, columns) {
   const out = [formatPagesTable(report.pages, columns)]
   const sorted = worstFirst(report.pages)
-  for (const page of sorted.filter((p) => p.issues.length)) {
-    out.push(`\n${chalk.bold(page.url)}`, formatIssueTable(page.issues, columns))
+  for (const page of sorted.filter((p) => p.issues.length || p.lighthouse)) {
+    out.push(`\n${chalk.bold(page.url)}`)
+    if (page.issues.length) out.push(formatIssueTable(page.issues, columns))
+    if (page.lighthouse) out.push(formatLighthouse(page.lighthouse, columns))
   }
-  const clean = sorted.filter((p) => !p.issues.length).length
+  const clean = sorted.filter((p) => !p.issues.length && !p.lighthouse).length
   if (clean) out.push(chalk.green(`\n${plural(clean, 'page')} clean`))
   out.push(
     chalk.bold('\nSite'),

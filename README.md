@@ -16,6 +16,7 @@ node bin/pageaudit.js --urls-file urls.txt                      # one URL per li
 cat urls.txt | node bin/pageaudit.js --urls-file -              # the same list from stdin
 node bin/pageaudit.js --sitemap https://example.com/sitemap.xml
 node bin/pageaudit.js https://example.com --json                # raw JSON report
+node bin/pageaudit.js https://example.com --lighthouse          # also run Lighthouse (needs Chrome)
 npm test
 ```
 
@@ -41,6 +42,7 @@ Link-following crawling is not supported.
 | `--concurrency <n>`  | 3       | Pages fetched at the same time.                                                                                        |
 | `--delay <ms>`       | 200     | Minimum time between starting requests to the same host.                                                               |
 | `--fail-on <level>`  | `error` | `warning` makes warnings fail the run too (for CI).                                                                    |
+| `--lighthouse`       | off     | Also run Lighthouse on every page that returned HTML. Needs a local Chrome or Chromium. See below.                     |
 | `--json`             |         | Print the JSON report. Also the default when stdout is not a TTY.                                                      |
 
 Each request has a 15 s timeout (covering redirects and the body), follows up to 10 redirects and sends `User-Agent: pageaudit/<version> (+https://github.com/rhesusminus/pageaudit)`.
@@ -65,6 +67,19 @@ Tables follow the terminal width (80 to 114 columns).
 | 2    | Usage error, an unreadable URL file or sitemap, or no valid URL to audit |
 
 A page that cannot be fetched or returns an error status is an error on that page (exit 1), not a reason to stop.
+
+### Lighthouse
+
+With `--lighthouse`, each page that returned HTML is also audited by [Lighthouse](https://github.com/GoogleChrome/lighthouse) (the `lighthouse` and `chrome-launcher` npm packages) in a headless Chrome. Pages run one at a time in a single Chrome, because parallel runs skew each other's performance numbers, so expect several seconds per page. It is off by default, which keeps the plain run fast and free of any browser dependency.
+
+The JSON report gets a `lighthouse` object on each audited page instead of the full Lighthouse result, which is far too large to read or hand to a model:
+
+- `scores`: 0 to 100 for `performance`, `accessibility`, `best-practices` and `seo`
+- `metrics`: `fcp`, `lcp`, `tbt`, `speedIndex` in ms and `cls`
+- `audits`: only the audits scoring below 90, worst first, each with its category, title, score, display value and up to three affected items
+- `warnings`: Lighthouse run warnings, plus a line for any audit that crashed inside Lighthouse
+
+If Chrome cannot start or a page cannot be audited, the page gets an `info` issue `lighthouse-failed`, its `lighthouse` is `null` and the run continues. Pages that redirect to the same final URL are audited once and share the result. Lighthouse findings are not issues and a failed run is only `info`, so neither changes the exit code, even with `--fail-on warning`.
 
 ## Checks
 
@@ -157,6 +172,7 @@ src/
     file.js             URLs from --urls-file (or stdin)
     sitemap.js          URLs from --sitemap, following a sitemap index one level deep
     resolve.js          merge, normalize, dedupe, apply --limit
+  lighthouse.js         runLighthouse(urls): optional Lighthouse run, trimmed to scores, metrics and failing audits
   fetch.js              fetchPage(url): redirects, timeout, User-Agent, encoding sniffing
   parse.js              parse(html): Cheerio DOM, with inert <template> content removed
   runner.js             runs the page checks over all URLs with concurrency and a per-host delay
@@ -237,7 +253,7 @@ Tests use the built-in `node:test` runner with no extra dependencies. `npm test`
 - Only the raw HTML from the initial fetch is inspected (Cheerio, no JavaScript execution), so client-side rendered content is not seen. The fix would be swapping `fetchPage` for a headless browser.
 - Pages are only discovered from arguments, URL files and sitemaps. Following links to discover pages is not supported.
 - `robots.txt` is not read, so pages it disallows are audited like any other.
-- Not included: headless browser, any LLM calls, Lighthouse or performance metrics, config files or plugins. The report is meant to be handed to a human or an LLM afterwards for judgment calls.
+- Not included: any LLM calls, config files or plugins. Lighthouse is opt-in and the static checks still use the raw HTML only. The report is meant to be handed to a human or an LLM afterwards for judgment calls.
 
 ## Workflow
 

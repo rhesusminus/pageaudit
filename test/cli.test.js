@@ -9,13 +9,13 @@ const fixturePath = (name) => new URL(`./fixtures/${name}`, import.meta.url).pat
 
 // Runs the CLI against the fixture site and captures what it prints. Requests to
 // the same host are not spaced out, so tests stay fast.
-async function runCli(t, args, { stdin } = {}) {
+async function runCli(t, args, options = {}) {
   mockFixtureFetch(t)
   const stdout = []
   const stderr = []
   t.mock.method(console, 'log', (...a) => stdout.push(a.join(' ')))
   t.mock.method(console, 'error', (...a) => stderr.push(a.join(' ')))
-  const code = await run([...args, '--delay', '0'], { stdin })
+  const code = await run([...args, '--delay', '0'], options)
   return { code, stdout: stdout.join('\n'), stderr: stderr.join('\n') }
 }
 
@@ -215,4 +215,52 @@ test('cli: spinner is only enabled on a TTY that reports columns', () => {
   assert.equal(canSpin({ isTTY: true }), false)
   assert.equal(canSpin({ isTTY: false, columns: 80 }), false)
   assert.equal(canSpin({}), false)
+})
+
+const fakeLighthouse = (results) => async (urls) => results.slice(0, urls.length)
+
+test('cli: --lighthouse attaches a summary to pages that returned HTML', async (t) => {
+  const summary = { scores: { seo: 90 }, metrics: {}, audits: [], warnings: [] }
+  const urls = [fixtureUrl('good.html'), fixtureUrl('missing-page')]
+  const seen = []
+  const lighthouse = async (list) => (seen.push(...list), [{ summary }])
+  const { code, report } = await runJson(t, [...urls, '--lighthouse'], { lighthouse })
+  assert.equal(code, 1)
+  assert.deepEqual(seen, [fixtureUrl('good.html')])
+  assert.deepEqual(report.pages[0].lighthouse, summary)
+  assert.equal('lighthouse' in report.pages[1], false)
+})
+
+test('cli: a Lighthouse failure is an info issue on the page and does not stop the run', async (t) => {
+  const lighthouse = fakeLighthouse([{ error: 'Could not start Chrome: nope' }])
+  const { code, report } = await runJson(t, [fixtureUrl('good.html'), '--lighthouse'], { lighthouse })
+  assert.equal(code, 0)
+  assert.equal(report.pages[0].lighthouse, null)
+  assert.deepEqual(pageTypes(report.pages[0]), ['lighthouse-failed'])
+  assert.deepEqual(report.summary, { pages: 1, errors: 0, warnings: 0, infos: 1 })
+})
+
+test('cli: without --lighthouse the report has no lighthouse key and the runner is not called', async (t) => {
+  const lighthouse = async () => assert.fail('should not run')
+  const { report } = await runJson(t, [fixtureUrl('good.html')], { lighthouse })
+  assert.equal('lighthouse' in report.pages[0], false)
+})
+
+test('cli: a Lighthouse failure does not fail --fail-on warning', async (t) => {
+  const lighthouse = fakeLighthouse([{ error: 'Could not start Chrome: nope' }])
+  const { code } = await runJson(t, [fixtureUrl('good.html'), '--lighthouse', '--fail-on', 'warning'], { lighthouse })
+  assert.equal(code, 0)
+})
+
+test('cli: Lighthouse audits the final URL once and the failure keeps the input URL', async (t) => {
+  const seen = []
+  const lighthouse = async (list) => (seen.push(...list), list.map(() => ({ error: 'boom' })))
+  const urls = [fixtureUrl('redirect-once'), fixtureUrl('good.html')]
+  const { report } = await runJson(t, [...urls, '--lighthouse'], { lighthouse })
+  assert.deepEqual(seen, [fixtureUrl('good.html')])
+  const failures = report.pages.map((page) => page.issues.find((i) => i.type === 'lighthouse-failed'))
+  assert.deepEqual(
+    failures.map((issue) => issue.url),
+    urls
+  )
 })
