@@ -16,14 +16,13 @@ await chrome.kill()
 
 `lhr` is the full JSON result: category scores, per-audit results with details, Core Web Vitals metrics (LCP, CLS, TBT). Needs a local Chrome/Chromium. Alternative: PageSpeed Insights API (hosted Lighthouse, no local Chrome, rate limited, needs API key) - worth a later optional backend, not the first step.
 
-## Approach
-0. Save this plan into the repo as `docs/pageaudit-v3-lighthouse-plan.md` (next to `docs/pageaudit-v2-plan.md`), formatted with prettier. Do not use an em dash.
-1. Add deps: `lighthouse`, `chrome-launcher` (confirm current versions and Node engine support at install).
-2. New `src/lighthouse.js`: `runLighthouse(url, { launcher, lighthouse })` returning a trimmed, stable object: category scores, key metrics, and only failing/warning audits (id, title, score, displayValue, short details). Do not store the full `lhr` - it is huge and wasteful for LLM input. Inject launcher/lighthouse so tests don't need Chrome (same pattern as `fetchPage` injection in `src/runner.js`).
-3. Run sequentially with a single shared Chrome instance (Lighthouse is CPU heavy and skews if parallel), separate from the HTTP-fetch concurrency in `runner.js`.
-4. Opt-in CLI flag `--lighthouse` in `src/input/args.js` / `src/cli.js`; off by default so the fast static path is unchanged. Failures become a per-page issue/note, never abort the run (matches `auditPage` behavior).
-5. Attach result to each page as `page.lighthouse` in the JSON report (`src/report.js`); add a short table section to the human report (scores + top failed audits).
-6. Tests: fixture `lhr` JSON in `test/fixtures/`, unit test the trimming and the report; CLI test with injected fake runner. Update README and the docs plan.
+## Approach (as built)
+1. Deps: `lighthouse`, `chrome-launcher`. Lighthouse 13 needs Node 22.19 or newer, the repo requires Node 24.
+2. `src/lighthouse.js`: `runLighthouse(urls, { launch, lighthouse, load, onProgress })` returns one `{ summary }` or `{ error }` per URL and never throws. `summarize(lhr)` trims the result to category scores, core metrics (FCP, LCP, TBT, CLS, speed index) and the audits scoring below 90 (binary, numeric and metricSavings audits, worst first, up to three affected items each). The full `lhr` is not kept, it is huge and wasteful for LLM input. Chrome and Lighthouse are injectable so tests do not need Chrome, like `fetchPage` in `src/runner.js`.
+3. Pages run sequentially in one shared Chrome, because Lighthouse is CPU heavy and parallel runs skew each other. This is separate from the HTTP-fetch concurrency in `runner.js`. Pages that redirect to the same final URL are audited once.
+4. Opt-in `--lighthouse` flag in `src/cli.js`, off by default so the fast static path is unchanged. A failed run becomes an `info` issue `lighthouse-failed` on the page and never aborts the run or changes the exit code.
+5. The result is attached to each page as `page.lighthouse` in the JSON report (`src/report.js`), and the human report gets a section with scores, metrics and the worst audits.
+6. Tests: `test/lighthouse.test.js` with an inline `lhr` and injected fakes, plus CLI and report tests. README updated.
 
 ## Afterwards (separate steps)
 - Define one combined "page data" JSON (facts + issues + Lighthouse summary) as the AI input contract.

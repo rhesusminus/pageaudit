@@ -26,6 +26,7 @@ const LHR = {
       details: { items: [{ url: 'a.css' }, { node: { snippet: '<b>' } }, { label: 'c' }, { url: 'd.css' }, {}] }
     }),
     'unminified-js': audit('unminified-js', 0.3, { scoreDisplayMode: 'metricSavings' }),
+    'crashed-audit': audit('crashed-audit', null, { scoreDisplayMode: 'error', errorMessage: 'It broke' }),
     'manual-check': audit('manual-check', null, { scoreDisplayMode: 'manual' }),
     'not-in-category': audit('not-in-category', 0)
   },
@@ -36,7 +37,7 @@ test('summarize: rounds scores and metrics', () => {
   const { scores, metrics, warnings } = summarize(LHR)
   assert.deepEqual(scores, { performance: 91, seo: 50, accessibility: null })
   assert.deepEqual(metrics, { fcp: 764, lcp: 3101, tbt: 0, cls: 0.123, speedIndex: 800 })
-  assert.deepEqual(warnings, ['slow CPU'])
+  assert.deepEqual(warnings, ['slow CPU', 'Audit crashed-audit failed: It broke'])
 })
 
 test('summarize: keeps only failing audits that belong to a category, worst first', () => {
@@ -94,6 +95,14 @@ test('runLighthouse: a runtime error from Lighthouse becomes an error entry', as
   assert.equal(f.calls.killed, 1)
 })
 
+test('runLighthouse: a Lighthouse that cannot be loaded is not reported as a Chrome failure', async () => {
+  const load = async () => {
+    throw new Error("Cannot find package 'lighthouse'")
+  }
+  const results = await runLighthouse(['https://a.test/'], { load })
+  assert.deepEqual(results, [{ error: "Could not load Lighthouse: Cannot find package 'lighthouse'" }])
+})
+
 test('runLighthouse: Chrome that cannot start fails every page without throwing', async () => {
   const launch = async () => {
     throw new Error('no Chrome installations found')
@@ -109,8 +118,26 @@ test('runLighthouse: a Chrome that fails to close still returns the results', as
   assert.equal(results[0].summary.scores.seo, 50)
 })
 
-test('lighthouseFailed: builds a warning with the same keys as other page issues', () => {
+test('runLighthouse: a synchronous kill, as chrome-launcher has, works and may throw', async () => {
+  const f = fakes()
+  let killed = 0
+  const quiet = { ...f, launch: async () => ({ port: 9222, kill: () => void killed++ }) }
+  assert.equal((await runLighthouse(['https://a.test/'], quiet))[0].summary.scores.seo, 50)
+  const throwing = {
+    ...f,
+    launch: async () => ({
+      port: 9222,
+      kill: () => {
+        throw new Error('already dead')
+      }
+    })
+  }
+  assert.equal((await runLighthouse(['https://a.test/'], throwing))[0].summary.scores.seo, 50)
+  assert.equal(killed, 1)
+})
+
+test('lighthouseFailed: builds an info issue with the same keys as other page issues', () => {
   const issue = lighthouseFailed('https://a.test/', 'boom')
   assert.deepEqual(Object.keys(issue), ['url', 'type', 'severity', 'category', 'source', 'message', 'context'])
-  assert.equal(issue.severity, 'warning')
+  assert.equal(issue.severity, 'info')
 })

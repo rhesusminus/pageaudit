@@ -149,10 +149,15 @@ export function formatLighthouse({ scores, metrics, audits }, columns) {
   const scoreLine = Object.entries(scores)
     .map(([id, score]) => `${id} ${score === null ? chalk.dim('n/a') : scoreColor(score)(String(score))}`)
     .join('  ')
-  const widths = columnWidths(columns, [{ width: 7 }, { width: 15 }, { weight: 1 }, { width: 18 }])
+  const widths = columnWidths(columns, [{ width: 7 }, { width: 16 }, { weight: 1 }, { width: 22 }])
   const table = new Table({ head: ['Score', 'Category', 'Audit', 'Value'], colWidths: widths, style: { head: [] } })
   for (const a of audits.slice(0, MAX_AUDITS)) {
-    table.push([String(a.score), chalk.dim(a.category), wrap(a.title, widths[2]), a.displayValue ?? ''])
+    table.push([
+      String(a.score),
+      chalk.dim(a.category),
+      wrap(a.title, widths[2]),
+      wrap(a.displayValue ?? '', widths[3])
+    ])
   }
   const more =
     audits.length > MAX_AUDITS ? chalk.dim(`  ...and ${audits.length - MAX_AUDITS} more in the JSON report`) : ''

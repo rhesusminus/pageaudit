@@ -249,3 +249,27 @@ test('formatReport: a missing Lighthouse metric is shown as n/a', () => {
   assert.match(text, /FCP n\/a, LCP 900 ms, TBT n\/a, CLS n\/a, SI n\/a/)
   assert.doesNotMatch(text, /null/)
 })
+
+test('formatReport: Lighthouse cells are wrapped, not truncated', () => {
+  const audit = {
+    id: 'a',
+    category: 'best-practices',
+    title: 'Serve images in next-gen formats',
+    score: 40,
+    displayValue: 'Est savings of 1,230 KiB',
+    items: []
+  }
+  const lighthouse = { scores: { seo: 90 }, metrics: {}, audits: [audit], warnings: [] }
+  const page = {
+    url: 'https://a.test/',
+    finalUrl: 'https://a.test/',
+    status: 200,
+    redirects: [],
+    issues: [],
+    lighthouse
+  }
+  const text = stripVTControlCharacters(formatReport(buildReport({ pages: [page], site: [] }), 80))
+  assert.match(text, /best-practices/)
+  assert.doesNotMatch(text, /…/)
+  assert.match(text, /1,230/)
+})

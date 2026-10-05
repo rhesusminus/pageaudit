@@ -45,6 +45,10 @@ function summarizeAudit(audit, category) {
   }
 }
 
+// An audit that crashed inside Lighthouse has no score, so say why instead of dropping it.
+const isBroken = (audit) => audit.scoreDisplayMode === 'error'
+const brokenMessage = (audit) => `Audit ${audit.id} failed: ${audit.errorMessage ?? 'unknown error'}`
+
 // Reduces a Lighthouse result (lhr) to what is worth reading: category scores, the
 // core metrics and the audits that did not pass. The full lhr is far too big to hand
 // to a person or a model.
@@ -59,7 +63,7 @@ export function summarize(lhr) {
       .filter((a) => categoryOf.has(a.id))
       .sort((a, b) => a.score - b.score)
       .map((a) => summarizeAudit(a, categoryOf.get(a.id))),
-    warnings: lhr.runWarnings ?? []
+    warnings: [...(lhr.runWarnings ?? []), ...audits.filter(isBroken).map(brokenMessage)]
   }
 }
 
@@ -82,17 +86,22 @@ async function auditOne(url, { lighthouse, port }) {
 
 // Runs Lighthouse for every URL, one at a time in a single Chrome: parallel runs
 // compete for the CPU and skew each other's performance numbers. Never throws, each
-// entry is { summary } or { error }, in input order. `launch` and `lighthouse` can be
+// entry is { summary } or { error }, in input order. `launch`, `lighthouse` and `load` can be
 // injected so tests do not need Chrome.
-export async function runLighthouse(urls, { launch, lighthouse, onProgress = () => {} } = {}) {
+export async function runLighthouse(urls, { launch, lighthouse, load = loadDefaults, onProgress = () => {} } = {}) {
   let chrome
+  const fail = (message) => urls.map(() => ({ error: message }))
   try {
-    const defaults = launch && lighthouse ? {} : await loadDefaults()
+    const defaults = launch && lighthouse ? {} : await load()
     launch ??= defaults.launch
     lighthouse ??= defaults.lighthouse
+  } catch (err) {
+    return fail(`Could not load Lighthouse: ${err.message}`)
+  }
+  try {
     chrome = await launch({ chromeFlags: ['--headless'] })
   } catch (err) {
-    return urls.map(() => ({ error: `Could not start Chrome: ${err.message}` }))
+    return fail(`Could not start Chrome: ${err.message}`)
   }
   try {
     const results = []
@@ -102,17 +111,24 @@ export async function runLighthouse(urls, { launch, lighthouse, onProgress = () 
     }
     return results
   } finally {
-    // A Chrome that already died must not throw away the results.
-    await chrome.kill().catch(() => {})
+    // A Chrome that already died must not throw away the results. chrome-launcher's
+    // kill() is synchronous while other launchers return a promise, so await either.
+    try {
+      await chrome.kill()
+    } catch {
+      // Nothing left to clean up.
+    }
   }
 }
 
-// A page Lighthouse could not audit. Only a warning: the static checks still ran.
+// A page Lighthouse could not audit. Only informational so that a runner without Chrome
+// never fails `--fail-on warning`: the static checks still ran. The category is the
+// tooling one because the failed run covered all four Lighthouse categories.
 export const lighthouseFailed = (url, message) => ({
   url,
   type: 'lighthouse-failed',
-  severity: 'warning',
-  category: 'performance',
+  severity: 'info',
+  category: 'best-practice',
   source: SOURCES.lighthouse,
   message: `Lighthouse could not audit the page: ${message}`,
   context: ''

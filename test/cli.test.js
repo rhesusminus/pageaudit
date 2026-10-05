@@ -231,17 +231,36 @@ test('cli: --lighthouse attaches a summary to pages that returned HTML', async (
   assert.equal('lighthouse' in report.pages[1], false)
 })
 
-test('cli: a Lighthouse failure is a warning on the page and does not stop the run', async (t) => {
+test('cli: a Lighthouse failure is an info issue on the page and does not stop the run', async (t) => {
   const lighthouse = fakeLighthouse([{ error: 'Could not start Chrome: nope' }])
   const { code, report } = await runJson(t, [fixtureUrl('good.html'), '--lighthouse'], { lighthouse })
   assert.equal(code, 0)
   assert.equal(report.pages[0].lighthouse, null)
   assert.deepEqual(pageTypes(report.pages[0]), ['lighthouse-failed'])
-  assert.deepEqual(report.summary, { pages: 1, errors: 0, warnings: 1, infos: 0 })
+  assert.deepEqual(report.summary, { pages: 1, errors: 0, warnings: 0, infos: 1 })
 })
 
 test('cli: without --lighthouse the report has no lighthouse key and the runner is not called', async (t) => {
   const lighthouse = async () => assert.fail('should not run')
   const { report } = await runJson(t, [fixtureUrl('good.html')], { lighthouse })
   assert.equal('lighthouse' in report.pages[0], false)
+})
+
+test('cli: a Lighthouse failure does not fail --fail-on warning', async (t) => {
+  const lighthouse = fakeLighthouse([{ error: 'Could not start Chrome: nope' }])
+  const { code } = await runJson(t, [fixtureUrl('good.html'), '--lighthouse', '--fail-on', 'warning'], { lighthouse })
+  assert.equal(code, 0)
+})
+
+test('cli: Lighthouse audits the final URL once and the failure keeps the input URL', async (t) => {
+  const seen = []
+  const lighthouse = async (list) => (seen.push(...list), list.map(() => ({ error: 'boom' })))
+  const urls = [fixtureUrl('redirect-once'), fixtureUrl('good.html')]
+  const { report } = await runJson(t, [...urls, '--lighthouse'], { lighthouse })
+  assert.deepEqual(seen, [fixtureUrl('good.html')])
+  const failures = report.pages.map((page) => page.issues.find((i) => i.type === 'lighthouse-failed'))
+  assert.deepEqual(
+    failures.map((issue) => issue.url),
+    urls
+  )
 })

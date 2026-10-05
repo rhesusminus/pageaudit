@@ -136,25 +136,25 @@ async function auditUrls(urls, options, startSpinner) {
   return pages
 }
 
-// Runs Lighthouse on the pages that returned HTML and attaches the outcome to each page.
+// Runs Lighthouse once per distinct final URL (several inputs can redirect to the same
+// page) and attaches the outcome to every page that ended up there.
 async function addLighthouse(pages, startSpinner, runner) {
   const targets = pages.filter((page) => page.facts !== null)
-  if (!targets.length) return
-  const progress = (done) => `Lighthouse ${done}/${targets.length} pages...`
+  const urls = [...new Set(targets.map((page) => page.finalUrl))]
+  if (!urls.length) return
+  const progress = (done) => `Lighthouse ${done}/${urls.length} pages...`
   const spinner = startSpinner(progress(0))
-  const results = await runner(
-    targets.map((page) => page.finalUrl),
-    {
-      onProgress: (done) => {
-        if (spinner) spinner.text = progress(done)
-      }
+  const results = await runner(urls, {
+    onProgress: (done) => {
+      if (spinner) spinner.text = progress(done)
     }
-  )
-  spinner?.stop()
-  targets.forEach((page, i) => {
-    page.lighthouse = results[i].summary ?? null
-    if (results[i].error) page.issues.push(lighthouseFailed(page.url, results[i].error))
   })
+  spinner?.stop()
+  for (const page of targets) {
+    const result = results[urls.indexOf(page.finalUrl)]
+    page.lighthouse = result.summary ?? null
+    if (result.error) page.issues.push(lighthouseFailed(page.url, result.error))
+  }
 }
 
 export async function run(argv, { stdin = process.stdin, lighthouse = runLighthouse } = {}) {
