@@ -16,6 +16,7 @@ export default [
   {
     plugins: { unicorn },
     rules: {
+      camelcase: ['error', { properties: 'always' }],
       'max-lines-per-function': ['error', { max: 40, skipBlankLines: true, skipComments: true }],
       'unicorn/filename-case': ['error', { case: 'kebabCase' }]
     }
