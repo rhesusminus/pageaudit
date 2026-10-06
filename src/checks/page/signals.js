@@ -1,5 +1,4 @@
-import { collapseWhitespace } from '../../text.js'
-import { truncate } from '../snippet.js'
+import { collapseWhitespace, limit } from '../../text.js'
 
 const MAX_HEADINGS = 40
 const MAX_TYPES = 20
@@ -13,8 +12,12 @@ export function absolute(href, base) {
   }
 }
 
-const clean = (text) => truncate(collapseWhitespace(text ?? '')) || null
-const metaContent = ($, selector) => clean($(selector).first().attr('content'))
+const MAX_TEXT = 120
+// URLs get a much higher cap: a URL cut short is not a URL any more.
+const MAX_URL = 2000
+
+const clean = (text, max = MAX_TEXT) => limit(collapseWhitespace(text ?? ''), max) || null
+const metaContent = ($, selector, max) => clean($(selector).first().attr('content'), max)
 
 // Visible body text only: script, style and noscript content is not read by a visitor.
 function wordCount($) {
@@ -52,8 +55,14 @@ function images($) {
 }
 
 function openGraph($) {
-  const og = (name) => metaContent($, `meta[property="og:${name}" i]`)
-  return { title: og('title'), description: og('description'), image: og('image'), type: og('type'), url: og('url') }
+  const og = (name, max) => metaContent($, `meta[property="og:${name}" i]`, max)
+  return {
+    title: og('title'),
+    description: og('description'),
+    image: og('image', MAX_URL),
+    type: og('type'),
+    url: og('url', MAX_URL)
+  }
 }
 
 // Collects @type values from a JSON-LD value, looking inside arrays and @graph.

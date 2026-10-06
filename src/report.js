@@ -1,6 +1,7 @@
 import chalk from 'chalk'
 import Table from 'cli-table3'
 import wrapAnsi from 'wrap-ansi'
+import { limit } from './text.js'
 
 const SEVERITY_ORDER = { error: 0, warning: 1, info: 2 }
 const COLORS = { error: chalk.red, warning: chalk.yellow, info: chalk.cyan }
@@ -29,6 +30,19 @@ function columnWidths(columns, layout) {
 // escape codes as width and clips wide characters instead of wrapping them.
 const wrap = (text, width) => wrapAnsi(text, width - CELL_PADDING, { hard: true, wordWrap: false, trim: false })
 
+const MAX_FACT_TEXT = 300
+const MAX_H1S = 10
+
+// The facts as written to the report. Titles, descriptions and headings can be any
+// length on a real site, so they are capped here, after the site checks compared them in full.
+const reportFacts = (facts) =>
+  facts && {
+    ...facts,
+    title: facts.title && limit(facts.title, MAX_FACT_TEXT),
+    description: facts.description && limit(facts.description, MAX_FACT_TEXT),
+    h1s: facts.h1s.slice(0, MAX_H1S).map((h1) => limit(h1, MAX_FACT_TEXT))
+  }
+
 const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`
 
 export function countSeverities(issues) {
@@ -53,7 +67,7 @@ export function buildReport({ pages, site, skipped = [], now = new Date() }) {
       status,
       redirects,
       issues,
-      facts,
+      facts: reportFacts(facts),
       // Only present when --lighthouse was used.
       ...(lighthouse === undefined ? {} : { lighthouse })
     })),

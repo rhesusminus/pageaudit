@@ -106,7 +106,7 @@ const page = (url, severities, fields = {}) => ({
   status: 200,
   redirects: [],
   issues: severities.map((severity) => ({ url, ...issue(severity, 'seo', `A ${severity}`, '<x>') })),
-  facts: { title: 'T' },
+  facts: { title: 'T', description: null, h1s: [] },
   ...fields
 })
 
@@ -273,4 +273,26 @@ test('formatReport: Lighthouse cells are wrapped, not truncated', () => {
   assert.match(text, /best-practices/)
   assert.doesNotMatch(text, /…/)
   assert.match(text, /1,230/)
+})
+
+test('buildReport: caps free-text facts in the report but leaves the audited facts whole', () => {
+  const facts = {
+    title: 'T'.repeat(400),
+    description: 'D'.repeat(400),
+    h1s: Array.from({ length: 30 }, () => 'H'.repeat(400))
+  }
+  const audited = { url: 'https://a.test/', finalUrl: 'https://a.test/', status: 200, redirects: [], issues: [], facts }
+  const [out] = buildReport({ pages: [audited], site: [] }).pages
+  assert.equal(Array.from(out.facts.title).length, 300)
+  assert.ok(out.facts.title.endsWith('...'))
+  assert.equal(Array.from(out.facts.description).length, 300)
+  assert.equal(out.facts.h1s.length, 10)
+  assert.ok(out.facts.h1s.every((h1) => Array.from(h1).length === 300))
+  assert.equal(facts.title.length, 400)
+  assert.equal(facts.h1s.length, 30)
+})
+
+test('buildReport: a page without facts stays null', () => {
+  const failed = { url: 'https://a.test/', finalUrl: null, status: null, redirects: [], issues: [], facts: null }
+  assert.equal(buildReport({ pages: [failed], site: [] }).pages[0].facts, null)
 })

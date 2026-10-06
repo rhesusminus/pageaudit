@@ -399,3 +399,9 @@ test('cli: --title, --client and --logo need --html', async (t) => {
   assert.equal(code, 2)
   assert.match(stderr, /only apply together with --html/)
 })
+
+test('cli: an empty --out value is a usage error', async (t) => {
+  const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), '--out', '', '--json'])
+  assert.equal(code, 2)
+  assert.match(stderr, /--out needs a value/)
+})

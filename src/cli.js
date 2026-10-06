@@ -70,8 +70,16 @@ function integer(name, value, min) {
   return Number(value)
 }
 
+// An empty value, such as --out "", is almost always a shell variable that was not set.
+function requireValues(values, names) {
+  for (const name of names) {
+    if (values[name] === '') throw new Error(`--${name} needs a value`)
+  }
+}
+
 function parseOptions(argv) {
   const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: OPTIONS })
+  requireValues(values, ['out'])
   const failOn = values['fail-on'] ?? 'error'
   if (failOn !== 'error' && failOn !== 'warning') {
     throw new Error(`--fail-on must be "error" or "warning", got "${failOn}"`)
