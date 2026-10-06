@@ -405,3 +405,18 @@ test('cli: an empty --out value is a usage error', async (t) => {
   assert.equal(code, 2)
   assert.match(stderr, /--out needs a value/)
 })
+
+test('cli: empty --html, --title, --client and --logo values are usage errors', async (t) => {
+  for (const option of ['--html', '--title', '--client', '--logo']) {
+    const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), option, '', '--json'])
+    assert.equal(code, 2)
+    assert.match(stderr, new RegExp(`${option} needs a value`))
+  }
+})
+
+test('cli: --html notes how many URLs a --limit left out', async (t) => {
+  const dir = await tempDir(t)
+  const path = join(dir, 'report.html')
+  await runCli(t, [fixtureUrl('good.html'), fixtureUrl('bad-missing.html'), '--limit', '1', '--html', path, '--json'])
+  assert.match(await readFile(path, 'utf8'), /Audited 1 page out of 2 found/)
+})

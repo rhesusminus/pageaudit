@@ -20,11 +20,17 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
 const link = (url, text = url) =>
   /^https?:\/\//i.test(url) ? markup`<a href="${url}" rel="noopener noreferrer">${text}</a>` : markup`${text}`
 
-const dateFormat = new Intl.DateTimeFormat('en-GB', { dateStyle: 'long', timeZone: 'UTC' })
+// The audit date as the person running the audit saw it, in their own time zone.
+const formatDate = (iso, timeZone) =>
+  new Intl.DateTimeFormat('en-GB', { dateStyle: 'long', timeZone }).format(new Date(iso))
 
 const scoreBand = (score) => (score >= 90 ? 'good' : score >= 50 ? 'average' : 'poor')
 
 const severityBadge = (severity) => markup`<span class="sev sev-${severity}">${SEVERITY_WORDS[severity]}</span>`
+
+// A zero score has no arc: a round cap on a zero-length dash would draw a stray dot.
+const arc = (score) =>
+  markup`<circle class="arc" cx="60" cy="60" r="${RING_RADIUS}" pathLength="100" stroke-dasharray="${score} 100" transform="rotate(-90 60 60)" />`
 
 // A score from 0 to 100 drawn as an arc, with the number and its meaning also in text.
 function ring(id, score) {
@@ -36,15 +42,7 @@ function ring(id, score) {
   return markup`<li class="ring ring-${band}">
     <svg viewBox="0 0 120 120" role="img" aria-label="${label}: ${score} out of 100">
       <circle class="track" cx="60" cy="60" r="${RING_RADIUS}" pathLength="100" />
-      <circle
-        class="arc"
-        cx="60"
-        cy="60"
-        r="${RING_RADIUS}"
-        pathLength="100"
-        stroke-dasharray="${score} 100"
-        transform="rotate(-90 60 60)"
-      />
+      ${score > 0 ? arc(score) : ''}
       <text class="num" x="60" y="60" text-anchor="middle" dominant-baseline="central">${score}</text>
     </svg>
     <span class="ring-label">${label}</span>
@@ -61,17 +59,17 @@ function coverScores(scores) {
     ${note ? markup`<p class="rings-note">${note}</p>` : ''}`
 }
 
-export function cover({ report, title, client, logo, scores, verdict }) {
+export function cover({ report, title, client, logo, timeZone, scores, verdict }) {
   return markup`<header class="cover">
     <div class="wrap">
-      ${logo ? markup`<img class="logo" src="${logo}" alt="${client ?? title} logo" />` : ''}
+      ${logo ? markup`<img class="logo" src="${logo}" alt="${client ? '' : 'Logo'}" />` : ''}
       ${client ? markup`<p class="client">${client}</p>` : ''}
       <h1>${title}</h1>
       <p class="verdict">${verdict}</p>
       <dl class="facts-line">
         <div>
           <dt>Audited</dt>
-          <dd>${dateFormat.format(new Date(report.generatedAt))}</dd>
+          <dd>${formatDate(report.generatedAt, timeZone)}</dd>
         </div>
         <div>
           <dt>Pages</dt>
@@ -86,7 +84,19 @@ export function cover({ report, title, client, logo, scores, verdict }) {
 const HEALTH_LABELS = { errors: 'with problems to fix', warnings: 'that could be improved', clean: 'with no problems' }
 const HEALTH_SEVERITY = { errors: 'error', warnings: 'warning', clean: 'good' }
 
-export function healthSection(health, { pages }) {
+function inputNotes({ skipped, totalUrls }, pages) {
+  const limited =
+    totalUrls > pages
+      ? markup`<p class="note">Audited ${plural(pages, 'page')} out of ${totalUrls} found, as asked.</p>`
+      : ''
+  if (!skipped.length) return limited
+  return markup`${limited}<details class="skipped">
+      <summary>${plural(skipped.length, 'address')} could not be used and ${skipped.length === 1 ? 'was' : 'were'} skipped</summary>
+      <ul>${skipped.map((s) => markup`<li><code>${s.input}</code> <span class="note">${s.reason}</span></li>`)}</ul>
+    </details>`
+}
+
+export function healthSection(health, { pages }, inputs) {
   const segments = Object.entries(health).filter(([, n]) => n > 0)
   return markup`<section class="panel" aria-labelledby="summary">
     <h2 id="summary">Summary</h2>
@@ -96,6 +106,7 @@ export function healthSection(health, { pages }) {
     <ul class="legend">
       ${Object.entries(health).map(([key, n]) => markup`<li class="sev sev-${HEALTH_SEVERITY[key]}"><strong>${plural(n, 'page')}</strong> ${HEALTH_LABELS[key]}</li>`)}
     </ul>
+    ${inputNotes(inputs, pages)}
   </section>`
 }
 
@@ -214,7 +225,7 @@ function lighthouseBlock(lighthouse) {
   if (!lighthouse) return ''
   const audits = lighthouse.audits.slice(0, MAX_AUDITS)
   const more = lighthouse.audits.length - audits.length
-  return markup`<h3>Speed and quality test</h3>
+  return markup`<h4>Speed and quality test</h4>
     <ul class="chips">
       ${Object.entries(lighthouse.scores).map(([id, score]) => markup`<li class="chip chip-${score === null ? 'unknown' : scoreBand(score)}">${CATEGORY_NAMES[id] ?? id} <strong>${score ?? 'n/a'}</strong></li>`)}
     </ul>
@@ -225,9 +236,9 @@ function lighthouseBlock(lighthouse) {
     </table>
     ${
       audits.length
-        ? markup`<h3>Biggest opportunities</h3>
+        ? markup`<h4>Biggest opportunities</h4>
             <ul class="audits">
-              ${audits.map((a) => markup`<li><span class="audit-score">${a.score}</span> ${a.title}${a.displayValue ? markup` <span class="note">${a.displayValue}</span>` : ''}</li>`)}
+              ${audits.map((a) => markup`<li><span class="audit-score">${a.score}/100</span> ${a.title}${a.displayValue ? markup` <span class="note">${a.displayValue}</span>` : ''}</li>`)}
             </ul>
             ${more > 0 ? markup`<p class="note">${plural(more, 'more finding')} in the JSON report.</p>` : ''}`
         : ''
@@ -240,7 +251,7 @@ function pageBody(page) {
     ${redirected ? markup`<p class="note">Redirects to ${link(page.finalUrl)}</p>` : ''} ${pageFacts(page.facts)}
     ${
       page.issues.length
-        ? markup`<h3>Problems found</h3>
+        ? markup`<h4>Problems found</h4>
             <ul class="issues">
               ${page.issues.map(issueItem)}
             </ul>`
@@ -253,7 +264,7 @@ function pageBody(page) {
 function pageCard(page, open) {
   return markup`<details class="page" ${open ? raw('open') : ''}>
     <summary>
-      <span class="page-url">${page.url}</span>
+      <h3 class="page-url">${page.url}</h3>
       <span class="page-chips"
         ><span class="chip">${statusText(page.status)}</span><span class="chip">${issueCounts(page.counts)}</span></span
       >

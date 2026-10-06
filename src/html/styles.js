@@ -141,7 +141,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 summary { cursor: pointer; font-weight: 600; list-style: none; }
 summary::-webkit-details-marker { display: none; }
 .fix-body summary { color: var(--accent); font-size: 0.9375rem; }
-.fix-body summary::before, .page > summary::before {
+.fix-body summary::before, .skipped summary::before, .page > summary::before {
   content: ""; display: inline-block; width: 0.5em; height: 0.5em; margin-right: 0.6em;
   border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
   transform: translateY(-0.12em) rotate(-45deg); transition: transform 0.15s;
@@ -152,7 +152,7 @@ details[open] > summary::before { transform: translateY(-0.2em) rotate(45deg); }
 .pages { display: grid; gap: 0.75rem; margin-top: 1.25rem; }
 .page { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
 .page > summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; padding: 1rem 1.25rem; }
-.page-url { flex: 1 1 18rem; overflow-wrap: anywhere; display: inline-flex; align-items: baseline; }
+.page-url { flex: 1 1 18rem; overflow-wrap: anywhere; display: inline-flex; align-items: baseline; margin: 0; font: inherit; font-weight: 600; }
 .page-chips, .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .chip { display: inline-block; padding: 0.15rem 0.65rem; border: 1px solid var(--line); border-radius: 999px; font-size: 0.8125rem; font-weight: 500; color: var(--ink-2); }
 .chip strong { color: var(--ink); }
@@ -160,7 +160,11 @@ details[open] > summary::before { transform: translateY(-0.2em) rotate(45deg); }
 .chip-average { border-color: var(--warn); }
 .chip-poor { border-color: var(--err); }
 .page-body { padding: 0 1.25rem 1.5rem; border-top: 1px solid var(--line); }
-.page-body h3 { margin-top: 1.5rem; }
+h4 { font-size: 1.05rem; line-height: 1.35; margin: 0 0 0.35rem; }
+.page-body h4 { margin-top: 1.5rem; }
+.skipped { margin-top: 1rem; }
+.skipped ul { display: grid; gap: 0.5rem; margin-top: 0.75rem; }
+.skipped summary { color: var(--accent); font-size: 0.9375rem; }
 .facts { display: grid; gap: 0.6rem; margin: 1.25rem 0 0; }
 .facts div { display: grid; grid-template-columns: 8.5rem 1fr; gap: 0.75rem; }
 .facts dt { color: var(--ink-2); font-size: 0.9375rem; }
@@ -179,7 +183,7 @@ details[open] > summary::before { transform: translateY(-0.2em) rotate(45deg); }
 .band-good { color: var(--good); }
 .band-average { color: var(--warn); }
 .band-poor { color: var(--err); }
-.audit-score { display: inline-block; min-width: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.audit-score { display: inline-block; min-width: 4rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .sources { display: grid; gap: 0.25rem; margin-top: 0.5rem; font-size: 0.875rem; overflow-wrap: anywhere; }
 .site-footer { padding-bottom: 3rem; color: var(--ink-2); font-size: 0.875rem; }
 
@@ -202,7 +206,7 @@ details[open] > summary::before { transform: translateY(-0.2em) rotate(45deg); }
   .ring .arc { animation: none; }
   .fix, .page > summary, .issues li, .affected li { break-inside: avoid; }
   .page { break-inside: auto; }
-  h2, h3, .lede { break-after: avoid; }
+  h2, h3, h4, .lede { break-after: avoid; }
   summary::before { display: none !important; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }

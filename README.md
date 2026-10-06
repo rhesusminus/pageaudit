@@ -75,14 +75,14 @@ A page that cannot be fetched or returns an error status is an error on that pag
 
 ### HTML report
 
-`--html report.html` writes a report that is meant to be shown to a customer: one self-contained file with inline CSS, no JavaScript needed to read it and no network requests, so it can be emailed, opened offline or printed to PDF (all sections open up for printing). It follows the system light or dark setting and works down to phone width.
+`--html report.html` writes a report that is meant to be shown to a customer: one self-contained file with inline CSS and no network requests, so it can be emailed, opened offline or printed to PDF. It reads fine without JavaScript. A small inline script only opens the collapsed sections while printing, so in a viewer without JavaScript open them before printing. It follows the system light or dark setting and works down to phone width.
 
 ```sh
 node bin/pageaudit.js --sitemap https://example.com/sitemap.xml --limit 20 --lighthouse \
   --html report.html --title "Website audit" --client "Acme Oy" --logo logo.svg
 ```
 
-It has a cover with the client, the date, a one-sentence verdict and, with `--lighthouse`, the four average scores. Then a summary of how many pages have problems, a ranked **What to fix** list, a section per page and a short note on how the audit was done. Findings are written in plain language (`src/html/advice.js`: what is wrong, why it matters and how to fix it), and the technical message and documentation link stay on each page. The same problem on many pages is one line in the list, with every affected page behind **Show where**. Site-wide problems such as duplicate titles are part of the same list. Severity is shown by a word and a shape, never by color alone.
+It has a cover with the client, the date, a one-sentence verdict and, with `--lighthouse`, the four average scores. Then a summary of how many pages have problems, a ranked **What to fix** list, a section per page and a short note on how the audit was done. Inputs that were skipped, and a `--limit` that cut the list short, are mentioned in the summary. Findings are written in plain language (`src/html/advice.js`: what is wrong, why it matters and how to fix it), and the technical message and documentation link stay on each page. The same problem on many pages is one line in the list, with every affected page behind **Show where**. Site-wide problems such as duplicate titles are part of the same list. Severity is shown by a word and a shape, never by color alone.
 
 All text taken from audited sites is escaped, and the logo is embedded as a data URI. A logo that cannot be read, or one over the size limit, exits 2 before any page is fetched.
 

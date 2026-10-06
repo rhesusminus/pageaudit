@@ -48,6 +48,11 @@ export function groupIssues(report) {
     )
 }
 
+// Each page with the site-wide issues it is part of (duplicate titles and the like) added
+// to its own, so a page is never called clean while a site-wide problem lists it.
+export const pagesWithSiteIssues = ({ pages, site }) =>
+  pages.map((page) => ({ ...page, issues: [...page.issues, ...site.filter((issue) => issue.urls.includes(page.url))] }))
+
 // How many audited pages are in each state. Pages that could not be fetched count as errors.
 export function pageHealth(pages) {
   const health = { errors: 0, warnings: 0, clean: 0 }
@@ -60,7 +65,10 @@ export function pageHealth(pages) {
 
 // Mean Lighthouse score per category over the pages that were audited, or null without any.
 export function averageScores(pages) {
-  const runs = pages.map((page) => page.lighthouse).filter(Boolean)
+  // Inputs that redirect to the same page share one Lighthouse run, count it once.
+  const runs = [
+    ...new Map(pages.filter((page) => page.lighthouse).map((page) => [page.finalUrl, page.lighthouse])).values()
+  ]
   if (!runs.length) return null
   const ids = Object.keys(runs[0].scores)
   const average = (id) => {

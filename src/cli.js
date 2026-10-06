@@ -2,11 +2,11 @@ import { parseArgs } from 'node:util'
 import chalk from 'chalk'
 import ora from 'ora'
 import { checkSite } from './checks/site/index.js'
+import { readLogo } from './html/logo.js'
+import { renderHtml } from './html/render.js'
 import { fromArgs } from './input/args.js'
 import { fromFile } from './input/file.js'
 import { resolveUrls } from './input/resolve.js'
-import { readLogo } from './html/logo.js'
-import { renderHtml } from './html/render.js'
 import { fromSitemap } from './input/sitemap.js'
 import { lighthouseFailed, runLighthouse } from './lighthouse.js'
 import { writeReportFile } from './output.js'
@@ -79,7 +79,7 @@ function requireValues(values, names) {
 
 function parseOptions(argv) {
   const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: OPTIONS })
-  requireValues(values, ['out'])
+  requireValues(values, ['out', 'html', 'title', 'client', 'logo'])
   const failOn = values['fail-on'] ?? 'error'
   if (failOn !== 'error' && failOn !== 'warning') {
     throw new Error(`--fail-on must be "error" or "warning", got "${failOn}"`)
@@ -185,12 +185,12 @@ async function addLighthouse(pages, startSpinner, runner) {
 }
 
 // Writes the --out and --html files. Returns false after printing why when one failed.
-async function writeFiles(options, report, logo) {
+async function writeFiles(options, report, { logo, totalUrls }) {
   const files = []
   if (options.out) files.push([options.out, `${JSON.stringify(report, null, 2)}\n`])
   if (options.html) {
     const { title, client } = options.branding
-    files.push([options.html, renderHtml(report, { title, client, logo })])
+    files.push([options.html, renderHtml(report, { title, client, logo, totalUrls })])
   }
   let ok = true
   for (const [path, content] of files) {
@@ -245,7 +245,7 @@ export async function run(argv, { stdin = process.stdin, lighthouse = runLightho
   if (options.lighthouse) await addLighthouse(pages, startSpinner, lighthouse)
   const report = buildReport({ pages, site: checkSite(pages), skipped: inputs.skipped })
   console.log(json ? JSON.stringify(report, null, 2) : formatReport(report, process.stdout.columns))
-  if (!(await writeFiles(options, report, logo))) return 2
+  if (!(await writeFiles(options, report, { logo, totalUrls: inputs.total }))) return 2
 
   const { errors, warnings } = report.summary
   return errors > 0 || (options.failOn === 'warning' && warnings > 0) ? 1 : 0

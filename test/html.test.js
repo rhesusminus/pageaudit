@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readdir, readFile } from 'node:fs/promises'
 import { ADVICE } from '../src/html/advice.js'
 import { escapeHtml, markup, raw } from '../src/html/escape.js'
-import { averageScores, groupIssues, metricBand, pageHealth, verdict } from '../src/html/model.js'
+import { averageScores, groupIssues, metricBand, pageHealth, pagesWithSiteIssues, verdict } from '../src/html/model.js'
 import { renderHtml } from '../src/html/render.js'
 import { buildReport } from '../src/report.js'
 
@@ -96,11 +96,16 @@ test('pageHealth, averageScores, verdict and metricBand', () => {
 })
 
 test('renderHtml: has every section, the branding and the page facts', () => {
-  const out = renderHtml(report, { title: 'Site check', client: 'Acme Oy', logo: 'data:image/png;base64,AAAA' })
+  const out = renderHtml(report, {
+    title: 'Site check',
+    client: 'Acme Oy',
+    logo: 'data:image/png;base64,AAAA',
+    timeZone: 'UTC'
+  })
   assert.match(out, /<title>Site check - Acme Oy<\/title>/)
   assert.match(out, /<h1>\s*Site check\s*<\/h1>/)
   assert.match(out, /<p class="client">\s*Acme Oy\s*<\/p>/)
-  assert.match(out, /<img\s+class="logo"\s+src="data:image\/png;base64,AAAA"\s+alt="Acme Oy logo"/)
+  assert.match(out, /<img\s+class="logo"\s+src="data:image\/png;base64,AAAA"\s+alt=""/)
   assert.match(out, /5 October 2026/)
   for (const id of ['summary', 'fixes', 'pages', 'method']) assert.match(out, new RegExp(`<h2 id="${id}">`))
   assert.match(out, /The page returns an error/)
@@ -169,4 +174,69 @@ test('advice: covers every issue type in the checks and in Lighthouse', async ()
   const missing = [...types].filter((type) => !ADVICE[type])
   assert.deepEqual(missing, [])
   for (const { title, why, fix } of Object.values(ADVICE)) assert.ok(title && why && fix)
+})
+
+const wrap = (pages, site = [], skipped = []) => buildReport({ pages, site, skipped, now: NOW })
+const bareLogo = 'data:image/png;base64,AAAA'
+
+test('renderHtml: the logo is described only when no client name is shown next to it', () => {
+  assert.match(renderHtml(report, { logo: bareLogo }), /alt="Logo"/)
+  assert.match(renderHtml(report, { logo: bareLogo, client: 'Acme' }), /alt=""/)
+})
+
+test('renderHtml: the date uses the given time zone', () => {
+  const late = buildReport({ pages: PAGES, site: [], now: new Date('2026-10-05T22:30:00Z') })
+  assert.match(renderHtml(late, { timeZone: 'UTC' }), /5 October 2026/)
+  assert.match(renderHtml(late, { timeZone: 'Europe/Helsinki' }), /6 October 2026/)
+})
+
+test('renderHtml: site-wide problems alone never make a page or the verdict "clean"', () => {
+  const pages = [page('https://a.test/', []), page('https://a.test/b', [])]
+  const site = [{ ...issue('duplicate-title', 'warning'), url: undefined, urls: pages.map((p) => p.url) }]
+  const out = renderHtml(wrap(pages, site))
+  assert.match(out, /No serious problems\. 2 pages could still be improved/)
+  assert.doesNotMatch(out, /No problems found/)
+  assert.equal(out.match(/Several pages share the same title/g).length, 3)
+  assert.deepEqual(pageHealth(pagesWithSiteIssues({ pages, site })), { errors: 0, warnings: 2, clean: 0 })
+})
+
+test('averageScores: inputs that redirect to one page count as one Lighthouse run', () => {
+  const shared = { ...PAGES[0], url: 'http://a.test/' }
+  const other = {
+    ...PAGES[0],
+    url: 'https://a.test/other',
+    finalUrl: 'https://a.test/other',
+    lighthouse: { ...lighthouse, scores: { performance: 55 } }
+  }
+  const result = averageScores([PAGES[0], shared, other])
+  assert.equal(result.pages, 2)
+  assert.equal(result.scores.performance, 75)
+})
+
+test('renderHtml: only http(s) addresses become links, whatever the report says', () => {
+  const evil = page('https://a.test/', [issue('missing-title', 'error', { source: 'data:text/html,<b>x</b>' })], {
+    finalUrl: 'javascript:alert(1)'
+  })
+  const out = renderHtml(wrap([evil]))
+  assert.doesNotMatch(out, /href="(javascript|data):/i)
+  assert.match(out, /javascript:alert\(1\)/)
+})
+
+test('renderHtml: mentions skipped inputs and a --limit that cut the list', () => {
+  const skipped = [{ input: 'ftp://x', source: 'urls.txt:3', reason: 'not an http or https URL' }]
+  const out = renderHtml(wrap([page('https://a.test/', [])], [], skipped), { totalUrls: 5 })
+  assert.match(out, /Audited 1 page out of 5 found/)
+  assert.match(out, /1 address could not be used and was skipped/)
+  assert.match(out, /ftp:\/\/x/)
+  const plain = renderHtml(wrap([page('https://a.test/', [])]))
+  assert.doesNotMatch(plain, /class="skipped"|found, as asked/)
+})
+
+test('renderHtml: a zero score draws no arc, and page names are headings', () => {
+  const zero = page('https://a.test/', [], { lighthouse: { ...lighthouse, scores: { performance: 0, seo: 80 } } })
+  const out = renderHtml(wrap([zero]))
+  assert.equal(out.match(/class="arc"/g).length, 1)
+  assert.match(out, /<h3 class="page-url">\s*https:\/\/a\.test\/\s*<\/h3>/)
+  assert.match(out, /<h4>\s*Speed and quality test\s*<\/h4>/)
+  assert.match(out, /10\/100/)
 })
