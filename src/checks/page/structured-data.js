@@ -26,6 +26,12 @@ function relativeUrls(value) {
   return typeof value === 'string' && value.trim() && !/^([a-z][a-z0-9+.-]*:|\/\/)/i.test(value.trim()) ? [value] : []
 }
 
+const withoutUrl = (value) => {
+  if (Array.isArray(value)) return value.map(withoutUrl)
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'url'))
+}
+
 // Relative URLs in a node and in the objects nested in its properties, such as publisher.logo or offers.url.
 // @graph members are nodes of their own and are not walked again here.
 function relativeUrlProperties(value, depth = 0) {
@@ -33,8 +39,10 @@ function relativeUrlProperties(value, depth = 0) {
   if (Array.isArray(value)) return value.flatMap((item) => relativeUrlProperties(item, depth + 1))
   return Object.entries(value).flatMap(([key, child]) => {
     if (key === '@graph') return []
-    if (URL_PROPERTIES.includes(key)) return relativeUrls(child).map((found) => ({ key, value: found }))
-    return relativeUrlProperties(child, depth + 1)
+    if (!URL_PROPERTIES.includes(key)) return relativeUrlProperties(child, depth + 1)
+    // The url of an object value is reported here, everything else in it is walked on.
+    const own = relativeUrls(child).map((found) => ({ key, value: found }))
+    return [...own, ...relativeUrlProperties(withoutUrl(child), depth + 1)]
   })
 }
 

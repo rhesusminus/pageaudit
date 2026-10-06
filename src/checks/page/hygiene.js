@@ -104,18 +104,19 @@ function checkMixedContent($, url) {
 const hasContentElements = ($) =>
   $('body main, body article, body form')
     .toArray()
-    .some((el) => !$(el).closest(APP_ROOT).length && !$(el).closest('noscript').length)
+    .some((el) => !$(el).closest(`${APP_ROOT}, noscript, header, nav, footer`).length)
 
 // pageaudit reads the raw HTML only, so a page built in the browser shows up as an empty shell.
 function checkRenderedInBrowser($) {
   const root = $(APP_ROOT).first()
   const words = wordCount($)
-  const emptyRoot = root.length > 0 && collapseWhitespace(root.text()) === '' && !hasContentElements($)
+  const rootIsEmpty = root.length > 0 && collapseWhitespace(root.text()) === ''
+  const emptyRoot = rootIsEmpty && !hasContentElements($)
   const noscriptNeedsJs = /enable javascript|requires? javascript|javascript (is )?(required|disabled)/i.test(
     collapseWhitespace($('noscript').text())
   )
-  // Without an app root, the message only counts on a page with no visible text at all.
-  const needsJs = noscriptNeedsJs && (root.length > 0 || words === 0)
+  // The message only counts next to an empty app root, or on a page with no visible text at all.
+  const needsJs = noscriptNeedsJs && (rootIsEmpty || words === 0)
   if (words >= SHELL_MAX_WORDS || !(emptyRoot || needsJs)) return []
   return [
     seoIssue({

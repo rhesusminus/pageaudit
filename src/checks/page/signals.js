@@ -28,15 +28,15 @@ export const metaContent = ($, selector, max) =>
     .map((el) => clean($(el).attr('content'), max))
     .find(Boolean) ?? null
 
-// Every robots and googlebot tag applies to Google, so the value is all of them.
-const robotsValue = ($) =>
-  clean(
-    $('meta[name="robots" i], meta[name="googlebot" i]')
-      .toArray()
-      .map((el) => ($(el).attr('content') ?? '').trim())
-      .filter(Boolean)
-      .join(', ')
-  )
+// Every robots and googlebot tag applies to Google, so the value is all of their directives, once each.
+const robotsValue = ($) => {
+  const directives = $('meta[name="robots" i], meta[name="googlebot" i]')
+    .toArray()
+    .flatMap((el) => ($(el).attr('content') ?? '').toLowerCase().split(','))
+    .map((part) => collapseWhitespace(part))
+    .filter(Boolean)
+  return clean([...new Set(directives)].join(', '), MAX_URL)
+}
 
 // Relative addresses resolve against the first <base href>, like in a browser.
 export function baseUrl($, pageUrl) {

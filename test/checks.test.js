@@ -642,3 +642,53 @@ test('structured data: relative URLs are found in nested objects', () => {
   const graph = { ...CONTEXT, '@graph': [{ '@type': 'Organization', url: '/a' }] }
   assert.equal(checkStructuredData(ld(graph)).length, 1)
 })
+
+// Third review fixes.
+
+test('structured data: URL properties holding objects are walked on, breadcrumb items too', () => {
+  const list = {
+    ...CONTEXT,
+    '@type': 'ItemList',
+    itemListElement: [{ '@type': 'ListItem', item: { '@type': 'Product', name: 'x', image: '/i.png' } }]
+  }
+  assert.deepEqual(types(checkStructuredData(ld(list))), ['json-ld-relative-url'])
+  const image = {
+    ...CONTEXT,
+    '@type': 'Article',
+    image: { '@type': 'ImageObject', url: 'https://a.test/i.png', contentUrl: '/c.png' }
+  }
+  assert.deepEqual(types(checkStructuredData(ld(image))), ['json-ld-relative-url'])
+  const crumbs = (item) => ({
+    ...CONTEXT,
+    '@type': 'BreadcrumbList',
+    itemListElement: [{ '@type': 'ListItem', position: 1, item }]
+  })
+  assert.deepEqual(types(checkStructuredData(ld(crumbs('/home')))), ['json-ld-relative-url'])
+  assert.deepEqual(checkStructuredData(ld(crumbs({ '@id': 'https://a.test/home', name: 'Home' }))), [])
+})
+
+test('facts: robots keeps every directive once and does not cut a late noindex', async () => {
+  const { extractFacts } = await import('../src/checks/page/index.js')
+  const html =
+    '<meta name="robots" content="max-image-preview:large, max-snippet:-1, max-video-preview:-1, notranslate, noimageindex, unavailable_after: 2027-01-01"><meta name="googlebot" content="NoIndex, notranslate">'
+  assert.match(extractFacts(parse(html), 'https://a.test/').robots, /notranslate.*noindex$/)
+  assert.equal(extractFacts(parse(html), 'https://a.test/').robots.match(/notranslate/g).length, 1)
+})
+
+test('facts: an empty viewport tag in front of a filled one gives the filled one', async () => {
+  const { extractFacts } = await import('../src/checks/page/index.js')
+  const html = '<meta name="viewport" content=""><meta name="viewport" content="width=device-width">'
+  assert.equal(extractFacts(parse(html), 'https://a.test/').viewport, 'width=device-width')
+})
+
+test('hygiene: an empty root next to a main area is not a shell, a header search form does not make it one', () => {
+  assert.deepEqual(hygiene('<body><div id="root"></div><main><p>Short page.</p></main></body>'), [])
+  const search = '<body><header><form action="/s"><input name="q"></form></header><div id="root"></div></body>'
+  assert.deepEqual(types(hygiene(search)), ['client-side-rendered'])
+})
+
+test('hygiene: a prerendered app root with the default noscript message is not a shell', () => {
+  const html =
+    '<body><div id="app"><p>Hello world</p></div><noscript>You need to enable JavaScript to run this app.</noscript></body>'
+  assert.deepEqual(hygiene(html), [])
+})
