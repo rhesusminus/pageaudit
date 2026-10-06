@@ -1,6 +1,6 @@
 import { SOURCES } from '../../sources.js'
 import { charCount, collapseWhitespace } from '../../text.js'
-import { truncate } from '../snippet.js'
+import { seoIssue } from '../snippet.js'
 
 // Heuristics: Google gives no numeric limits, truncation depends on pixel width.
 const TITLE_MAX = 60
@@ -23,8 +23,6 @@ export const descriptionValues = ($) =>
 
 // Google only reads canonical links inside <head>.
 export const canonicalLinks = ($) => $('head link[rel~="canonical" i]').toArray()
-
-const seoIssue = (issue) => ({ category: 'seo', ...issue, context: truncate(issue.context) })
 
 function checkTitle($) {
   const titleEl = titleElement($)

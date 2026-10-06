@@ -496,7 +496,7 @@ test('hygiene: long, underscore and uppercase URLs are infos', () => {
   const url = `https://a.test/Some_Path/${'a'.repeat(100)}`
   assert.deepEqual(types(hygiene(WORDS, { url })), ['long-url', 'url-underscores', 'url-uppercase'])
   assert.deepEqual(hygiene(WORDS, { url: 'https://a.test/some-path/' }), [])
-  assert.deepEqual(types(hygiene(WORDS, { url: 'https://a.test/%E0%A4%A' })), [])
+  assert.deepEqual(types(hygiene(WORDS, { url: 'https://a.test/caf%C3%A9%' })), [])
 })
 
 test('hygiene: HTML over 2 MB is a warning, exactly 2 MB is fine', () => {
@@ -590,4 +590,55 @@ test('structured data: @context on a @graph member, arrays and @type arrays', ()
 test('structured data: protocol-relative URLs are fine and a null @type is ignored', () => {
   assert.deepEqual(checkStructuredData(ld({ ...CONTEXT, '@type': 'Organization', logo: '//cdn.a.test/l.png' })), [])
   assert.deepEqual(checkStructuredData(ld({ ...CONTEXT, '@type': null, url: '/x' })), [])
+})
+
+// Second review fixes.
+
+test('facts: robots joins every robots and googlebot tag', async () => {
+  const { extractFacts } = await import('../src/checks/page/index.js')
+  const html =
+    '<meta name="robots" content="index"><meta name="robots" content="noindex"><meta name="googlebot" content="nofollow">'
+  assert.equal(extractFacts(parse(html), 'https://a.test/').robots, 'index, noindex, nofollow')
+})
+
+test('social: an empty tag in front of a filled one does not hide it', () => {
+  const html = `<meta property="og:title" content=""><meta name="og:title" content="t"><meta property="og:description" content="d"><meta property="og:image" content="i"><meta property="twitter:card" content=""><meta name="twitter:card" content="summary">`
+  assert.deepEqual(checkSocial(parse(html)), [])
+})
+
+test('hygiene: a broken percent escape does not leave letters behind', () => {
+  assert.deepEqual(
+    hygiene(WORDS, { url: 'https://a.test/a%4Gb' }).map((i) => i.type),
+    ['url-uppercase']
+  )
+})
+
+test('hygiene: http on localhost is not mixed content', () => {
+  const html = `<p>${WORDS}</p><script src="http://localhost:3000/dev.js"></script><img src="http://127.0.0.1/a.png"><img src="http://app.localhost/a.png">`
+  assert.deepEqual(hygiene(html), [])
+})
+
+test('hygiene: a static header with an empty mount point is a shell, a main area is not', () => {
+  assert.deepEqual(types(hygiene('<body><header><h1>Brand</h1></header><div id="root"></div></body>')), [
+    'client-side-rendered'
+  ])
+  const shell = hygiene('<body><main id="app"></main><script src="/app.js"></script></body>')
+  assert.deepEqual(types(shell), ['client-side-rendered'])
+  assert.match(shell[0].context, /<main id="app"><\/main>/)
+})
+
+test('hygiene: a noscript message on a page with visible text and no app root is not a shell', () => {
+  assert.deepEqual(
+    hygiene('<body><p>Hello there</p><noscript>This site requires JavaScript for comments</noscript></body>'),
+    []
+  )
+})
+
+test('structured data: relative URLs are found in nested objects', () => {
+  const article = { ...CONTEXT, '@type': 'Article', publisher: { '@type': 'Organization', logo: '/logo.png' } }
+  assert.deepEqual(types(checkStructuredData(ld(article))), ['json-ld-relative-url'])
+  const product = { ...CONTEXT, '@type': 'Product', name: 'x', offers: { '@type': 'Offer', url: '/buy' } }
+  assert.deepEqual(types(checkStructuredData(ld(product))), ['json-ld-relative-url'])
+  const graph = { ...CONTEXT, '@graph': [{ '@type': 'Organization', url: '/a' }] }
+  assert.equal(checkStructuredData(ld(graph)).length, 1)
 })

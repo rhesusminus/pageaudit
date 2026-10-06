@@ -1,8 +1,6 @@
 import { SOURCES } from '../../sources.js'
-import { truncate } from '../snippet.js'
+import { seoIssue } from '../snippet.js'
 import { metaContent } from './signals.js'
-
-const issue = (fields) => ({ category: 'seo', ...fields, context: truncate(fields.context) })
 
 // Every robots and googlebot meta tag applies to Google and their directives add up, so all of them are read, uncut.
 function robotsTags($) {
@@ -23,7 +21,7 @@ function robotsTags($) {
 
 function robotsIssue(tags, directive, fields) {
   const tag = tags.find(({ rules }) => rules.includes(directive) || rules.includes('none'))
-  return tag ? [issue({ source: SOURCES.robotsMeta, ...fields, context: tag.html })] : []
+  return tag ? [seoIssue({ source: SOURCES.robotsMeta, ...fields, context: tag.html })] : []
 }
 
 const checkRobots = ($) => {
@@ -46,7 +44,7 @@ const checkViewport = ($) =>
   metaContent($, 'meta[name="viewport" i]')
     ? []
     : [
-        issue({
+        seoIssue({
           type: 'missing-viewport',
           severity: 'warning',
           source: SOURCES.viewport,
@@ -59,7 +57,7 @@ const checkLang = ($) =>
   ($('html').attr('lang') ?? '').trim()
     ? []
     : [
-        issue({
+        seoIssue({
           type: 'missing-lang',
           severity: 'warning',
           category: 'accessibility',

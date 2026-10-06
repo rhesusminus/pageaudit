@@ -4,7 +4,7 @@ import { checkHygiene } from './hygiene.js'
 import { checkImages } from './images.js'
 import { checkIndexing } from './indexing.js'
 import { canonicalLinks, checkMeta, descriptionValues, titleElement } from './meta.js'
-import { absolute, extractSignals } from './signals.js'
+import { absolute, baseUrl, extractSignals } from './signals.js'
 import { checkSocial } from './social.js'
 import { checkStructuredData } from './structured-data.js'
 
@@ -28,9 +28,7 @@ export function extractFacts($, finalUrl) {
   const href = canonicalLinks($)
     .map((el) => ($(el).attr('href') ?? '').trim())
     .find(Boolean)
-  // Relative URLs resolve against the first <base href>, like in a browser.
-  const baseHref = ($('base[href]').first().attr('href') ?? '').trim()
-  const baseUrl = (baseHref && absolute(baseHref, finalUrl)) || finalUrl
+  const base = baseUrl($, finalUrl)
   return {
     title: collapseWhitespace(titleElement($).text()) || null,
     description: descriptionValues($).find(Boolean) ?? null,
@@ -42,7 +40,7 @@ export function extractFacts($, finalUrl) {
           .filter(Boolean)
       )
     ],
-    canonical: href ? absolute(href, baseUrl) : null,
-    ...extractSignals($, baseUrl, finalUrl)
+    canonical: href ? absolute(href, base) : null,
+    ...extractSignals($, base, finalUrl)
   }
 }

@@ -21,7 +21,28 @@ const MAX_TEXT = 120
 const MAX_URL = 2000
 
 const clean = (text, max = MAX_TEXT) => limit(collapseWhitespace(text ?? ''), max) || null
-export const metaContent = ($, selector, max) => clean($(selector).first().attr('content'), max)
+// The first non-empty content, so an empty tag in front of a filled one does not hide it.
+export const metaContent = ($, selector, max) =>
+  $(selector)
+    .toArray()
+    .map((el) => clean($(el).attr('content'), max))
+    .find(Boolean) ?? null
+
+// Every robots and googlebot tag applies to Google, so the value is all of them.
+const robotsValue = ($) =>
+  clean(
+    $('meta[name="robots" i], meta[name="googlebot" i]')
+      .toArray()
+      .map((el) => ($(el).attr('content') ?? '').trim())
+      .filter(Boolean)
+      .join(', ')
+  )
+
+// Relative addresses resolve against the first <base href>, like in a browser.
+export function baseUrl($, pageUrl) {
+  const href = ($('base[href]').first().attr('href') ?? '').trim()
+  return (href && absolute(href, pageUrl)) || pageUrl
+}
 
 // Visible body text only: script, style and noscript content is not read by a visitor.
 export function wordCount($) {
@@ -104,7 +125,7 @@ export function extractSignals($, baseUrl, pageUrl) {
   return {
     lang: clean($('html').attr('lang')),
     viewport: metaContent($, 'meta[name="viewport" i]'),
-    robots: metaContent($, 'meta[name="robots" i]'),
+    robots: robotsValue($),
     headings: headings($),
     wordCount: wordCount($),
     links: links($, baseUrl, pageUrl),

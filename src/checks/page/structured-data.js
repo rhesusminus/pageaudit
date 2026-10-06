@@ -1,8 +1,9 @@
 import { SOURCES } from '../../sources.js'
-import { truncate } from '../snippet.js'
+import { seoIssue } from '../snippet.js'
 import { jsonLdBlocks, jsonLdNodes, typesOf } from './signals.js'
 
-const URL_PROPERTIES = ['url', 'image', 'logo', 'sameAs', 'contentUrl']
+const URL_PROPERTIES = ['url', 'image', 'logo', 'sameAs', 'contentUrl', 'item']
+const MAX_NESTING = 4
 
 // Types Google's search gallery has no rich result for (most were retired).
 const NO_RICH_RESULT = new Set([
@@ -16,8 +17,6 @@ const NO_RICH_RESULT = new Set([
   'VehicleListing'
 ])
 
-const issue = (fields) => ({ category: 'seo', ...fields, context: truncate(fields.context) })
-
 const has = (node, key) => node[key] !== undefined && node[key] !== null && node[key] !== ''
 
 // A URL value is a string, an array of strings, or an object with a url (ImageObject).
@@ -25,6 +24,18 @@ function relativeUrls(value) {
   if (Array.isArray(value)) return value.flatMap(relativeUrls)
   if (value && typeof value === 'object') return relativeUrls(value.url)
   return typeof value === 'string' && value.trim() && !/^([a-z][a-z0-9+.-]*:|\/\/)/i.test(value.trim()) ? [value] : []
+}
+
+// Relative URLs in a node and in the objects nested in its properties, such as publisher.logo or offers.url.
+// @graph members are nodes of their own and are not walked again here.
+function relativeUrlProperties(value, depth = 0) {
+  if (!value || typeof value !== 'object' || depth > MAX_NESTING) return []
+  if (Array.isArray(value)) return value.flatMap((item) => relativeUrlProperties(item, depth + 1))
+  return Object.entries(value).flatMap(([key, child]) => {
+    if (key === '@graph') return []
+    if (URL_PROPERTIES.includes(key)) return relativeUrls(child).map((found) => ({ key, value: found }))
+    return relativeUrlProperties(child, depth + 1)
+  })
 }
 
 function missingProperties(node, types) {
@@ -40,14 +51,14 @@ function missingProperties(node, types) {
     : []
 }
 
-const sd = (fields) => issue({ source: SOURCES.structuredData, ...fields })
+const sd = (fields) => seoIssue({ source: SOURCES.structuredData, ...fields })
 
 function checkNode(node) {
   const types = typesOf(node)
   const issues = []
   for (const type of types.filter((t) => NO_RICH_RESULT.has(t))) {
     issues.push(
-      issue({
+      seoIssue({
         type: 'unsupported-schema-type',
         severity: 'info',
         source: SOURCES.searchGallery,
@@ -56,21 +67,19 @@ function checkNode(node) {
       })
     )
   }
-  for (const key of URL_PROPERTIES) {
-    for (const value of relativeUrls(node[key])) {
-      issues.push(
-        sd({
-          type: 'json-ld-relative-url',
-          severity: 'warning',
-          message: `The ${key} in ${types.join(', ')} markup is not an absolute URL`,
-          context: `"${key}": "${value}"`
-        })
-      )
-    }
+  for (const { key, value } of relativeUrlProperties(node)) {
+    issues.push(
+      sd({
+        type: 'json-ld-relative-url',
+        severity: 'warning',
+        message: `The ${key} in ${types.join(', ')} markup is not an absolute URL`,
+        context: `"${key}": "${value}"`
+      })
+    )
   }
   for (const description of missingProperties(node, types)) {
     issues.push(
-      issue({
+      seoIssue({
         type: 'missing-schema-property',
         severity: 'warning',
         source: types.includes('Product') ? SOURCES.productSnippet : SOURCES.breadcrumb,

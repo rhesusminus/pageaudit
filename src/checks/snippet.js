@@ -8,3 +8,6 @@ export const truncate = (text) => limit(text, MAX_CONTEXT)
 export function snippet($, el) {
   return truncate(collapseWhitespace($.html(el)))
 }
+
+// An SEO issue with its context capped. Fields passed in win over the category default.
+export const seoIssue = (fields) => ({ category: 'seo', ...fields, context: truncate(fields.context) })
