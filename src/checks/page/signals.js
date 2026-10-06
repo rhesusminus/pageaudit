@@ -12,6 +12,10 @@ export function absolute(href, base) {
   }
 }
 
+// Facebook's scraper also accepts name= instead of property=, and some themes write twitter:card as a property, so both count.
+export const ogSelector = (name) => `meta[property="og:${name}" i], meta[name="og:${name}" i]`
+export const TWITTER_CARD = 'meta[name="twitter:card" i], meta[property="twitter:card" i]'
+
 const MAX_TEXT = 120
 // URLs get a much higher cap: a URL cut short is not a URL any more.
 const MAX_URL = 2000
@@ -20,7 +24,7 @@ const clean = (text, max = MAX_TEXT) => limit(collapseWhitespace(text ?? ''), ma
 export const metaContent = ($, selector, max) => clean($(selector).first().attr('content'), max)
 
 // Visible body text only: script, style and noscript content is not read by a visitor.
-function wordCount($) {
+export function wordCount($) {
   const body = $('body').first().clone()
   body.find('script, style, noscript').remove()
   const text = collapseWhitespace(body.text())
@@ -55,7 +59,7 @@ function images($) {
 }
 
 function openGraph($) {
-  const og = (name, max) => metaContent($, `meta[property="og:${name}" i]`, max)
+  const og = (name, max) => metaContent($, ogSelector(name), max)
   return {
     title: og('title'),
     description: og('description'),
@@ -65,12 +69,14 @@ function openGraph($) {
   }
 }
 
-// Collects @type values from a JSON-LD value, looking inside arrays and @graph.
-function collectTypes(value, depth = 0) {
+export const typesOf = (node) => [node['@type']].flat().filter((type) => typeof type === 'string')
+
+// Every object with a usable @type in a JSON-LD value, looking inside arrays and @graph.
+export function jsonLdNodes(value, depth = 0) {
   if (!value || typeof value !== 'object' || depth > MAX_JSON_LD_DEPTH) return []
-  if (Array.isArray(value)) return value.flatMap((item) => collectTypes(item, depth + 1))
-  const own = [value['@type']].flat().filter((type) => typeof type === 'string')
-  return [...own, ...collectTypes(value['@graph'], depth + 1)]
+  if (Array.isArray(value)) return value.flatMap((item) => jsonLdNodes(item, depth + 1))
+  const own = typesOf(value).length > 0 ? [value] : []
+  return [...own, ...jsonLdNodes(value['@graph'], depth + 1)]
 }
 
 // Every JSON-LD script as { value } when it parses or { error, text } when it does not.
@@ -89,7 +95,7 @@ export function jsonLdBlocks($) {
 
 // Invalid JSON-LD is ignored here, the structured data check reports it.
 function jsonLdTypes($) {
-  const types = jsonLdBlocks($).flatMap((block) => ('error' in block ? [] : collectTypes(block.value)))
+  const types = jsonLdBlocks($).flatMap((block) => ('error' in block ? [] : jsonLdNodes(block.value).flatMap(typesOf)))
   return [...new Set(types)].slice(0, MAX_TYPES)
 }
 
@@ -104,7 +110,7 @@ export function extractSignals($, baseUrl, pageUrl) {
     links: links($, baseUrl, pageUrl),
     images: images($),
     openGraph: openGraph($),
-    twitterCard: metaContent($, 'meta[name="twitter:card" i]'),
+    twitterCard: metaContent($, TWITTER_CARD),
     jsonLdTypes: jsonLdTypes($)
   }
 }

@@ -126,49 +126,49 @@ Rules follow what Google and the W3C actually say, not folklore, so severities a
 
 ### Page checks
 
-| Group    | Rule                                                                                                                                         | Severity | Category      |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------- |
-| Images   | `missing-alt`: no `alt` attribute                                                                                                            | error    | accessibility |
-| Images   | `empty-alt-in-link`: empty alt on an image that is the only content of a link or button                                                      | error    | accessibility |
-| Images   | `empty-alt`: `alt=""` (correct for decorative images, flagged for review)                                                                    | info     | accessibility |
-| Images   | `alt-is-filename`: alt text repeats the file name                                                                                            | warning  | accessibility |
-| Images   | `missing-src`: no `src` or `srcset`                                                                                                          | warning  | seo           |
-| Images   | `generic-filename`: e.g. `IMG00023.JPG`, `image1.jpg`                                                                                        | info     | seo           |
-| Images   | `missing-dimensions`: no `width` or `height` (layout shift)                                                                                  | warning  | performance   |
-| Meta     | `missing-title`, `empty-title` (the title is also found outside `<head>`, but not inside an `<svg>`)                                         | error    | seo           |
-| Meta     | `long-title`: over 60 characters                                                                                                             | warning  | seo           |
-| Meta     | `missing-description` (Google may build the snippet from the page instead)                                                                   | warning  | seo           |
-| Meta     | `long-description` (over 160) and `short-description` (under 70)                                                                             | info     | seo           |
-| Meta     | `multiple-descriptions` (only one is used, the first non-empty one is checked; empty ones count toward the total)                            | warning  | seo           |
-| Meta     | `missing-canonical` (also when the link is outside `<head>`, where Google ignores it)                                                        | warning  | seo           |
-| Meta     | `multiple-canonicals`: several canonicals with different hrefs (conflicting signals)                                                         | warning  | seo           |
-| Meta     | `multiple-canonicals`: several canonicals with identical hrefs (redundant)                                                                   | info     | seo           |
-| Meta     | `relative-canonical`, `canonical-fragment`, `empty-canonical`                                                                                | warning  | seo           |
-| Headings | `missing-h1` (Google does not require one)                                                                                                   | warning  | best-practice |
-| Headings | `multiple-h1` (Google does not mind)                                                                                                         | info     | best-practice |
-| Headings | `skipped-heading-level`: e.g. `<h3>` with no preceding `<h2>`                                                                                | warning  | accessibility |
-| Headings | `empty-heading` (no text, `aria-label`, `aria-labelledby` or image alt)                                                                      | warning  | accessibility |
-| Social   | `missing-open-graph`: no `og:*` tags (Google Search does not use them, they shape link previews)                                             | info     | best-practice |
-| Social   | `incomplete-open-graph`: `og:title`, `og:description` or `og:image` missing                                                                  | info     | best-practice |
-| Social   | `missing-twitter-card`: no `twitter:card`                                                                                                    | info     | best-practice |
-| Indexing | `noindex`: `robots` or `googlebot` meta tag with `noindex` or `none` (often intentional)                                                     | warning  | seo           |
-| Indexing | `nofollow`: `robots` or `googlebot` meta tag with `nofollow` or `none`                                                                       | info     | seo           |
-| Indexing | `missing-viewport`: no viewport meta tag                                                                                                     | warning  | seo           |
-| Indexing | `missing-lang`: no `lang` on `<html>`                                                                                                        | warning  | accessibility |
-| Schema   | `invalid-json-ld`: a JSON-LD block that does not parse                                                                                       | warning  | seo           |
-| Schema   | `json-ld-missing-context`: no `@context`                                                                                                     | warning  | seo           |
-| Schema   | `json-ld-relative-url`: `url`, `image`, `logo`, `sameAs` or `contentUrl` is not absolute                                                     | warning  | seo           |
-| Schema   | `unsupported-schema-type`: HowTo, FAQPage and other types Google's search gallery has no rich result for                                     | info     | seo           |
-| Schema   | `missing-schema-property`: Product without `name` and one of `offers`, `review`, `aggregateRating`; BreadcrumbList without `itemListElement` | warning  | seo           |
-| URL      | `long-url` (over 100 characters), `url-underscores`, `url-uppercase`                                                                         | info     | seo           |
-| HTML     | `html-too-large`: over 2 MB, the part Googlebot reads                                                                                        | warning  | seo           |
-| HTML     | `mixed-content`: `http://` resource on an `https` page                                                                                       | warning  | best-practice |
-| HTML     | `client-side-rendered`: almost no text and an empty app root, so the raw HTML results may be incomplete                                      | info     | best-practice |
-| Response | `fetch-failed`: network error, timeout or more than 10 redirects                                                                             | error    | seo           |
-| Response | `http-status`: any status other than 200 (the HTML checks are skipped)                                                                       | error    | seo           |
-| Response | `not-html`: the content type is not HTML, for example a PDF in a sitemap (the HTML checks are skipped)                                       | info     | seo           |
-| Response | `redirect-chain`: more than one redirect before the final page                                                                               | warning  | seo           |
-| Response | `redirect`: one redirect (the final URL is audited)                                                                                          | info     | seo           |
+| Group    | Rule                                                                                                                                              | Severity | Category      |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------- |
+| Images   | `missing-alt`: no `alt` attribute                                                                                                                 | error    | accessibility |
+| Images   | `empty-alt-in-link`: empty alt on an image that is the only content of a link or button                                                           | error    | accessibility |
+| Images   | `empty-alt`: `alt=""` (correct for decorative images, flagged for review)                                                                         | info     | accessibility |
+| Images   | `alt-is-filename`: alt text repeats the file name                                                                                                 | warning  | accessibility |
+| Images   | `missing-src`: no `src` or `srcset`                                                                                                               | warning  | seo           |
+| Images   | `generic-filename`: e.g. `IMG00023.JPG`, `image1.jpg`                                                                                             | info     | seo           |
+| Images   | `missing-dimensions`: no `width` or `height` (layout shift)                                                                                       | warning  | performance   |
+| Meta     | `missing-title`, `empty-title` (the title is also found outside `<head>`, but not inside an `<svg>`)                                              | error    | seo           |
+| Meta     | `long-title`: over 60 characters                                                                                                                  | warning  | seo           |
+| Meta     | `missing-description` (Google may build the snippet from the page instead)                                                                        | warning  | seo           |
+| Meta     | `long-description` (over 160) and `short-description` (under 70)                                                                                  | info     | seo           |
+| Meta     | `multiple-descriptions` (only one is used, the first non-empty one is checked; empty ones count toward the total)                                 | warning  | seo           |
+| Meta     | `missing-canonical` (also when the link is outside `<head>`, where Google ignores it)                                                             | warning  | seo           |
+| Meta     | `multiple-canonicals`: several canonicals with different hrefs (conflicting signals)                                                              | warning  | seo           |
+| Meta     | `multiple-canonicals`: several canonicals with identical hrefs (redundant)                                                                        | info     | seo           |
+| Meta     | `relative-canonical`, `canonical-fragment`, `empty-canonical`                                                                                     | warning  | seo           |
+| Headings | `missing-h1` (Google does not require one)                                                                                                        | warning  | best-practice |
+| Headings | `multiple-h1` (Google does not mind)                                                                                                              | info     | best-practice |
+| Headings | `skipped-heading-level`: e.g. `<h3>` with no preceding `<h2>`                                                                                     | warning  | accessibility |
+| Headings | `empty-heading` (no text, `aria-label`, `aria-labelledby` or image alt)                                                                           | warning  | accessibility |
+| Social   | `missing-open-graph`: no `og:*` tags (Google Search does not use them, they shape link previews)                                                  | info     | best-practice |
+| Social   | `incomplete-open-graph`: `og:title`, `og:description` or `og:image` missing                                                                       | info     | best-practice |
+| Social   | `missing-twitter-card`: no `twitter:card`                                                                                                         | info     | best-practice |
+| Indexing | `noindex`: `robots` or `googlebot` meta tag with `noindex` or `none` (often intentional). Only meta tags are read, `X-Robots-Tag` headers are not | warning  | seo           |
+| Indexing | `nofollow`: `robots` or `googlebot` meta tag with `nofollow` or `none`                                                                            | info     | seo           |
+| Indexing | `missing-viewport`: no viewport meta tag                                                                                                          | warning  | seo           |
+| Indexing | `missing-lang`: no `lang` on `<html>`                                                                                                             | warning  | accessibility |
+| Schema   | `invalid-json-ld`: a JSON-LD block that does not parse                                                                                            | warning  | seo           |
+| Schema   | `json-ld-missing-context`: no `@context`                                                                                                          | warning  | seo           |
+| Schema   | `json-ld-relative-url`: `url`, `image`, `logo`, `sameAs` or `contentUrl` is not absolute                                                          | warning  | seo           |
+| Schema   | `unsupported-schema-type`: HowTo, FAQPage and other types Google's search gallery has no rich result for                                          | info     | seo           |
+| Schema   | `missing-schema-property`: Product without `name` and one of `offers`, `review`, `aggregateRating`; BreadcrumbList without `itemListElement`      | warning  | seo           |
+| URL      | `long-url` (over 100 characters), `url-underscores`, `url-uppercase`                                                                              | info     | seo           |
+| HTML     | `html-too-large`: over 2 MB, the part Googlebot reads                                                                                             | warning  | seo           |
+| HTML     | `mixed-content`: `http://` resource on an `https` page                                                                                            | warning  | best-practice |
+| HTML     | `client-side-rendered`: almost no text and an empty app root, so the raw HTML results may be incomplete                                           | info     | best-practice |
+| Response | `fetch-failed`: network error, timeout or more than 10 redirects                                                                                  | error    | seo           |
+| Response | `http-status`: any status other than 200 (the HTML checks are skipped)                                                                            | error    | seo           |
+| Response | `not-html`: the content type is not HTML, for example a PDF in a sitemap (the HTML checks are skipped)                                            | info     | seo           |
+| Response | `redirect-chain`: more than one redirect before the final page                                                                                    | warning  | seo           |
+| Response | `redirect`: one redirect (the final URL is audited)                                                                                               | info     | seo           |
 
 ### Site checks
 

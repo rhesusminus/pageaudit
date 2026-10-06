@@ -525,3 +525,69 @@ test('hygiene: server rendered pages and short static pages are not shells', () 
   assert.deepEqual(hygiene(`<body><div id="root"><p>${WORDS}</p></div></body>`), [])
   assert.deepEqual(hygiene('<body><p>Short page.</p></body>'), [])
 })
+
+// Review fixes.
+
+const VIEWPORT_LANG = '<html lang="en"><head><meta name="viewport" content="x">'
+
+test('indexing: directives from several robots tags add up', () => {
+  const html = `${VIEWPORT_LANG}<meta name="robots" content="index, follow"><meta name="robots" content="noindex">`
+  assert.deepEqual(types(checkIndexing(parse(html))), ['noindex'])
+})
+
+test('indexing: a noindex after a very long directive list is still found, uncut', () => {
+  const content = `index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1, notranslate, unavailable_after: 2027-01-01, noindex`
+  assert.deepEqual(types(checkIndexing(parse(`${VIEWPORT_LANG}<meta name="robots" content="${content}">`))), [
+    'noindex'
+  ])
+})
+
+test('indexing: the context shows the tag that holds the directive', () => {
+  const html = `${VIEWPORT_LANG}<meta name="robots" content="index,follow"><meta name="googlebot" content="noindex">`
+  assert.match(checkIndexing(parse(html))[0].context, /name="googlebot" content="noindex"/)
+})
+
+test('social: twitter:card as a property and og tags with name= are accepted', () => {
+  const html = `<meta name="og:title" content="t"><meta name="og:description" content="d"><meta property="og:image" content="i"><meta property="twitter:card" content="summary">`
+  assert.deepEqual(checkSocial(parse(html)), [])
+})
+
+test('hygiene: non-ASCII slugs are measured as people see them', () => {
+  const url = `https://example.jp/${'ブ'.repeat(20)}`
+  assert.deepEqual(hygiene(WORDS, { url: encodeURI(url) }), [])
+  const long = hygiene(WORDS, { url: encodeURI(`https://example.jp/${'ブ'.repeat(100)}`) })
+  assert.deepEqual(types(long), ['long-url'])
+  assert.match(long[0].context, /ブ/)
+})
+
+test('hygiene: srcset candidates and <base href> count for mixed content', () => {
+  const srcset = `<p>${WORDS}</p><img src="https://a.test/a.png" srcset="https://a.test/a.png 1x, http://a.test/a2.png 2x">`
+  assert.deepEqual(types(hygiene(srcset)), ['mixed-content'])
+  const base = `<base href="http://a.test/"><p>${WORDS}</p><img src="a.png">`
+  assert.deepEqual(types(hygiene(base)), ['mixed-content'])
+})
+
+test('hygiene: an empty root next to headings or a form is not a shell', () => {
+  assert.deepEqual(hygiene('<body><div id="root"></div><main><h1>Log in</h1><form></form></main></body>'), [])
+})
+
+test('hygiene: checkHtml without a page argument runs no URL or size checks', async () => {
+  const { checkHtml } = await import('../src/checks/page/index.js')
+  const issues = checkHtml(
+    parse(`<html lang="en"><head><meta name="viewport" content="x"></head><body>${WORDS}</body>`)
+  )
+  assert.ok(!types(issues).some((type) => /url|too-large|mixed/.test(type)))
+})
+
+test('structured data: @context on a @graph member, arrays and @type arrays', () => {
+  assert.deepEqual(checkStructuredData(ld({ '@graph': [{ ...CONTEXT, '@type': 'Organization' }] })), [])
+  const mixed = [{ ...CONTEXT, '@type': 'Organization' }, { '@type': 'Person' }]
+  assert.deepEqual(types(checkStructuredData(ld(mixed))), ['json-ld-missing-context'])
+  const product = { ...CONTEXT, '@type': ['Product', 'Thing'] }
+  assert.deepEqual(types(checkStructuredData(ld(product))), ['missing-schema-property'])
+})
+
+test('structured data: protocol-relative URLs are fine and a null @type is ignored', () => {
+  assert.deepEqual(checkStructuredData(ld({ ...CONTEXT, '@type': 'Organization', logo: '//cdn.a.test/l.png' })), [])
+  assert.deepEqual(checkStructuredData(ld({ ...CONTEXT, '@type': null, url: '/x' })), [])
+})

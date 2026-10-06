@@ -1,8 +1,7 @@
 import { SOURCES } from '../../sources.js'
 import { truncate } from '../snippet.js'
-import { jsonLdBlocks } from './signals.js'
+import { jsonLdBlocks, jsonLdNodes, typesOf } from './signals.js'
 
-const MAX_DEPTH = 4
 const URL_PROPERTIES = ['url', 'image', 'logo', 'sameAs', 'contentUrl']
 
 // Types Google's search gallery has no rich result for (most were retired).
@@ -19,21 +18,13 @@ const NO_RICH_RESULT = new Set([
 
 const issue = (fields) => ({ category: 'seo', ...fields, context: truncate(fields.context) })
 
-// Every object with an @type, looking inside arrays and @graph.
-function nodes(value, depth = 0) {
-  if (!value || typeof value !== 'object' || depth > MAX_DEPTH) return []
-  if (Array.isArray(value)) return value.flatMap((item) => nodes(item, depth + 1))
-  return [...(value['@type'] === undefined ? [] : [value]), ...nodes(value['@graph'], depth + 1)]
-}
-
-const typesOf = (node) => [node['@type']].flat().filter((type) => typeof type === 'string')
 const has = (node, key) => node[key] !== undefined && node[key] !== null && node[key] !== ''
 
 // A URL value is a string, an array of strings, or an object with a url (ImageObject).
 function relativeUrls(value) {
   if (Array.isArray(value)) return value.flatMap(relativeUrls)
   if (value && typeof value === 'object') return relativeUrls(value.url)
-  return typeof value === 'string' && value.trim() && !/^[a-z][a-z0-9+.-]*:/i.test(value.trim()) ? [value] : []
+  return typeof value === 'string' && value.trim() && !/^([a-z][a-z0-9+.-]*:|\/\/)/i.test(value.trim()) ? [value] : []
 }
 
 function missingProperties(node, types) {
@@ -91,17 +82,24 @@ function checkNode(node) {
   return issues
 }
 
+// Each top-level item needs a @context, either its own or on a member of its @graph.
+function lacksContext(value) {
+  const items = (Array.isArray(value) ? value : [value]).filter((item) => item && typeof item === 'object')
+  return items.some(
+    (item) =>
+      jsonLdNodes(item).length > 0 && !has(item, '@context') && !jsonLdNodes(item).some((node) => has(node, '@context'))
+  )
+}
+
 function checkBlock(block) {
   const text = block.text.trim()
   if ('error' in block) {
     const message = `A JSON-LD block is not valid JSON, so search engines ignore it (${block.error})`
     return [sd({ type: 'invalid-json-ld', severity: 'warning', message, context: text })]
   }
-  const found = nodes(block.value)
-  const roots = Array.isArray(block.value) ? block.value : [block.value]
-  const hasContext = roots.some((root) => root && typeof root === 'object' && has(root, '@context'))
+  const found = jsonLdNodes(block.value)
   const issues = []
-  if (found.length > 0 && !hasContext) {
+  if (lacksContext(block.value)) {
     const message = 'A JSON-LD block has no @context (it should be "https://schema.org")'
     issues.push(sd({ type: 'json-ld-missing-context', severity: 'warning', message, context: text }))
   }

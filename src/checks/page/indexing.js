@@ -4,47 +4,42 @@ import { metaContent } from './signals.js'
 
 const issue = (fields) => ({ category: 'seo', ...fields, context: truncate(fields.context) })
 
-// robots and googlebot meta tags both apply to Google, the directives are comma separated.
-function directives($) {
-  const values = ['robots', 'googlebot'].map((name) => metaContent($, `meta[name="${name}" i]`) ?? '')
-  return new Set(
-    values
-      .join(',')
-      .toLowerCase()
-      .split(',')
-      .map((part) => part.trim())
-  )
+// Every robots and googlebot meta tag applies to Google and their directives add up, so all of them are read, uncut.
+function robotsTags($) {
+  return $('meta[name="robots" i], meta[name="googlebot" i]')
+    .toArray()
+    .map((el) => {
+      const content = $(el).attr('content') ?? ''
+      return {
+        content,
+        rules: content
+          .toLowerCase()
+          .split(',')
+          .map((part) => part.trim()),
+        html: `<meta name="${$(el).attr('name')}" content="${content}">`
+      }
+    })
 }
 
-const robotsContext = ($) =>
-  `<meta name="robots" content="${metaContent($, 'meta[name="robots" i]') ?? metaContent($, 'meta[name="googlebot" i]')}">`
+function robotsIssue(tags, directive, fields) {
+  const tag = tags.find(({ rules }) => rules.includes(directive) || rules.includes('none'))
+  return tag ? [issue({ source: SOURCES.robotsMeta, ...fields, context: tag.html })] : []
+}
 
-function checkRobots($) {
-  const rules = directives($)
-  const issues = []
-  if (rules.has('noindex') || rules.has('none')) {
-    issues.push(
-      issue({
-        type: 'noindex',
-        severity: 'warning',
-        source: SOURCES.robotsMeta,
-        message: 'The page tells search engines not to index it (noindex), so it will not appear in search results',
-        context: robotsContext($)
-      })
-    )
-  }
-  if (rules.has('nofollow') || rules.has('none')) {
-    issues.push(
-      issue({
-        type: 'nofollow',
-        severity: 'info',
-        source: SOURCES.robotsMeta,
-        message: 'The page tells search engines not to follow its links (nofollow)',
-        context: robotsContext($)
-      })
-    )
-  }
-  return issues
+const checkRobots = ($) => {
+  const tags = robotsTags($)
+  return [
+    ...robotsIssue(tags, 'noindex', {
+      type: 'noindex',
+      severity: 'warning',
+      message: 'The page tells search engines not to index it (noindex), so it will not appear in search results'
+    }),
+    ...robotsIssue(tags, 'nofollow', {
+      type: 'nofollow',
+      severity: 'info',
+      message: 'The page tells search engines not to follow its links (nofollow)'
+    })
+  ]
 }
 
 const checkViewport = ($) =>

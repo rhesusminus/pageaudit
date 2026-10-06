@@ -1,6 +1,7 @@
 import { SOURCES } from '../../sources.js'
-import { collapseWhitespace } from '../../text.js'
-import { truncate } from '../snippet.js'
+import { charCount, collapseWhitespace } from '../../text.js'
+import { snippet, truncate } from '../snippet.js'
+import { absolute, wordCount } from './signals.js'
 
 // Heuristic: Google gives no limit, but shorter URLs are easier to read and share.
 const URL_MAX = 100
@@ -9,8 +10,7 @@ const HTML_MAX_BYTES = 2 * 1024 * 1024
 // Fewer visible words than this on a page with an empty app root means the content is built in the browser.
 const SHELL_MAX_WORDS = 20
 const APP_ROOT = '#root, #app, #__next, #__nuxt, #svelte'
-const MIXED_CONTENT =
-  'img[src], script[src], iframe[src], audio[src], video[src], source[src], link[rel~="stylesheet" i][href]'
+const MIXED_CONTENT = 'img, script[src], iframe[src], audio[src], video[src], source, link[rel~="stylesheet" i][href]'
 
 const issue = (fields) => ({ category: 'seo', ...fields, context: truncate(fields.context) })
 
@@ -33,10 +33,12 @@ function checkUrl(url) {
     return []
   }
   const path = safeDecode(parsed.pathname)
+  // Measured the way people see it: browsers show non-ASCII characters decoded, not as %XX.
+  const shown = `${parsed.origin}${path}${safeDecode(parsed.search)}`
   const issues = []
-  if (url.length > URL_MAX) {
-    const message = `URL is ${url.length} characters (over ~${URL_MAX}), shorter addresses are easier to read and share`
-    issues.push(urlIssue('long-url', SOURCES.urlStructure, message, url))
+  if (charCount(shown) > URL_MAX) {
+    const message = `URL is ${charCount(shown)} characters (over ~${URL_MAX}), shorter addresses are easier to read and share`
+    issues.push(urlIssue('long-url', SOURCES.urlStructure, message, shown))
   }
   if (path.includes('_')) {
     const message = 'URL path uses underscores, Google recommends hyphens to separate words'
@@ -49,6 +51,7 @@ function checkUrl(url) {
   return issues
 }
 
+// The decoded text is measured as UTF-8, which is exact for UTF-8 pages and close for other encodings.
 function checkSize(html) {
   const bytes = Buffer.byteLength(html ?? '')
   if (bytes <= HTML_MAX_BYTES) return []
@@ -63,11 +66,19 @@ function checkSize(html) {
   ]
 }
 
+// Every address an element loads, including each candidate in srcset.
+function loadedUrls($, el) {
+  const srcset = ($(el).attr('srcset') ?? '').split(',').map((candidate) => candidate.trim().split(/\s+/)[0])
+  return [$(el).attr('src'), $(el).attr('href'), ...srcset].map((value) => (value ?? '').trim()).filter(Boolean)
+}
+
 function checkMixedContent($, url) {
   if (!url?.startsWith('https:')) return []
+  // Relative addresses resolve against <base href>, like in a browser.
+  const base = absolute(($('base[href]').first().attr('href') ?? '').trim(), url) ?? url
   return $(MIXED_CONTENT)
     .toArray()
-    .filter((el) => /^http:\/\//i.test(($(el).attr('src') ?? $(el).attr('href') ?? '').trim()))
+    .filter((el) => loadedUrls($, el).some((value) => absolute(value, base)?.startsWith('http:')))
     .map((el) =>
       issue({
         type: 'mixed-content',
@@ -75,22 +86,26 @@ function checkMixedContent($, url) {
         category: 'best-practice',
         source: SOURCES.mixedContent,
         message: `The https page loads <${el.tagName}> over insecure http, browsers block or rewrite it`,
-        context: truncate(collapseWhitespace($.html(el)))
+        context: snippet($, el)
       })
     )
 }
 
-// pageaudit reads the raw HTML only, so a page built in the browser shows up as an empty shell.
-function checkRenderedInBrowser($) {
+// Prerendered pages have headings, a main area or a form next to an app root, a shell has none of them.
+const hasContentElements = ($) => {
   const body = $('body').first().clone()
   body.find('script, style, noscript').remove()
-  const words = collapseWhitespace(body.text()).split(' ').filter(Boolean).length
+  return body.find('h1, h2, h3, main, article, form').length > 0
+}
+
+// pageaudit reads the raw HTML only, so a page built in the browser shows up as an empty shell.
+function checkRenderedInBrowser($) {
   const root = $(APP_ROOT).first()
-  const emptyRoot = root.length > 0 && collapseWhitespace(root.text()) === ''
+  const emptyRoot = root.length > 0 && collapseWhitespace(root.text()) === '' && !hasContentElements($)
   const needsJs = /enable javascript|requires? javascript|javascript (is )?(required|disabled)/i.test(
     collapseWhitespace($('noscript').text())
   )
-  if (words >= SHELL_MAX_WORDS || !(emptyRoot || needsJs)) return []
+  if (wordCount($) >= SHELL_MAX_WORDS || !(emptyRoot || needsJs)) return []
   return [
     issue({
       type: 'client-side-rendered',

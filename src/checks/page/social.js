@@ -1,6 +1,6 @@
 import { SOURCES } from '../../sources.js'
 import { truncate } from '../snippet.js'
-import { metaContent } from './signals.js'
+import { metaContent, ogSelector, TWITTER_CARD } from './signals.js'
 
 const issue = (fields) => ({
   category: 'best-practice',
@@ -15,8 +15,8 @@ const REQUIRED = ['title', 'description', 'image']
 // Open Graph and Twitter tags control link previews on social and chat apps. Google Search does not use them, so these are only info.
 export function checkSocial($) {
   const issues = []
-  const present = (name) => metaContent($, `meta[property="og:${name}" i]`) !== null
-  const anyOg = $('meta[property^="og:" i]').length > 0
+  const present = (name) => metaContent($, ogSelector(name)) !== null
+  const anyOg = $('meta[property^="og:" i], meta[name^="og:" i]').length > 0
   if (!anyOg) {
     issues.push(
       issue({
@@ -37,7 +37,7 @@ export function checkSocial($) {
       )
     }
   }
-  if (!metaContent($, 'meta[name="twitter:card" i]')) {
+  if (!metaContent($, TWITTER_CARD)) {
     issues.push(
       issue({
         type: 'missing-twitter-card',
