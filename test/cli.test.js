@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
@@ -300,8 +300,7 @@ test('cli: Lighthouse audits the final URL once and the failure keeps the input 
 })
 
 test('cli: --out writes the same JSON report to a file', async (t) => {
-  const dir = await mkdtemp(join(tmpdir(), 'pageaudit-'))
-  t.after(() => rm(dir, { recursive: true, force: true }))
+  const dir = await tempDir(t)
   const path = join(dir, 'report.json')
   const { stdout } = await runCli(t, [fixtureUrl('good.html'), '--json', '--out', path])
   assert.deepEqual(JSON.parse(await readFile(path, 'utf8')), JSON.parse(stdout))
@@ -314,8 +313,109 @@ test('cli: --out to an unwritable path exits 2 but still prints the report', asy
   assert.equal(JSON.parse(stdout).summary.pages, 1)
 })
 
+const TINY_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64'
+)
+
+async function tempDir(t) {
+  const dir = await mkdtemp(join(tmpdir(), 'pageaudit-'))
+  t.after(() => rm(dir, { recursive: true, force: true }))
+  return dir
+}
+
+test('cli: --html writes a branded self-contained report', async (t) => {
+  const dir = await tempDir(t)
+  const logo = join(dir, 'logo.png')
+  await writeFile(logo, TINY_PNG)
+  const path = join(dir, 'report.html')
+  const args = [
+    fixtureUrl('bad-missing.html'),
+    '--html',
+    path,
+    '--title',
+    'Check',
+    '--client',
+    'Acme Oy',
+    '--logo',
+    logo
+  ]
+  const { code } = await runCli(t, [...args, '--json'])
+  assert.equal(code, 1)
+  const out = await readFile(path, 'utf8')
+  assert.match(out, /<title>Check - Acme Oy<\/title>/)
+  assert.match(out, /src="data:image\/png;base64,iVBOR/)
+  assert.match(out, /The page has no title/)
+})
+
+test('cli: --html with --lighthouse shows the scores', async (t) => {
+  const dir = await tempDir(t)
+  const path = join(dir, 'report.html')
+  const summary = {
+    scores: { performance: 91, accessibility: 80, 'best-practices': 100, seo: 55 },
+    metrics: { fcp: 1000, lcp: 2000, tbt: 10, cls: 0, speedIndex: 1500 },
+    audits: [],
+    warnings: []
+  }
+  const lighthouse = async (urls) => urls.map(() => ({ summary }))
+  await runCli(t, [fixtureUrl('good.html'), '--lighthouse', '--html', path, '--json'], { lighthouse })
+  const out = await readFile(path, 'utf8')
+  assert.match(out, /aria-label="Speed: 91 out of 100"/)
+  assert.match(out, /Largest Contentful Paint/)
+})
+
+test('cli: --html to an unwritable path exits 2', async (t) => {
+  const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), '--html', '/no/such/dir/r.html', '--json'])
+  assert.equal(code, 2)
+  assert.match(stderr, /Could not write \/no\/such\/dir\/r.html: ENOENT/)
+})
+
+test('cli: a bad logo exits 2 before any page is fetched', async (t) => {
+  const dir = await tempDir(t)
+  await writeFile(join(dir, 'logo.txt'), 'x')
+  const fetchMock = mockFixtureFetch(t)
+  const errors = []
+  t.mock.method(console, 'error', (...a) => errors.push(a.join(' ')))
+  const base = [fixtureUrl('good.html'), '--html', join(dir, 'r.html'), '--json']
+  assert.equal(await run([...base, '--logo', join(dir, 'logo.txt')]), 2)
+  assert.equal(await run([...base, '--logo', join(dir, 'missing.png')]), 2)
+  assert.match(errors[0], /--logo must be a png, jpg, gif, webp or svg file/)
+  assert.match(errors[1], /Could not read the logo .*missing\.png: ENOENT/)
+  assert.equal(fetchMock.mock.callCount(), 0)
+})
+
+test('cli: a logo over the size limit is rejected', async (t) => {
+  const dir = await tempDir(t)
+  await writeFile(join(dir, 'big.png'), Buffer.alloc(513 * 1024))
+  const errors = []
+  t.mock.method(console, 'error', (...a) => errors.push(a.join(' ')))
+  assert.equal(await run([fixtureUrl('good.html'), '--html', join(dir, 'r.html'), '--logo', join(dir, 'big.png')]), 2)
+  assert.match(errors[0], /larger than 512 KB/)
+})
+
+test('cli: --title, --client and --logo need --html', async (t) => {
+  const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), '--client', 'Acme', '--json'])
+  assert.equal(code, 2)
+  assert.match(stderr, /only apply together with --html/)
+})
+
 test('cli: an empty --out value is a usage error', async (t) => {
   const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), '--out', '', '--json'])
   assert.equal(code, 2)
   assert.match(stderr, /--out needs a value/)
+})
+
+test('cli: empty --html, --title, --client and --logo values are usage errors', async (t) => {
+  for (const option of ['--html', '--title', '--client', '--logo']) {
+    const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), option, '', '--json'])
+    assert.equal(code, 2)
+    assert.match(stderr, new RegExp(`${option} needs a value`))
+  }
+})
+
+test('cli: --html notes how many URLs a --limit left out', async (t) => {
+  const dir = await tempDir(t)
+  const path = join(dir, 'report.html')
+  await runCli(t, [fixtureUrl('good.html'), fixtureUrl('bad-missing.html'), '--limit', '1', '--html', path, '--json'])
+  assert.match(await readFile(path, 'utf8'), /Audited 1 page out of 2 found/)
 })

@@ -2,6 +2,8 @@ import { parseArgs } from 'node:util'
 import chalk from 'chalk'
 import ora from 'ora'
 import { checkSite } from './checks/site/index.js'
+import { readLogo } from './html/logo.js'
+import { renderHtml } from './html/render.js'
 import { fromArgs } from './input/args.js'
 import { fromFile } from './input/file.js'
 import { resolveUrls } from './input/resolve.js'
@@ -28,6 +30,10 @@ Options:
   --lighthouse         also run Lighthouse (needs Chrome) on every page that returned HTML, one at a time
   --fail-on <level>    exit 1 on any "error" (default) or on any "warning" or error
   --out <path>         also write the JSON report to a file, for example to hand to Claude
+  --html <path>        also write a report for customers as one self-contained HTML file
+  --title <text>       report title in the HTML report (default "Website audit")
+  --client <name>      client name shown in the HTML report
+  --logo <file>        logo for the HTML report (png, jpg, gif, webp or svg, at most 512 KB)
   --json               print the report as JSON (default when stdout is not a TTY)
   -h, --help           show this help
 
@@ -41,6 +47,10 @@ const OPTIONS = {
   delay: { type: 'string' },
   lighthouse: { type: 'boolean' },
   out: { type: 'string' },
+  html: { type: 'string' },
+  title: { type: 'string' },
+  client: { type: 'string' },
+  logo: { type: 'string' },
   'fail-on': { type: 'string' },
   json: { type: 'boolean' },
   help: { type: 'boolean', short: 'h' }
@@ -69,10 +79,13 @@ function requireValues(values, names) {
 
 function parseOptions(argv) {
   const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: OPTIONS })
-  requireValues(values, ['out'])
+  requireValues(values, ['out', 'html', 'title', 'client', 'logo'])
   const failOn = values['fail-on'] ?? 'error'
   if (failOn !== 'error' && failOn !== 'warning') {
     throw new Error(`--fail-on must be "error" or "warning", got "${failOn}"`)
+  }
+  if (!values.html && (values.title || values.client || values.logo)) {
+    throw new Error('--title, --client and --logo only apply together with --html')
   }
   return {
     help: values.help,
@@ -85,6 +98,8 @@ function parseOptions(argv) {
     failOn,
     lighthouse: values.lighthouse,
     out: values.out,
+    html: values.html,
+    branding: { title: values.title, client: values.client, logo: values.logo },
     json: values.json
   }
 }
@@ -169,6 +184,35 @@ async function addLighthouse(pages, startSpinner, runner) {
   }
 }
 
+// Writes the --out and --html files. Returns false after printing why when one failed.
+async function writeFiles(options, report, { logo, totalUrls }) {
+  const files = []
+  if (options.out) files.push([options.out, `${JSON.stringify(report, null, 2)}\n`])
+  if (options.html) {
+    const { title, client } = options.branding
+    files.push([options.html, renderHtml(report, { title, client, logo, totalUrls })])
+  }
+  let ok = true
+  for (const [path, content] of files) {
+    const failure = await writeReportFile(path, content)
+    if (failure) console.error(failure)
+    ok &&= !failure
+  }
+  return ok
+}
+
+// The logo is read before the audit starts, so a bad file fails fast. Returns the data
+// URI, null when there is no logo, or undefined after printing why it failed.
+async function loadLogo(path) {
+  if (!path) return null
+  try {
+    return await readLogo(path)
+  } catch (err) {
+    console.error(err.message)
+    return undefined
+  }
+}
+
 export async function run(argv, { stdin = process.stdin, lighthouse = runLighthouse } = {}) {
   let options
   try {
@@ -186,6 +230,9 @@ export async function run(argv, { stdin = process.stdin, lighthouse = runLightho
     return 2
   }
 
+  const logo = await loadLogo(options.branding.logo)
+  if (logo === undefined) return 2
+
   const json = options.json ?? !process.stdout.isTTY
   const spin = !json && canSpin(process.stderr)
   const startSpinner = (text) => (spin ? ora({ text, stream: process.stderr }).start() : null)
@@ -198,13 +245,7 @@ export async function run(argv, { stdin = process.stdin, lighthouse = runLightho
   if (options.lighthouse) await addLighthouse(pages, startSpinner, lighthouse)
   const report = buildReport({ pages, site: checkSite(pages), skipped: inputs.skipped })
   console.log(json ? JSON.stringify(report, null, 2) : formatReport(report, process.stdout.columns))
-  if (options.out) {
-    const failure = await writeReportFile(options.out, `${JSON.stringify(report, null, 2)}\n`)
-    if (failure) {
-      console.error(failure)
-      return 2
-    }
-  }
+  if (!(await writeFiles(options, report, { logo, totalUrls: inputs.total }))) return 2
 
   const { errors, warnings } = report.summary
   return errors > 0 || (options.failOn === 'warning' && warnings > 0) ? 1 : 0

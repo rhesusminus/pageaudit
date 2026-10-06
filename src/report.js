@@ -78,7 +78,7 @@ export function buildReport({ pages, site, skipped = [], now = new Date() }) {
 }
 
 // Worst pages first: most errors, then warnings, then infos. Ties keep input order.
-function worstFirst(pages) {
+export function worstFirst(pages) {
   return pages
     .map((page) => ({ ...page, counts: countSeverities(page.issues) }))
     .sort(
