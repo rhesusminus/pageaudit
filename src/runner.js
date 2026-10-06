@@ -31,7 +31,7 @@ export async function auditPage(url, { fetchPage = defaultFetchPage, timeout = D
   let facts = null
   if (status === 200 && html !== null) {
     const $ = parse(html)
-    issues.push(...checkHtml($))
+    issues.push(...checkHtml($, { url: finalUrl, html }))
     facts = extractFacts($, finalUrl)
   }
   return { url, finalUrl, status, redirects, issues: withUrl(issues), facts }

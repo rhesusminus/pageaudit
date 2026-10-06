@@ -1,0 +1,18 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Markup problems - Example Store</title>
+  <meta name="description" content="A page with indexing, social, structured data and hygiene problems, used to test those rules end to end.">
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="canonical" href="https://fixtures.test/bad-markup.html">
+  <meta property="og:title" content="Markup problems">
+  <script type="application/ld+json">{ not json</script>
+  <script type="application/ld+json">{"@type":"Product","name":"Shampoo","image":"/shampoo.jpg"}</script>
+</head>
+<body>
+  <h1>Markup problems</h1>
+  <p>This page has enough visible words to not look like an empty application shell to the client side rendering check.</p>
+  <img src="http://fixtures.test/insecure.png" alt="Insecure image" width="10" height="10">
+</body>
+</html>

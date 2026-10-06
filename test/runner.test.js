@@ -4,7 +4,10 @@ import { FetchError } from '../src/fetch.js'
 import { auditPage, runAudit } from '../src/runner.js'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
 
-const GOOD = `<html><head><title>Good page title here</title>
+const GOOD = `<html lang="en"><head><title>Good page title here</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta property="og:title" content="Good"><meta property="og:description" content="Good page.">
+<meta property="og:image" content="https://a.test/og.png"><meta name="twitter:card" content="summary">
 <meta name="description" content="A description that is long enough to not be flagged as a short one, really.">
 <link rel="canonical" href="https://a.test/good"></head><body><h1>Hello</h1></body></html>`
 

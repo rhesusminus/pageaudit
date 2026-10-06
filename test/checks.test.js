@@ -5,6 +5,10 @@ import { parse } from '../src/parse.js'
 import { checkImages } from '../src/checks/page/images.js'
 import { checkMeta } from '../src/checks/page/meta.js'
 import { checkHeadings } from '../src/checks/page/headings.js'
+import { checkHygiene } from '../src/checks/page/hygiene.js'
+import { checkIndexing } from '../src/checks/page/indexing.js'
+import { checkSocial } from '../src/checks/page/social.js'
+import { checkStructuredData } from '../src/checks/page/structured-data.js'
 import { truncate } from '../src/checks/snippet.js'
 
 const types = (issues) => issues.map((i) => i.type)
@@ -372,4 +376,319 @@ test('meta: title and description lengths count characters, not UTF-16 code unit
   assert.match(issues[0].message, /Title is 61 chars/)
   const short = checkMeta(parse(goodHead('T', '😀'.repeat(10))))
   assert.match(short[0].message, /only 10 chars/)
+})
+
+// Social, indexing, structured data and hygiene checks.
+
+const OG =
+  '<meta property="og:title" content="t"><meta property="og:description" content="d"><meta property="og:image" content="https://a.test/i.png">'
+const TWITTER = '<meta name="twitter:card" content="summary">'
+
+test('social: no Open Graph and no card are two infos', () => {
+  const issues = checkSocial(parse('<head></head>'))
+  assert.deepEqual(types(issues), ['missing-open-graph', 'missing-twitter-card'])
+  assert.ok(issues.every((i) => i.severity === 'info' && i.category === 'best-practice'))
+})
+
+test('social: partial Open Graph names the missing tags', () => {
+  const issues = checkSocial(parse(`<meta property="og:title" content="t">${TWITTER}`))
+  assert.deepEqual(types(issues), ['incomplete-open-graph'])
+  assert.match(issues[0].message, /og:description, og:image/)
+})
+
+test('social: complete Open Graph and a card are fine', () => {
+  assert.deepEqual(checkSocial(parse(OG + TWITTER)), [])
+})
+
+test('indexing: noindex is a warning, also from the googlebot tag and "none"', () => {
+  for (const html of [
+    '<meta name="robots" content="noindex, follow">',
+    '<meta name="googlebot" content="NOINDEX">',
+    '<meta name="robots" content="none">'
+  ]) {
+    const issues = checkIndexing(
+      parse(`<html lang="en"><head>${html}<meta name="viewport" content="width=device-width"></head>`)
+    )
+    assert.ok(types(issues).includes('noindex'), html)
+    assert.equal(issues.find((i) => i.type === 'noindex').severity, 'warning')
+  }
+})
+
+test('indexing: nofollow is info, index and follow are not flagged', () => {
+  const page = (robots) =>
+    parse(`<html lang="en"><head><meta name="robots" content="${robots}"><meta name="viewport" content="x"></head>`)
+  assert.deepEqual(types(checkIndexing(page('index, nofollow'))), ['nofollow'])
+  assert.deepEqual(checkIndexing(page('index, follow')), [])
+})
+
+test('indexing: missing viewport and lang are warnings', () => {
+  const issues = checkIndexing(parse('<html><head></head>'))
+  assert.deepEqual(types(issues), ['missing-viewport', 'missing-lang'])
+  assert.deepEqual(
+    issues.map((i) => i.category),
+    ['seo', 'accessibility']
+  )
+  assert.deepEqual(types(checkIndexing(parse('<html lang=" "><head><meta name="viewport" content="x">'))), [
+    'missing-lang'
+  ])
+})
+
+const ld = (json) =>
+  parse(`<script type="application/ld+json">${typeof json === 'string' ? json : JSON.stringify(json)}</script>`)
+const CONTEXT = { '@context': 'https://schema.org' }
+
+test('structured data: invalid JSON is reported with the parser error', () => {
+  const issues = checkStructuredData(ld('{ not json'))
+  assert.deepEqual(types(issues), ['invalid-json-ld'])
+  assert.match(issues[0].context, /not json/)
+})
+
+test('structured data: a block without @context is flagged, @graph and arrays are walked', () => {
+  assert.deepEqual(types(checkStructuredData(ld({ '@type': 'Organization' }))), ['json-ld-missing-context'])
+  assert.deepEqual(
+    checkStructuredData(ld({ ...CONTEXT, '@graph': [{ '@type': 'Organization', url: 'https://a.test/' }] })),
+    []
+  )
+  assert.deepEqual(checkStructuredData(ld([{ ...CONTEXT, '@type': 'Organization' }])), [])
+})
+
+test('structured data: relative URLs are flagged in strings, arrays and image objects', () => {
+  const org = {
+    ...CONTEXT,
+    '@type': 'Organization',
+    url: '/about',
+    logo: { '@type': 'ImageObject', url: 'logo.png' },
+    sameAs: ['https://x.test/a', '/b']
+  }
+  const issues = checkStructuredData(ld(org))
+  assert.deepEqual(types(issues), ['json-ld-relative-url', 'json-ld-relative-url', 'json-ld-relative-url'])
+  assert.deepEqual(checkStructuredData(ld({ ...CONTEXT, '@type': 'Organization', url: 'https://a.test/' })), [])
+})
+
+test('structured data: types without a Google rich result are info', () => {
+  for (const type of ['HowTo', 'FAQPage', 'ClaimReview']) {
+    const issues = checkStructuredData(ld({ ...CONTEXT, '@type': type }))
+    assert.deepEqual(types(issues), ['unsupported-schema-type'], type)
+    assert.equal(issues[0].severity, 'info')
+  }
+  assert.deepEqual(checkStructuredData(ld({ ...CONTEXT, '@type': 'Article' })), [])
+})
+
+test('structured data: Product needs a name and one of offers, review, aggregateRating', () => {
+  const product = (fields) => checkStructuredData(ld({ ...CONTEXT, '@type': 'Product', ...fields }))
+  assert.deepEqual(types(product({})), ['missing-schema-property'])
+  assert.match(product({ name: 'x' })[0].message, /one of offers, review or aggregateRating/)
+  assert.deepEqual(product({ name: 'x', offers: {} }), [])
+  assert.deepEqual(product({ name: 'x', aggregateRating: {} }), [])
+})
+
+test('structured data: BreadcrumbList needs itemListElement', () => {
+  assert.deepEqual(types(checkStructuredData(ld({ ...CONTEXT, '@type': 'BreadcrumbList' }))), [
+    'missing-schema-property'
+  ])
+  assert.deepEqual(checkStructuredData(ld({ ...CONTEXT, '@type': 'BreadcrumbList', itemListElement: [] })), [])
+})
+
+const hygiene = (html, page = {}) => checkHygiene(parse(html), { url: 'https://a.test/page', html, ...page })
+const WORDS = 'word '.repeat(30)
+
+test('hygiene: long, underscore and uppercase URLs are infos', () => {
+  const url = `https://a.test/Some_Path/${'a'.repeat(100)}`
+  assert.deepEqual(types(hygiene(WORDS, { url })), ['long-url', 'url-underscores', 'url-uppercase'])
+  assert.deepEqual(hygiene(WORDS, { url: 'https://a.test/some-path/' }), [])
+  assert.deepEqual(types(hygiene(WORDS, { url: 'https://a.test/caf%C3%A9%' })), [])
+})
+
+test('hygiene: HTML over 2 MB is a warning, exactly 2 MB is fine', () => {
+  const limit = 2 * 1024 * 1024
+  const html = (bytes) => '<p>' + 'a'.repeat(bytes - 7) + '</p>'
+  assert.deepEqual(types(hygiene(html(limit + 1))), ['html-too-large'])
+  assert.deepEqual(hygiene(html(limit)), [])
+})
+
+test('hygiene: http resources on an https page are mixed content, on an http page they are not', () => {
+  const html = `<p>${WORDS}</p><img src="http://a.test/a.png"><script src="http://a.test/a.js"></script><link rel="stylesheet" href="http://a.test/a.css"><img src="https://a.test/ok.png"><a href="http://a.test/">link</a>`
+  assert.deepEqual(types(hygiene(html)), ['mixed-content', 'mixed-content', 'mixed-content'])
+  assert.deepEqual(hygiene(html, { url: 'http://a.test/page' }), [])
+})
+
+test('hygiene: an empty app root or a noscript warning with no text is a client-side rendered shell', () => {
+  assert.deepEqual(types(hygiene('<body><div id="root"></div><script src="/a.js"></script></body>')), [
+    'client-side-rendered'
+  ])
+  assert.deepEqual(types(hygiene('<body><noscript>You need to enable JavaScript to run this app.</noscript></body>')), [
+    'client-side-rendered'
+  ])
+})
+
+test('hygiene: server rendered pages and short static pages are not shells', () => {
+  assert.deepEqual(hygiene(`<body><div id="root"><p>${WORDS}</p></div></body>`), [])
+  assert.deepEqual(hygiene('<body><p>Short page.</p></body>'), [])
+})
+
+// Review fixes.
+
+const VIEWPORT_LANG = '<html lang="en"><head><meta name="viewport" content="x">'
+
+test('indexing: directives from several robots tags add up', () => {
+  const html = `${VIEWPORT_LANG}<meta name="robots" content="index, follow"><meta name="robots" content="noindex">`
+  assert.deepEqual(types(checkIndexing(parse(html))), ['noindex'])
+})
+
+test('indexing: a noindex after a very long directive list is still found, uncut', () => {
+  const content = `index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1, notranslate, unavailable_after: 2027-01-01, noindex`
+  assert.deepEqual(types(checkIndexing(parse(`${VIEWPORT_LANG}<meta name="robots" content="${content}">`))), [
+    'noindex'
+  ])
+})
+
+test('indexing: the context shows the tag that holds the directive', () => {
+  const html = `${VIEWPORT_LANG}<meta name="robots" content="index,follow"><meta name="googlebot" content="noindex">`
+  assert.match(checkIndexing(parse(html))[0].context, /name="googlebot" content="noindex"/)
+})
+
+test('social: twitter:card as a property and og tags with name= are accepted', () => {
+  const html = `<meta name="og:title" content="t"><meta name="og:description" content="d"><meta property="og:image" content="i"><meta property="twitter:card" content="summary">`
+  assert.deepEqual(checkSocial(parse(html)), [])
+})
+
+test('hygiene: non-ASCII slugs are measured as people see them', () => {
+  const url = `https://example.jp/${'ブ'.repeat(20)}`
+  assert.deepEqual(hygiene(WORDS, { url: encodeURI(url) }), [])
+  const long = hygiene(WORDS, { url: encodeURI(`https://example.jp/${'ブ'.repeat(100)}`) })
+  assert.deepEqual(types(long), ['long-url'])
+  assert.match(long[0].context, /ブ/)
+})
+
+test('hygiene: srcset candidates and <base href> count for mixed content', () => {
+  const srcset = `<p>${WORDS}</p><img src="https://a.test/a.png" srcset="https://a.test/a.png 1x, http://a.test/a2.png 2x">`
+  assert.deepEqual(types(hygiene(srcset)), ['mixed-content'])
+  const base = `<base href="http://a.test/"><p>${WORDS}</p><img src="a.png">`
+  assert.deepEqual(types(hygiene(base)), ['mixed-content'])
+})
+
+test('hygiene: an empty root next to headings or a form is not a shell', () => {
+  assert.deepEqual(hygiene('<body><div id="root"></div><main><h1>Log in</h1><form></form></main></body>'), [])
+})
+
+test('hygiene: checkHtml without a page argument runs no URL or size checks', async () => {
+  const { checkHtml } = await import('../src/checks/page/index.js')
+  const issues = checkHtml(
+    parse(`<html lang="en"><head><meta name="viewport" content="x"></head><body>${WORDS}</body>`)
+  )
+  assert.ok(!types(issues).some((type) => /url|too-large|mixed/.test(type)))
+})
+
+test('structured data: @context on a @graph member, arrays and @type arrays', () => {
+  assert.deepEqual(checkStructuredData(ld({ '@graph': [{ ...CONTEXT, '@type': 'Organization' }] })), [])
+  const mixed = [{ ...CONTEXT, '@type': 'Organization' }, { '@type': 'Person' }]
+  assert.deepEqual(types(checkStructuredData(ld(mixed))), ['json-ld-missing-context'])
+  const product = { ...CONTEXT, '@type': ['Product', 'Thing'] }
+  assert.deepEqual(types(checkStructuredData(ld(product))), ['missing-schema-property'])
+})
+
+test('structured data: protocol-relative URLs are fine and a null @type is ignored', () => {
+  assert.deepEqual(checkStructuredData(ld({ ...CONTEXT, '@type': 'Organization', logo: '//cdn.a.test/l.png' })), [])
+  assert.deepEqual(checkStructuredData(ld({ ...CONTEXT, '@type': null, url: '/x' })), [])
+})
+
+// Second review fixes.
+
+test('facts: robots joins every robots and googlebot tag', async () => {
+  const { extractFacts } = await import('../src/checks/page/index.js')
+  const html =
+    '<meta name="robots" content="index"><meta name="robots" content="noindex"><meta name="googlebot" content="nofollow">'
+  assert.equal(extractFacts(parse(html), 'https://a.test/').robots, 'index, noindex, nofollow')
+})
+
+test('social: an empty tag in front of a filled one does not hide it', () => {
+  const html = `<meta property="og:title" content=""><meta name="og:title" content="t"><meta property="og:description" content="d"><meta property="og:image" content="i"><meta property="twitter:card" content=""><meta name="twitter:card" content="summary">`
+  assert.deepEqual(checkSocial(parse(html)), [])
+})
+
+test('hygiene: a broken percent escape does not leave letters behind', () => {
+  assert.deepEqual(
+    hygiene(WORDS, { url: 'https://a.test/a%4Gb' }).map((i) => i.type),
+    ['url-uppercase']
+  )
+})
+
+test('hygiene: http on localhost is not mixed content', () => {
+  const html = `<p>${WORDS}</p><script src="http://localhost:3000/dev.js"></script><img src="http://127.0.0.1/a.png"><img src="http://app.localhost/a.png">`
+  assert.deepEqual(hygiene(html), [])
+})
+
+test('hygiene: a static header with an empty mount point is a shell, a main area is not', () => {
+  assert.deepEqual(types(hygiene('<body><header><h1>Brand</h1></header><div id="root"></div></body>')), [
+    'client-side-rendered'
+  ])
+  const shell = hygiene('<body><main id="app"></main><script src="/app.js"></script></body>')
+  assert.deepEqual(types(shell), ['client-side-rendered'])
+  assert.match(shell[0].context, /<main id="app"><\/main>/)
+})
+
+test('hygiene: a noscript message on a page with visible text and no app root is not a shell', () => {
+  assert.deepEqual(
+    hygiene('<body><p>Hello there</p><noscript>This site requires JavaScript for comments</noscript></body>'),
+    []
+  )
+})
+
+test('structured data: relative URLs are found in nested objects', () => {
+  const article = { ...CONTEXT, '@type': 'Article', publisher: { '@type': 'Organization', logo: '/logo.png' } }
+  assert.deepEqual(types(checkStructuredData(ld(article))), ['json-ld-relative-url'])
+  const product = { ...CONTEXT, '@type': 'Product', name: 'x', offers: { '@type': 'Offer', url: '/buy' } }
+  assert.deepEqual(types(checkStructuredData(ld(product))), ['json-ld-relative-url'])
+  const graph = { ...CONTEXT, '@graph': [{ '@type': 'Organization', url: '/a' }] }
+  assert.equal(checkStructuredData(ld(graph)).length, 1)
+})
+
+// Third review fixes.
+
+test('structured data: URL properties holding objects are walked on, breadcrumb items too', () => {
+  const list = {
+    ...CONTEXT,
+    '@type': 'ItemList',
+    itemListElement: [{ '@type': 'ListItem', item: { '@type': 'Product', name: 'x', image: '/i.png' } }]
+  }
+  assert.deepEqual(types(checkStructuredData(ld(list))), ['json-ld-relative-url'])
+  const image = {
+    ...CONTEXT,
+    '@type': 'Article',
+    image: { '@type': 'ImageObject', url: 'https://a.test/i.png', contentUrl: '/c.png' }
+  }
+  assert.deepEqual(types(checkStructuredData(ld(image))), ['json-ld-relative-url'])
+  const crumbs = (item) => ({
+    ...CONTEXT,
+    '@type': 'BreadcrumbList',
+    itemListElement: [{ '@type': 'ListItem', position: 1, item }]
+  })
+  assert.deepEqual(types(checkStructuredData(ld(crumbs('/home')))), ['json-ld-relative-url'])
+  assert.deepEqual(checkStructuredData(ld(crumbs({ '@id': 'https://a.test/home', name: 'Home' }))), [])
+})
+
+test('facts: robots keeps every directive once and does not cut a late noindex', async () => {
+  const { extractFacts } = await import('../src/checks/page/index.js')
+  const html =
+    '<meta name="robots" content="max-image-preview:large, max-snippet:-1, max-video-preview:-1, notranslate, noimageindex, unavailable_after: 2027-01-01"><meta name="googlebot" content="NoIndex, notranslate">'
+  assert.match(extractFacts(parse(html), 'https://a.test/').robots, /notranslate.*noindex$/)
+  assert.equal(extractFacts(parse(html), 'https://a.test/').robots.match(/notranslate/g).length, 1)
+})
+
+test('facts: an empty viewport tag in front of a filled one gives the filled one', async () => {
+  const { extractFacts } = await import('../src/checks/page/index.js')
+  const html = '<meta name="viewport" content=""><meta name="viewport" content="width=device-width">'
+  assert.equal(extractFacts(parse(html), 'https://a.test/').viewport, 'width=device-width')
+})
+
+test('hygiene: an empty root next to a main area is not a shell, a header search form does not make it one', () => {
+  assert.deepEqual(hygiene('<body><div id="root"></div><main><p>Short page.</p></main></body>'), [])
+  const search = '<body><header><form action="/s"><input name="q"></form></header><div id="root"></div></body>'
+  assert.deepEqual(types(hygiene(search)), ['client-side-rendered'])
+})
+
+test('hygiene: a prerendered app root with the default noscript message is not a shell', () => {
+  const html =
+    '<body><div id="app"><p>Hello world</p></div><noscript>You need to enable JavaScript to run this app.</noscript></body>'
+  assert.deepEqual(hygiene(html), [])
 })

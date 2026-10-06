@@ -1,12 +1,10 @@
 import { SOURCES } from '../../sources.js'
-import { truncate } from '../snippet.js'
-
-const issue = (fields) => ({ category: 'seo', ...fields, context: truncate(fields.context) })
+import { seoIssue } from '../snippet.js'
 
 // A page that could not be fetched at all: network error, timeout, too many redirects.
 export function checkFetchError(err) {
   return [
-    issue({
+    seoIssue({
       type: 'fetch-failed',
       severity: 'error',
       source: SOURCES.httpStatus,
@@ -20,7 +18,7 @@ function checkRedirects({ url, redirects }) {
   const chain = [url, ...redirects.map((r) => r.location)].join(' -> ')
   if (redirects.length > 1) {
     return [
-      issue({
+      seoIssue({
         type: 'redirect-chain',
         severity: 'warning',
         source: SOURCES.redirects,
@@ -31,7 +29,7 @@ function checkRedirects({ url, redirects }) {
   }
   if (redirects.length === 1) {
     return [
-      issue({
+      seoIssue({
         type: 'redirect',
         severity: 'info',
         source: SOURCES.redirects,
@@ -48,7 +46,7 @@ function checkStatus({ url, finalUrl, status, contentType, html }) {
   const landedOn = finalUrl === url ? '' : finalUrl
   if (status !== 200) {
     return [
-      issue({
+      seoIssue({
         type: 'http-status',
         severity: 'error',
         source: SOURCES.httpStatus,
@@ -59,7 +57,7 @@ function checkStatus({ url, finalUrl, status, contentType, html }) {
   }
   if (html === null) {
     return [
-      issue({
+      seoIssue({
         type: 'not-html',
         severity: 'info',
         source: SOURCES.fileTypes,

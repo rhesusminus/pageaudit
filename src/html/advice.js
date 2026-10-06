@@ -161,6 +161,96 @@ export const ADVICE = {
     why: 'Pages with the same heading are hard to tell apart for visitors and search engines.',
     fix: 'Give each page a heading that describes its own content.'
   },
+  'missing-open-graph': {
+    title: 'Links to the page get a plain preview when shared',
+    why: 'Without Open Graph tags, social and chat apps guess the preview title, text and picture. This does not affect Google rankings.',
+    fix: 'Add og:title, og:description and og:image tags so shared links look good.'
+  },
+  'incomplete-open-graph': {
+    title: 'The preview for shared links is incomplete',
+    why: 'Some Open Graph tags are set but others are missing, so social and chat apps fill the gaps with guesses.',
+    fix: 'Add the missing tags listed in the technical message. A picture of about 1200 by 630 pixels works well.'
+  },
+  'missing-twitter-card': {
+    title: 'No card type for shared links on X',
+    why: 'X falls back to the Open Graph tags, but without a card type it picks the layout itself, often a small preview.',
+    fix: 'Add a twitter:card tag, for example summary_large_image.'
+  },
+  noindex: {
+    title: 'The page asks search engines to stay away',
+    why: 'A noindex tag keeps the page out of search results. That is right for pages like thank-you or login pages, but a disaster on a page that should be found.',
+    fix: 'If the page should appear in search, remove the noindex directive. If not, no action is needed.'
+  },
+  nofollow: {
+    title: 'The page asks search engines not to follow its links',
+    why: 'Search engines will not pass value or discover other pages through the links on this page.',
+    fix: 'Remove nofollow from the robots tag unless this is on purpose.'
+  },
+  'missing-viewport': {
+    title: 'The page is not set up for phones',
+    why: 'Without a viewport tag, phones show the page at desktop width and shrink it, so text is tiny and visitors have to zoom.',
+    fix: 'Add <meta name="viewport" content="width=device-width, initial-scale=1"> to the head of the page.'
+  },
+  'missing-lang': {
+    title: 'The page does not say what language it is in',
+    why: 'Screen readers use the language to pick the right voice, and browsers use it to offer translation.',
+    fix: 'Add a lang attribute to the html tag, for example lang="en" or lang="fi".'
+  },
+  'invalid-json-ld': {
+    title: 'Structured data on the page is broken',
+    why: 'The structured data cannot be read, so search engines ignore it and the page loses its chance of rich results.',
+    fix: "Fix the JSON syntax (the technical message names the problem) and test it with Google's Rich Results Test."
+  },
+  'json-ld-missing-context': {
+    title: 'Structured data is missing its vocabulary',
+    why: 'Without @context, search engines do not know which vocabulary the markup uses and may ignore it.',
+    fix: 'Add "@context": "https://schema.org" to the structured data.'
+  },
+  'json-ld-relative-url': {
+    title: 'Structured data uses a partial web address',
+    why: 'Addresses in structured data should be complete, with https and the domain, or search engines may not resolve them.',
+    fix: 'Replace the relative address with the full one, for example https://example.com/logo.png.'
+  },
+  'unsupported-schema-type': {
+    title: 'Structured data that Google no longer shows',
+    why: 'Google does not show a rich result for this type, so the markup has no visible effect in Google Search. It does no harm.',
+    fix: 'No action needed. You may remove it to keep the page lean, or keep it if other tools use it.'
+  },
+  'missing-schema-property': {
+    title: 'Structured data is missing a required field',
+    why: 'Google needs certain fields before it can show a rich result such as price or breadcrumbs, so the page is not eligible without them.',
+    fix: 'Add the field named in the technical message to the structured data.'
+  },
+  'long-url': {
+    title: 'The web address is long',
+    why: 'Long addresses are harder to read, share and remember. Google has no strict limit.',
+    fix: 'Shorten the address where you can, and drop parameters that do not change the content.'
+  },
+  'url-underscores': {
+    title: 'The web address uses underscores',
+    why: 'Google reads hyphens as word separators and recommends them over underscores.',
+    fix: 'Use hyphens in new addresses. Only change existing ones if you set up a redirect from the old one.'
+  },
+  'url-uppercase': {
+    title: 'The web address has capital letters',
+    why: 'Google treats /Shop and /shop as different pages, which can split the page into duplicates.',
+    fix: 'Use lowercase addresses and redirect any capitalised version to the lowercase one.'
+  },
+  'html-too-large': {
+    title: 'The page code is very large',
+    why: 'Google only reads the first 2 MB of a page. Content and structured data after that point is not indexed.',
+    fix: 'Move inline scripts, styles and images out into separate files and trim the page markup.'
+  },
+  'mixed-content': {
+    title: 'A secure page loads something insecurely',
+    why: 'Browsers block or rewrite files loaded over http on an https page, so images or scripts may be missing, and the padlock can be lost.',
+    fix: 'Change the address of the file to https.'
+  },
+  'client-side-rendered': {
+    title: "The page is built in the visitor's browser",
+    why: 'The page code has almost no text, so the content appears only after scripts run. Some search engines and tools see an empty page, and this audit only reads the code, so its results for this page may be incomplete.',
+    fix: 'Render the important content on the server so it is in the page code, or check how the page looks in Google Search Console.'
+  },
   'lighthouse-failed': {
     title: 'The speed and quality test could not run',
     why: 'The scores for this page are missing from the report. The other checks still ran.',
