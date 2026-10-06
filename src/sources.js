@@ -11,5 +11,17 @@ export const SOURCES = {
   lighthouse: 'https://developer.chrome.com/docs/lighthouse/overview',
   cls: 'https://web.dev/articles/optimize-cls',
   decorativeImages: 'https://www.w3.org/WAI/tutorials/images/decorative/',
-  headings: 'https://www.w3.org/WAI/tutorials/page-structure/headings/'
+  headings: 'https://www.w3.org/WAI/tutorials/page-structure/headings/',
+  openGraph: 'https://ogp.me/',
+  robotsMeta: 'https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag',
+  viewport: 'https://developer.chrome.com/docs/lighthouse/pwa/viewport',
+  languageOfPage: 'https://www.w3.org/WAI/WCAG22/Understanding/language-of-page.html',
+  structuredData: 'https://developers.google.com/search/docs/appearance/structured-data/intro-structured-data',
+  searchGallery: 'https://developers.google.com/search/docs/appearance/structured-data/search-gallery',
+  productSnippet: 'https://developers.google.com/search/docs/appearance/structured-data/product-snippet',
+  breadcrumb: 'https://developers.google.com/search/docs/appearance/structured-data/breadcrumb',
+  urlStructure: 'https://developers.google.com/search/docs/crawling-indexing/url-structure',
+  googlebot: 'https://developers.google.com/search/docs/crawling-indexing/googlebot',
+  javascriptSeo: 'https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics',
+  mixedContent: 'https://web.dev/articles/what-is-mixed-content'
 }

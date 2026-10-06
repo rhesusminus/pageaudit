@@ -17,7 +17,7 @@ const MAX_TEXT = 120
 const MAX_URL = 2000
 
 const clean = (text, max = MAX_TEXT) => limit(collapseWhitespace(text ?? ''), max) || null
-const metaContent = ($, selector, max) => clean($(selector).first().attr('content'), max)
+export const metaContent = ($, selector, max) => clean($(selector).first().attr('content'), max)
 
 // Visible body text only: script, style and noscript content is not read by a visitor.
 function wordCount($) {
@@ -73,17 +73,23 @@ function collectTypes(value, depth = 0) {
   return [...own, ...collectTypes(value['@graph'], depth + 1)]
 }
 
-// Invalid JSON-LD is ignored here, it is not this extraction's job to report it.
-function jsonLdTypes($) {
-  const types = $('script[type="application/ld+json" i]')
+// Every JSON-LD script as { value } when it parses or { error, text } when it does not.
+export function jsonLdBlocks($) {
+  return $('script[type="application/ld+json" i]')
     .toArray()
-    .flatMap((el) => {
+    .map((el) => {
+      const text = $(el).text()
       try {
-        return collectTypes(JSON.parse($(el).text()))
-      } catch {
-        return []
+        return { value: JSON.parse(text), text }
+      } catch (err) {
+        return { error: err.message, text }
       }
     })
+}
+
+// Invalid JSON-LD is ignored here, the structured data check reports it.
+function jsonLdTypes($) {
+  const types = jsonLdBlocks($).flatMap((block) => ('error' in block ? [] : collectTypes(block.value)))
   return [...new Set(types)].slice(0, MAX_TYPES)
 }
 

@@ -35,7 +35,7 @@ const GOOD_FACTS = {
   h1s: ['Gentle Shampoo'],
   canonical: fixtureUrl('good.html'),
   lang: 'en',
-  viewport: null,
+  viewport: 'width=device-width, initial-scale=1',
   robots: null,
   headings: [
     { level: 1, text: 'Gentle Shampoo' },
@@ -46,8 +46,14 @@ const GOOD_FACTS = {
   wordCount: 5,
   links: { internal: 0, external: 0, nofollow: 0 },
   images: { total: 1, missingAlt: 0 },
-  openGraph: { title: null, description: null, image: null, type: null, url: null },
-  twitterCard: null,
+  openGraph: {
+    title: 'Fixture page',
+    description: 'Fixture description.',
+    image: 'https://fixtures.test/og.png',
+    type: null,
+    url: null
+  },
+  twitterCard: 'summary_large_image',
   jsonLdTypes: []
 }
 
@@ -79,6 +85,26 @@ test('cli: bad-overlong.html reports its issues and exits 1', async (t) => {
   assert.deepEqual(report.summary, { pages: 1, errors: 1, warnings: 4, infos: 3 })
   assert.equal(report.pages[0].issues.length, 8)
   assert.ok(report.pages[0].issues.every((i) => i.url === fixtureUrl('bad-overlong.html')))
+})
+
+test('cli: bad-markup.html reports indexing, social, structured data and hygiene issues without failing', async (t) => {
+  const { code, report } = await runJson(t, [fixtureUrl('bad-markup.html')])
+  assert.equal(code, 0)
+  assert.deepEqual(pageTypes(report.pages[0]), [
+    'incomplete-open-graph',
+    'invalid-json-ld',
+    'json-ld-missing-context',
+    'json-ld-relative-url',
+    'missing-lang',
+    'missing-schema-property',
+    'missing-twitter-card',
+    'missing-viewport',
+    'mixed-content',
+    'nofollow',
+    'noindex'
+  ])
+  assert.deepEqual(report.summary, { pages: 1, errors: 0, warnings: 8, infos: 3 })
+  assert.equal((await runCli(t, [fixtureUrl('bad-markup.html'), '--json', '--fail-on', 'warning'])).code, 1)
 })
 
 test('cli: bad-missing.html reports missing elements and exits 1', async (t) => {
