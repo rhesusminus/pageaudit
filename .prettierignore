@@ -6,3 +6,5 @@ package-lock.json
 CHANGELOG.md
 docs/
 test/fixtures
+report.html
+report.json

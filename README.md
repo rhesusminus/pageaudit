@@ -77,7 +77,7 @@ The JSON report is meant to be read by a person or a model. Write it to a file a
 node bin/pageaudit.js --sitemap https://example.com/sitemap.xml --limit 20 --lighthouse --out report.json
 ```
 
-Then, in Claude Code: "read report.json and summarize the SEO and usability problems, most important first". Each page carries the issues the checks found, the Lighthouse summary and a `facts` object with what is on the page, so a suggestion can refer to the real title or headings. `facts` is `null` for pages that returned no HTML. All values are size-capped to keep the file small. `generatedAt` is the time of the audit.
+Then, in Claude Code: "read report.json and summarize the SEO and usability problems, most important first". Each page carries the issues the checks found, the Lighthouse summary and a `facts` object with what is on the page, so a suggestion can refer to the real title or headings. `facts` is `null` for pages that returned no HTML. Free text is capped to keep the file small: heading text and the Open Graph title, description and type at 120 characters (URLs at 2000), the page title, description and `h1s` at 300 characters, with at most 10 `h1s` and 40 headings. `generatedAt` is the time of the audit.
 
 | `facts` field                              | Meaning                                                                                           |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------- |

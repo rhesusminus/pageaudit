@@ -53,3 +53,11 @@ test('signals: headings are capped and long text is truncated', () => {
   assert.equal(headings.length, 40)
   assert.equal(Array.from(headings[0].text).length, 120)
 })
+
+test('signals: Open Graph URLs are not cut at the text limit, text is', () => {
+  const url = `https://fixtures.test/${'a'.repeat(300)}.png`
+  const html = `<meta property="og:image" content="${url}"><meta property="og:title" content="${'t'.repeat(300)}">`
+  const { openGraph } = extractSignals(parse(html), PAGE, PAGE)
+  assert.equal(openGraph.image, url)
+  assert.equal(Array.from(openGraph.title).length, 120)
+})

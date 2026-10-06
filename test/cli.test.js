@@ -313,3 +313,9 @@ test('cli: --out to an unwritable path exits 2 but still prints the report', asy
   assert.match(stderr, /Could not write \/no\/such\/dir\/r.json: ENOENT/)
   assert.equal(JSON.parse(stdout).summary.pages, 1)
 })
+
+test('cli: an empty --out value is a usage error', async (t) => {
+  const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), '--out', '', '--json'])
+  assert.equal(code, 2)
+  assert.match(stderr, /--out needs a value/)
+})
