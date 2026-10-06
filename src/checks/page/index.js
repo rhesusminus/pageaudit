@@ -2,22 +2,16 @@ import { collapseWhitespace } from '../../text.js'
 import { checkHeadings } from './headings.js'
 import { checkImages } from './images.js'
 import { canonicalLinks, checkMeta, descriptionValues, titleElement } from './meta.js'
+import { absolute, extractSignals } from './signals.js'
 
 export { checkFetchError, checkResponse } from './response.js'
 
 // Every check that looks at the parsed HTML of one page.
 export const checkHtml = ($) => [...checkImages($), ...checkMeta($), ...checkHeadings($)]
 
-function absolute(href, base) {
-  try {
-    return new URL(href, base).href
-  } catch {
-    return null
-  }
-}
-
-// The values the site checks compare across pages. Empty values are null so a
-// missing title is never reported as a duplicate of another missing title.
+// The values the site checks compare across pages, plus content signals for the
+// report. Empty values are null so a missing title is never reported as a duplicate
+// of another missing title.
 export function extractFacts($, finalUrl) {
   const href = canonicalLinks($)
     .map((el) => ($(el).attr('href') ?? '').trim())
@@ -36,6 +30,7 @@ export function extractFacts($, finalUrl) {
           .filter(Boolean)
       )
     ],
-    canonical: href ? absolute(href, baseUrl) : null
+    canonical: href ? absolute(href, baseUrl) : null,
+    ...extractSignals($, baseUrl, finalUrl)
   }
 }

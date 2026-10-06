@@ -43,6 +43,7 @@ Link-following crawling is not supported.
 | `--delay <ms>`       | 200     | Minimum time between starting requests to the same host.                                                               |
 | `--fail-on <level>`  | `error` | `warning` makes warnings fail the run too (for CI).                                                                    |
 | `--lighthouse`       | off     | Also run Lighthouse on every page that returned HTML. Needs a local Chrome or Chromium. See below.                     |
+| `--out <path>`       |         | Also write the JSON report to a file, for example to hand to Claude. Exits 2 if the file cannot be written.            |
 | `--json`             |         | Print the JSON report. Also the default when stdout is not a TTY.                                                      |
 
 Each request has a 15 s timeout (covering redirects and the body), follows up to 10 redirects and sends `User-Agent: pageaudit/<version> (+https://github.com/rhesusminus/pageaudit)`.
@@ -67,6 +68,27 @@ Tables follow the terminal width (80 to 114 columns).
 | 2    | Usage error, an unreadable URL file or sitemap, or no valid URL to audit |
 
 A page that cannot be fetched or returns an error status is an error on that page (exit 1), not a reason to stop.
+
+### Using the output with Claude
+
+The JSON report is meant to be read by a person or a model. Write it to a file and ask Claude Code to read it:
+
+```sh
+node bin/pageaudit.js --sitemap https://example.com/sitemap.xml --limit 20 --lighthouse --out report.json
+```
+
+Then, in Claude Code: "read report.json and summarize the SEO and usability problems, most important first". Each page carries the issues the checks found, the Lighthouse summary and a `facts` object with what is on the page, so a suggestion can refer to the real title or headings. `facts` is `null` for pages that returned no HTML. Free text is capped to keep the file small: heading text and the Open Graph title, description and type at 120 characters (URLs at 2000), the page title, description and `h1s` at 300 characters, with at most 10 `h1s` and 40 headings. `generatedAt` is the time of the audit.
+
+| `facts` field                              | Meaning                                                                                           |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `title`, `description`, `h1s`, `canonical` | The values the site checks compare (the canonical is resolved to an absolute URL)                 |
+| `lang`, `viewport`, `robots`               | The `lang` attribute and the viewport and robots meta tags                                        |
+| `headings`                                 | Outline of `{ level, text }`, at most 40 headings, text capped at 120 characters                  |
+| `wordCount`                                | Words of visible body text (script, style and noscript are not counted), a rough measure of depth |
+| `links`                                    | `{ internal, external, nofollow }` counts of http(s) links. `www.` is treated as the same site    |
+| `images`                                   | `{ total, missingAlt }`                                                                           |
+| `openGraph`, `twitterCard`                 | Open Graph title, description, image, type and url, and the Twitter card type                     |
+| `jsonLdTypes`                              | The `@type` values of valid JSON-LD blocks, at most 20. Invalid JSON-LD is ignored                |
 
 ### Lighthouse
 
@@ -173,6 +195,7 @@ src/
     sitemap.js          URLs from --sitemap, following a sitemap index one level deep
     resolve.js          merge, normalize, dedupe, apply --limit
   lighthouse.js         runLighthouse(urls): optional Lighthouse run, trimmed to scores, metrics and failing audits
+  output.js             writeReportFile(): writes a report file without throwing
   fetch.js              fetchPage(url): redirects, timeout, User-Agent, encoding sniffing
   parse.js              parse(html): Cheerio DOM, with inert <template> content removed
   runner.js             runs the page checks over all URLs with concurrency and a per-host delay
@@ -183,7 +206,8 @@ src/
       meta.js
       headings.js
       response.js       status, redirects, content type and fetch failures
-      index.js          checkHtml() and extractFacts() for the site checks
+      signals.js        extractSignals(): content and metadata signals stored in the facts
+      index.js          checkHtml() and extractFacts(): facts for the site checks and the report
     site/               checks across pages, run after every page is done
       duplicates.js
       canonical.js
