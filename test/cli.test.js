@@ -300,8 +300,7 @@ test('cli: Lighthouse audits the final URL once and the failure keeps the input 
 })
 
 test('cli: --out writes the same JSON report to a file', async (t) => {
-  const dir = await mkdtemp(join(tmpdir(), 'pageaudit-'))
-  t.after(() => rm(dir, { recursive: true, force: true }))
+  const dir = await tempDir(t)
   const path = join(dir, 'report.json')
   const { stdout } = await runCli(t, [fixtureUrl('good.html'), '--json', '--out', path])
   assert.deepEqual(JSON.parse(await readFile(path, 'utf8')), JSON.parse(stdout))
