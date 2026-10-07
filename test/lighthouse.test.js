@@ -82,7 +82,8 @@ test('summarize: keeps what a fix needs from at most five affected items', () =>
 })
 
 test('summarize: keeps the description with plain words, the first link and the savings', () => {
-  const [unused, plain] = [summarize(LHR).audits.find((a) => a.id === 'unused-css'), summarize(LHR).audits[0]]
+  const { audits } = summarize(LHR)
+  const [unused, plain] = [audits.find((a) => a.id === 'unused-css'), audits.find((a) => a.id === 'meta-description')]
   assert.equal(unused.description, 'Remove unused rules. Learn more about unused CSS. See docs.')
   assert.equal(unused.learnMore, 'https://web.dev/unused-css/')
   assert.deepEqual(unused.savings, { ms: 150, bytes: 20481 })
@@ -179,4 +180,111 @@ test('lighthouseFailed: builds an info issue with the same keys as other page is
   const issue = lighthouseFailed('https://a.test/', 'boom')
   assert.deepEqual(Object.keys(issue), ['url', 'type', 'severity', 'category', 'source', 'message', 'context'])
   assert.equal(issue.severity, 'info')
+})
+
+// Builds an lhr with one failing performance audit of the given shape.
+const withAudit = (extra) => ({
+  categories: { performance: { score: 0.5, auditRefs: [{ id: 'x' }] } },
+  audits: { x: audit('x', 0, { scoreDisplayMode: 'metricSavings', ...extra }) }
+})
+const itemsOf = (extra) => summarize(withAudit(extra)).audits[0].items
+
+test('summarize: a checklist audit keeps its failed checks and does not crash', () => {
+  const details = {
+    type: 'checklist',
+    items: {
+      noRedirects: { value: false, label: 'Avoids redirects' },
+      serverResponseIsFast: { value: true, label: 'Server responds quickly' },
+      usesCompression: { value: false }
+    }
+  }
+  assert.deepEqual(itemsOf({ details }), [{ label: 'Avoids redirects' }, { label: 'usesCompression' }])
+  assert.deepEqual(itemsOf({ details: { type: 'checklist', items: null } }), [])
+  assert.deepEqual(itemsOf({ details: { items: 'odd' } }), [])
+})
+
+test('summarize: list details are flattened into tables, nodes and sections', () => {
+  const details = {
+    type: 'list',
+    items: [
+      { type: 'node', selector: 'img.hero', snippet: '<img class="hero">', nodeLabel: 'Hero' },
+      { type: 'list-section', value: 'Request is not discoverable' },
+      { type: 'table', items: [{ url: 'a.js', wastedMs: 40 }] },
+      { type: 'checklist', items: { preload: { value: false, label: 'Preload the image' } } }
+    ]
+  }
+  assert.deepEqual(itemsOf({ details }), [
+    { selector: 'img.hero', snippet: '<img class="hero">', nodeLabel: 'Hero' },
+    { label: 'Request is not discoverable' },
+    { url: 'a.js', wastedMs: 40 },
+    { label: 'Preload the image' }
+  ])
+})
+
+test('summarize: items with other shapes keep their address, line, message, entity and reason', () => {
+  const details = {
+    items: [
+      { source: 'exception', description: 'TypeError: x is undefined', sourceLocation: { url: 'app.js', line: 9 } },
+      { url: { type: 'link', url: 'b.js' }, source: { url: 'ignored.js' } },
+      { source: { type: 'node', selector: 'html', snippet: '<html>' } },
+      { entity: { type: 'link', text: 'Google Fonts', url: 'https://fonts.google.com' } },
+      { node: { selector: 'img', snippet: '<img>' }, subItems: { items: [{ reason: 'Use a modern format' }] } },
+      { url: '   ', source: { url: 'fallback.js' } }
+    ]
+  }
+  assert.deepEqual(itemsOf({ details }), [
+    { url: 'app.js', line: 10, label: 'TypeError: x is undefined' },
+    { url: 'b.js' },
+    { selector: 'html', snippet: '<html>' },
+    { label: 'Google Fonts' },
+    { selector: 'img', snippet: '<img>', explanation: 'Use a modern format' }
+  ])
+})
+
+test('summarize: item text is tidied, nodeLabel that the snippet repeats is dropped, zero costs are left out', () => {
+  const details = {
+    items: [
+      {
+        node: {
+          snippet: '<a class="x">Go</a>',
+          nodeLabel: 'Go',
+          explanation: 'Fix any of the following:\n  Contrast 3:1'
+        },
+        wastedMs: 0,
+        wastedBytes: 0.2,
+        totalBytes: 0
+      }
+    ]
+  }
+  assert.deepEqual(itemsOf({ details }), [{ snippet: '<a class="x">Go</a>', explanation: 'Contrast 3:1' }])
+  const long = { node: { explanation: `${'y'.repeat(600)}` } }
+  assert.equal(Array.from(itemsOf({ details: { items: [long] } })[0].explanation).length, 500)
+})
+
+test('summarize: savings come from metricSavings and fall back to the older fields; zero is no estimate', () => {
+  const only = (extra) => summarize(withAudit(extra)).audits[0].savings
+  assert.deepEqual(only({ metricSavings: { FCP: 800.4, LCP: 0, INP: 12, CLS: 0.04567 } }), {
+    metrics: { fcp: 800, inp: 12, cls: 0.046 }
+  })
+  assert.deepEqual(only({ details: { overallSavingsMs: 90.2, debugData: { wastedBytes: 4096 } } }), {
+    ms: 90,
+    bytes: 4096
+  })
+  assert.equal(
+    only({ details: { overallSavingsMs: 0, overallSavingsBytes: 0.3 }, metricSavings: { LCP: 0 } }),
+    undefined
+  )
+})
+
+test('summarize: descriptions cope with parentheses in links, relative links and no links', () => {
+  const describe = (description) => summarize(withAudit({ description })).audits[0]
+  const nested = describe('See [the guide (v2)](https://web.dev/a_(b)/).')
+  assert.equal(nested.description, 'See the guide (v2).')
+  assert.equal(nested.learnMore, 'https://web.dev/a_(b)/')
+  const relative = describe('Read [more](/docs/x) first.')
+  assert.equal(relative.description, 'Read more first.')
+  assert.equal('learnMore' in relative, false)
+  const none = describe('No links here.')
+  assert.equal(none.description, 'No links here.')
+  assert.equal('description' in describe(undefined), false)
 })
