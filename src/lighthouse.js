@@ -1,10 +1,10 @@
 import { SOURCES } from './sources.js'
+import { describe, itemsOf, savings } from './lighthouse-detail.js'
 
 export const CATEGORIES = ['performance', 'accessibility', 'best-practices', 'seo']
 
 // Audits scoring below this are kept. Lighthouse itself calls 0.9 and up "good".
 const GOOD_SCORE = 0.9
-const MAX_ITEMS = 3
 // Display modes that carry a real score. Informative and manual audits have none.
 const SCORED_MODES = new Set(['binary', 'numeric', 'metricSavings'])
 const METRICS = {
@@ -23,8 +23,6 @@ function metricValue(audit) {
   return audit.id === METRICS.cls ? Number(audit.numericValue.toFixed(3)) : Math.round(audit.numericValue)
 }
 
-const itemLabel = (item) => item.url ?? item.node?.snippet ?? item.label ?? item.source?.url ?? null
-
 // Which category an audit counts toward, so the report can group findings.
 function categoryByAudit(categories) {
   const map = new Map()
@@ -41,7 +39,9 @@ function summarizeAudit(audit, category) {
     title: audit.title,
     score: percent(audit.score),
     displayValue: audit.displayValue ?? null,
-    items: (audit.details?.items ?? []).map(itemLabel).filter(Boolean).slice(0, MAX_ITEMS)
+    ...describe(audit),
+    ...savings(audit),
+    items: itemsOf(audit.details)
   }
 }
 

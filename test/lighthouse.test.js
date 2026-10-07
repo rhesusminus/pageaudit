@@ -23,7 +23,23 @@ const LHR = {
     'is-crawlable': audit('is-crawlable', 1),
     'unused-css': audit('unused-css', 0.6, {
       scoreDisplayMode: 'numeric',
-      details: { items: [{ url: 'a.css' }, { node: { snippet: '<b>' } }, { label: 'c' }, { url: 'd.css' }, {}] }
+      description:
+        'Remove unused rules. [Learn more about unused CSS](https://web.dev/unused-css/). See [docs](https://x.test/).',
+      details: {
+        overallSavingsMs: 150.4,
+        overallSavingsBytes: 20480.6,
+        items: [
+          { url: 'a.css', wastedBytes: 1000.2, totalBytes: 5000, wastedMs: 80.5 },
+          {
+            node: { selector: 'div.hero > b', snippet: '<b>', nodeLabel: 'Bold', explanation: '  Low\n contrast ' }
+          },
+          { label: 'c' },
+          { source: { url: 'd.css' } },
+          {},
+          { url: 'e.css' },
+          { url: 'f.css' }
+        ]
+      }
     }),
     'unminified-js': audit('unminified-js', 0.3, { scoreDisplayMode: 'metricSavings' }),
     'crashed-audit': audit('crashed-audit', null, { scoreDisplayMode: 'error', errorMessage: 'It broke' }),
@@ -53,10 +69,34 @@ test('summarize: keeps only failing audits that belong to a category, worst firs
   )
 })
 
-test('summarize: lists at most three item labels per audit', () => {
+test('summarize: keeps what a fix needs from at most five affected items', () => {
   const unused = summarize(LHR).audits.find((a) => a.id === 'unused-css')
-  assert.deepEqual(unused.items, ['a.css', '<b>', 'c'])
+  assert.deepEqual(unused.items, [
+    { url: 'a.css', wastedMs: 81, wastedBytes: 1000, totalBytes: 5000 },
+    { selector: 'div.hero > b', nodeLabel: 'Bold', snippet: '<b>', explanation: 'Low contrast' },
+    { label: 'c' },
+    { url: 'd.css' },
+    { url: 'e.css' }
+  ])
   assert.equal(unused.displayValue, null)
+})
+
+test('summarize: keeps the description with plain words, the first link and the savings', () => {
+  const { audits } = summarize(LHR)
+  const [unused, plain] = [audits.find((a) => a.id === 'unused-css'), audits.find((a) => a.id === 'meta-description')]
+  assert.equal(unused.description, 'Remove unused rules. Learn more about unused CSS. See docs.')
+  assert.equal(unused.learnMore, 'https://web.dev/unused-css/')
+  assert.deepEqual(unused.savings, { ms: 150, bytes: 20481 })
+  assert.deepEqual(Object.keys(plain), ['id', 'category', 'title', 'score', 'displayValue', 'items'])
+})
+
+test('summarize: caps long item text and long descriptions', () => {
+  const lhr = structuredClone(LHR)
+  lhr.audits['meta-description'].description = 'word '.repeat(200)
+  lhr.audits['meta-description'].details = { items: [{ node: { snippet: 'x'.repeat(1000) } }] }
+  const [audit] = summarize(lhr).audits
+  assert.equal(Array.from(audit.description).length, 400)
+  assert.equal(Array.from(audit.items[0].snippet).length, 300)
 })
 
 function fakes({ lhr = LHR, fail = [] } = {}) {
@@ -140,4 +180,111 @@ test('lighthouseFailed: builds an info issue with the same keys as other page is
   const issue = lighthouseFailed('https://a.test/', 'boom')
   assert.deepEqual(Object.keys(issue), ['url', 'type', 'severity', 'category', 'source', 'message', 'context'])
   assert.equal(issue.severity, 'info')
+})
+
+// Builds an lhr with one failing performance audit of the given shape.
+const withAudit = (extra) => ({
+  categories: { performance: { score: 0.5, auditRefs: [{ id: 'x' }] } },
+  audits: { x: audit('x', 0, { scoreDisplayMode: 'metricSavings', ...extra }) }
+})
+const itemsOf = (extra) => summarize(withAudit(extra)).audits[0].items
+
+test('summarize: a checklist audit keeps its failed checks and does not crash', () => {
+  const details = {
+    type: 'checklist',
+    items: {
+      noRedirects: { value: false, label: 'Avoids redirects' },
+      serverResponseIsFast: { value: true, label: 'Server responds quickly' },
+      usesCompression: { value: false }
+    }
+  }
+  assert.deepEqual(itemsOf({ details }), [{ label: 'Avoids redirects' }, { label: 'usesCompression' }])
+  assert.deepEqual(itemsOf({ details: { type: 'checklist', items: null } }), [])
+  assert.deepEqual(itemsOf({ details: { items: 'odd' } }), [])
+})
+
+test('summarize: list details are flattened into tables, nodes and sections', () => {
+  const details = {
+    type: 'list',
+    items: [
+      { type: 'node', selector: 'img.hero', snippet: '<img class="hero">', nodeLabel: 'Hero' },
+      { type: 'list-section', value: 'Request is not discoverable' },
+      { type: 'table', items: [{ url: 'a.js', wastedMs: 40 }] },
+      { type: 'checklist', items: { preload: { value: false, label: 'Preload the image' } } }
+    ]
+  }
+  assert.deepEqual(itemsOf({ details }), [
+    { selector: 'img.hero', snippet: '<img class="hero">', nodeLabel: 'Hero' },
+    { label: 'Request is not discoverable' },
+    { url: 'a.js', wastedMs: 40 },
+    { label: 'Preload the image' }
+  ])
+})
+
+test('summarize: items with other shapes keep their address, line, message, entity and reason', () => {
+  const details = {
+    items: [
+      { source: 'exception', description: 'TypeError: x is undefined', sourceLocation: { url: 'app.js', line: 9 } },
+      { url: { type: 'link', url: 'b.js' }, source: { url: 'ignored.js' } },
+      { source: { type: 'node', selector: 'html', snippet: '<html>' } },
+      { entity: { type: 'link', text: 'Google Fonts', url: 'https://fonts.google.com' } },
+      { node: { selector: 'img', snippet: '<img>' }, subItems: { items: [{ reason: 'Use a modern format' }] } },
+      { url: '   ', source: { url: 'fallback.js' } }
+    ]
+  }
+  assert.deepEqual(itemsOf({ details }), [
+    { url: 'app.js', line: 10, label: 'TypeError: x is undefined' },
+    { url: 'b.js' },
+    { selector: 'html', snippet: '<html>' },
+    { label: 'Google Fonts' },
+    { selector: 'img', snippet: '<img>', explanation: 'Use a modern format' }
+  ])
+})
+
+test('summarize: item text is tidied, nodeLabel that the snippet repeats is dropped, zero costs are left out', () => {
+  const details = {
+    items: [
+      {
+        node: {
+          snippet: '<a class="x">Go</a>',
+          nodeLabel: 'Go',
+          explanation: 'Fix any of the following:\n  Contrast 3:1'
+        },
+        wastedMs: 0,
+        wastedBytes: 0.2,
+        totalBytes: 0
+      }
+    ]
+  }
+  assert.deepEqual(itemsOf({ details }), [{ snippet: '<a class="x">Go</a>', explanation: 'Contrast 3:1' }])
+  const long = { node: { explanation: `${'y'.repeat(600)}` } }
+  assert.equal(Array.from(itemsOf({ details: { items: [long] } })[0].explanation).length, 500)
+})
+
+test('summarize: savings come from metricSavings and fall back to the older fields; zero is no estimate', () => {
+  const only = (extra) => summarize(withAudit(extra)).audits[0].savings
+  assert.deepEqual(only({ metricSavings: { FCP: 800.4, LCP: 0, INP: 12, CLS: 0.04567 } }), {
+    metrics: { fcp: 800, inp: 12, cls: 0.046 }
+  })
+  assert.deepEqual(only({ details: { overallSavingsMs: 90.2, debugData: { wastedBytes: 4096 } } }), {
+    ms: 90,
+    bytes: 4096
+  })
+  assert.equal(
+    only({ details: { overallSavingsMs: 0, overallSavingsBytes: 0.3 }, metricSavings: { LCP: 0 } }),
+    undefined
+  )
+})
+
+test('summarize: descriptions cope with parentheses in links, relative links and no links', () => {
+  const describe = (description) => summarize(withAudit({ description })).audits[0]
+  const nested = describe('See [the guide (v2)](https://web.dev/a_(b)/).')
+  assert.equal(nested.description, 'See the guide (v2).')
+  assert.equal(nested.learnMore, 'https://web.dev/a_(b)/')
+  const relative = describe('Read [more](/docs/x) first.')
+  assert.equal(relative.description, 'Read more first.')
+  assert.equal('learnMore' in relative, false)
+  const none = describe('No links here.')
+  assert.equal(none.description, 'No links here.')
+  assert.equal('description' in describe(undefined), false)
 })
