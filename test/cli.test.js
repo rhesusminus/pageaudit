@@ -38,14 +38,17 @@ const GOOD_FACTS = {
   viewport: 'width=device-width, initial-scale=1',
   robots: null,
   headings: [
-    { level: 1, text: 'Gentle Shampoo' },
-    { level: 2, text: 'Ingredients' },
-    { level: 3, text: 'Plant-based' },
-    { level: 2, text: 'Reviews' }
+    { level: 1, text: 'Gentle Shampoo', excerpt: null },
+    { level: 2, text: 'Ingredients', excerpt: null },
+    { level: 3, text: 'Plant-based', excerpt: null },
+    { level: 2, text: 'Reviews', excerpt: null }
   ],
   wordCount: 5,
+  mainText: 'Gentle Shampoo Ingredients Plant-based Reviews',
   links: { internal: 0, external: 0, nofollow: 0 },
+  linkSamples: [],
   images: { total: 1, missingAlt: 0 },
+  imageSamples: [{ src: 'https://fixtures.test/products/shampoo.jpg', alt: 'Bottle of gentle shampoo', context: null }],
   openGraph: {
     title: 'Fixture page',
     description: 'Fixture description.',

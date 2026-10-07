@@ -21,7 +21,13 @@ test('signals: rich page', async () => {
     type: null,
     url: null
   })
-  assert.deepEqual(signals.headings, [{ level: 1, text: 'Rich page' }])
+  assert.deepEqual(signals.headings, [
+    {
+      level: 1,
+      text: 'Rich page',
+      excerpt: 'One two three four. relative internal www is internal external nofollow fragment mail js'
+    }
+  ])
 })
 
 test('signals: word count ignores scripts, links count by site and skip non-pages', async () => {

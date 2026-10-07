@@ -714,3 +714,75 @@ test('evidence: selectors prefer the nearest id and count same-tag siblings', ()
     ['#intro > h3:nth-of-type(1)', '#intro > h3:nth-of-type(2)']
   )
 })
+
+const factsOf = async (html, url = 'https://a.test/page') => {
+  const { extractFacts } = await import('../src/checks/page/index.js')
+  return extractFacts(parse(html), url)
+}
+
+test('facts: mainText is the main area without scripts, and words of neighbouring blocks stay apart', async () => {
+  const html =
+    '<body><nav>Menu Home</nav><main><h1>Title</h1><p>First</p><p>Second</p><script>x()</script></main><footer>Legal</footer></body>'
+  assert.equal((await factsOf(html)).mainText, 'Title First Second')
+})
+
+test('facts: mainText without a main area skips navigation, header, footer and aside', async () => {
+  const html =
+    '<body><header>Brand</header><nav>Menu</nav><div>Body text</div><aside>Ad</aside><footer>Legal</footer></body>'
+  assert.equal((await factsOf(html)).mainText, 'Body text')
+  assert.equal((await factsOf('<body></body>')).mainText, null)
+})
+
+test('facts: mainText is cut to a size a model can take in', async () => {
+  const { mainText } = await factsOf(`<body><p>${'word '.repeat(1000)}</p></body>`)
+  assert.equal(Array.from(mainText).length, 1500)
+  assert.ok(mainText.endsWith('...'))
+})
+
+test('facts: every heading carries the first words under it, up to the next heading', async () => {
+  const html =
+    '<body><h1>Top</h1><p>Intro text.</p><div><h2>Sub</h2><p>Sub text</p><p>more</p></div><h2>Empty</h2></body>'
+  const { headings } = await factsOf(html)
+  assert.deepEqual(
+    headings.map((h) => [h.text, h.excerpt]),
+    [
+      ['Top', 'Intro text.'],
+      ['Sub', 'Sub text more'],
+      ['Empty', null]
+    ]
+  )
+})
+
+test('facts: heading excerpts are capped', async () => {
+  const { headings } = await factsOf(`<body><h1>Top</h1><p>${'abc '.repeat(500)}</p></body>`)
+  assert.equal(Array.from(headings[0].excerpt).length, 200)
+})
+
+test('facts: linkSamples list page links with absolute address, text and classification', async () => {
+  const html = `<body><a href="/about">About us</a><a href="https://other.test/x" rel="nofollow">Other</a>
+    <a href="#top">Top</a><a href="mailto:a@b.c">Mail</a><a href="/logo"><img src="l.png" alt="Home logo"></a></body>`
+  const { links, linkSamples } = await factsOf(html)
+  assert.deepEqual(links, { internal: 2, external: 1, nofollow: 1 })
+  assert.deepEqual(linkSamples, [
+    { href: 'https://a.test/about', text: 'About us', internal: true, nofollow: false },
+    { href: 'https://other.test/x', text: 'Other', internal: false, nofollow: true },
+    { href: 'https://a.test/logo', text: 'Home logo', internal: true, nofollow: false }
+  ])
+})
+
+test('facts: linkSamples stop at 25 but the counts include every link', async () => {
+  const html = `<body>${Array.from({ length: 40 }, (_, i) => `<a href="/p${i}">p${i}</a>`).join('')}</body>`
+  const { links, linkSamples } = await factsOf(html)
+  assert.equal(links.internal, 40)
+  assert.equal(linkSamples.length, 25)
+})
+
+test('facts: imageSamples give the address, alt and the words around the image', async () => {
+  const html = `<body><figure><img src="/a.jpg" alt="  A  cat "><figcaption>Our cat Tom</figcaption></figure>
+    <p>Fresh bread <img src="b.png"> every day</p><img src="data:image/gif;base64,${'A'.repeat(200)}" alt=""></body>`
+  const { imageSamples } = await factsOf(html)
+  assert.deepEqual(imageSamples[0], { src: 'https://a.test/a.jpg', alt: 'A cat', context: 'Our cat Tom' })
+  assert.deepEqual(imageSamples[1], { src: 'https://a.test/b.png', alt: null, context: 'Fresh bread every day' })
+  assert.equal(imageSamples[2].src.length, 60)
+  assert.equal(imageSamples[2].alt, '')
+})

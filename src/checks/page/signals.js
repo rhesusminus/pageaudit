@@ -1,4 +1,5 @@
 import { collapseWhitespace, limit } from '../../text.js'
+import { headingExcerpts, imageSamples, mainText } from './content.js'
 
 const MAX_HEADINGS = 40
 const MAX_TYPES = 20
@@ -53,25 +54,41 @@ export function wordCount($) {
 }
 
 function headings($) {
+  const excerpts = headingExcerpts($)
   return $('h1, h2, h3, h4, h5, h6')
     .toArray()
     .slice(0, MAX_HEADINGS)
-    .map((el) => ({ level: Number(el.tagName[1]), text: clean($(el).text()) ?? '' }))
+    .map((el) => ({ level: Number(el.tagName[1]), text: clean($(el).text()) ?? '', excerpt: excerpts.get(el) ?? null }))
 }
 
-const host = (url) => new URL(url).hostname.toLowerCase().replace(/^www\./, '')
+export const host = (url) => new URL(url).hostname.toLowerCase().replace(/^www\./, '')
 
-// Counts links to other pages, resolved against <base> but classified against the page's own site. Fragment-only links, mailto:, tel: and the like are not pages.
-function links($, baseUrl, pageUrl) {
-  const counts = { internal: 0, external: 0, nofollow: 0 }
+const MAX_LINK_SAMPLES = 25
+
+// Every link to another page, resolved against <base> and classified against the page's own site. Fragment-only links, mailto:, tel: and the like are not pages.
+function pageLinks($, baseUrl, pageUrl) {
   const here = host(pageUrl)
-  for (const el of $('a[href]').toArray()) {
-    const href = absolute(($(el).attr('href') ?? '').trim(), baseUrl)
-    if (!href || !/^https?:/.test(href) || /^#/.test($(el).attr('href').trim())) continue
-    counts[host(href) === here ? 'internal' : 'external']++
-    if (/\bnofollow\b/i.test($(el).attr('rel') ?? '')) counts.nofollow++
-  }
-  return counts
+  return $('a[href]')
+    .toArray()
+    .flatMap((el) => {
+      const raw = ($(el).attr('href') ?? '').trim()
+      const href = absolute(raw, baseUrl)
+      if (!href || !/^https?:/.test(href) || raw.startsWith('#')) return []
+      const text = clean($(el).text() || $(el).find('img[alt]').first().attr('alt')) ?? ''
+      return [
+        {
+          href: limit(href, MAX_URL),
+          text,
+          internal: host(href) === here,
+          nofollow: /\bnofollow\b/i.test($(el).attr('rel') ?? '')
+        }
+      ]
+    })
+}
+
+function linkCounts(all) {
+  const internal = all.filter((link) => link.internal).length
+  return { internal, external: all.length - internal, nofollow: all.filter((link) => link.nofollow).length }
 }
 
 function images($) {
@@ -122,14 +139,18 @@ function jsonLdTypes($) {
 
 // Content and metadata signals about one page, kept small enough to hand to a model.
 export function extractSignals($, baseUrl, pageUrl) {
+  const pageLinkList = pageLinks($, baseUrl, pageUrl)
   return {
     lang: clean($('html').attr('lang')),
     viewport: metaContent($, 'meta[name="viewport" i]'),
     robots: robotsValue($),
     headings: headings($),
     wordCount: wordCount($),
-    links: links($, baseUrl, pageUrl),
+    mainText: mainText($),
+    links: linkCounts(pageLinkList),
+    linkSamples: pageLinkList.slice(0, MAX_LINK_SAMPLES),
     images: images($),
+    imageSamples: imageSamples($, baseUrl),
     openGraph: openGraph($),
     twitterCard: metaContent($, TWITTER_CARD),
     jsonLdTypes: jsonLdTypes($)

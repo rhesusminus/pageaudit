@@ -98,16 +98,19 @@ Then, in Claude Code: "read report.json and summarize the SEO and usability prob
 
 Every issue has a stable `id`, a `type`, a `message` and a `context`. Where the check found a single element it also has a `selector` (a CSS path), the element's `html` and its `parentHtml` (each capped at 500 characters). Length checks add the measured `actual` value and the `expected` limit. The top-level `rules` object explains each issue `type` that occurs in the report once, as `{ title, why, fix }` (the same wording as the HTML report), so a model knows what a finding means and how to fix it.
 
-| `facts` field                              | Meaning                                                                                           |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `title`, `description`, `h1s`, `canonical` | The values the site checks compare (the canonical is resolved to an absolute URL)                 |
-| `lang`, `viewport`, `robots`               | The `lang` attribute and the viewport and robots meta tags                                        |
-| `headings`                                 | Outline of `{ level, text }`, at most 40 headings, text capped at 120 characters                  |
-| `wordCount`                                | Words of visible body text (script, style and noscript are not counted), a rough measure of depth |
-| `links`                                    | `{ internal, external, nofollow }` counts of http(s) links. `www.` is treated as the same site    |
-| `images`                                   | `{ total, missingAlt }`                                                                           |
-| `openGraph`, `twitterCard`                 | Open Graph title, description, image, type and url, and the Twitter card type                     |
-| `jsonLdTypes`                              | The `@type` values of valid JSON-LD blocks, at most 20. Invalid JSON-LD is ignored                |
+| `facts` field                              | Meaning                                                                                                                                                |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `title`, `description`, `h1s`, `canonical` | The values the site checks compare (the canonical is resolved to an absolute URL)                                                                      |
+| `lang`, `viewport`, `robots`               | The `lang` attribute and the viewport and robots meta tags                                                                                             |
+| `headings`                                 | Outline of `{ level, text, excerpt }`, at most 40 headings, text capped at 120 characters and the `excerpt` (the first words under the heading) at 200 |
+| `wordCount`                                | Words of visible body text (script, style and noscript are not counted), a rough measure of depth                                                      |
+| `mainText`                                 | The visible text of `<main>` or `<article>` (else the body without nav, header, footer and aside), cut at 1500 characters                              |
+| `links`                                    | `{ internal, external, nofollow }` counts of http(s) links. `www.` is treated as the same site                                                         |
+| `linkSamples`                              | The first 25 page links as `{ href, text, internal, nofollow }`, with the anchor text (or the alt of an image link) capped at 120 characters           |
+| `images`                                   | `{ total, missingAlt }`                                                                                                                                |
+| `imageSamples`                             | The first 20 images as `{ src, alt, context }`: absolute address, alt text (`null` if missing) and the figure caption or the words around the image    |
+| `openGraph`, `twitterCard`                 | Open Graph title, description, image, type and url, and the Twitter card type                                                                          |
+| `jsonLdTypes`                              | The `@type` values of valid JSON-LD blocks, at most 20. Invalid JSON-LD is ignored                                                                     |
 
 ### Lighthouse
 
@@ -273,6 +276,7 @@ src/
       hygiene.js        URL, HTML size, mixed content and client-side rendered pages
       robots-header.js  the X-Robots-Tag header
       signals.js        extractSignals() and jsonLdBlocks(): content and metadata signals stored in the facts
+      content.js        mainText(), headingExcerpts() and imageSamples(): page text, section excerpts and image context for the facts
       index.js          checkHtml() and extractFacts(): facts for the site checks and the report
     site/               checks across pages, run after every page is done
       duplicates.js
