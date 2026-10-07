@@ -23,7 +23,23 @@ const LHR = {
     'is-crawlable': audit('is-crawlable', 1),
     'unused-css': audit('unused-css', 0.6, {
       scoreDisplayMode: 'numeric',
-      details: { items: [{ url: 'a.css' }, { node: { snippet: '<b>' } }, { label: 'c' }, { url: 'd.css' }, {}] }
+      description:
+        'Remove unused rules. [Learn more about unused CSS](https://web.dev/unused-css/). See [docs](https://x.test/).',
+      details: {
+        overallSavingsMs: 150.4,
+        overallSavingsBytes: 20480.6,
+        items: [
+          { url: 'a.css', wastedBytes: 1000.2, totalBytes: 5000, wastedMs: 80.5 },
+          {
+            node: { selector: 'div.hero > b', snippet: '<b>', nodeLabel: 'Bold', explanation: '  Low\n contrast ' }
+          },
+          { label: 'c' },
+          { source: { url: 'd.css' } },
+          {},
+          { url: 'e.css' },
+          { url: 'f.css' }
+        ]
+      }
     }),
     'unminified-js': audit('unminified-js', 0.3, { scoreDisplayMode: 'metricSavings' }),
     'crashed-audit': audit('crashed-audit', null, { scoreDisplayMode: 'error', errorMessage: 'It broke' }),
@@ -53,10 +69,33 @@ test('summarize: keeps only failing audits that belong to a category, worst firs
   )
 })
 
-test('summarize: lists at most three item labels per audit', () => {
+test('summarize: keeps what a fix needs from at most five affected items', () => {
   const unused = summarize(LHR).audits.find((a) => a.id === 'unused-css')
-  assert.deepEqual(unused.items, ['a.css', '<b>', 'c'])
+  assert.deepEqual(unused.items, [
+    { url: 'a.css', wastedMs: 81, wastedBytes: 1000, totalBytes: 5000 },
+    { selector: 'div.hero > b', nodeLabel: 'Bold', snippet: '<b>', explanation: 'Low contrast' },
+    { label: 'c' },
+    { url: 'd.css' },
+    { url: 'e.css' }
+  ])
   assert.equal(unused.displayValue, null)
+})
+
+test('summarize: keeps the description with plain words, the first link and the savings', () => {
+  const [unused, plain] = [summarize(LHR).audits.find((a) => a.id === 'unused-css'), summarize(LHR).audits[0]]
+  assert.equal(unused.description, 'Remove unused rules. Learn more about unused CSS. See docs.')
+  assert.equal(unused.learnMore, 'https://web.dev/unused-css/')
+  assert.deepEqual(unused.savings, { ms: 150, bytes: 20481 })
+  assert.deepEqual(Object.keys(plain), ['id', 'category', 'title', 'score', 'displayValue', 'items'])
+})
+
+test('summarize: caps long item text and long descriptions', () => {
+  const lhr = structuredClone(LHR)
+  lhr.audits['meta-description'].description = 'word '.repeat(200)
+  lhr.audits['meta-description'].details = { items: [{ node: { snippet: 'x'.repeat(1000) } }] }
+  const [audit] = summarize(lhr).audits
+  assert.equal(Array.from(audit.description).length, 400)
+  assert.equal(Array.from(audit.items[0].snippet).length, 300)
 })
 
 function fakes({ lhr = LHR, fail = [] } = {}) {

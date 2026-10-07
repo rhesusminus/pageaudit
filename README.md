@@ -120,7 +120,7 @@ The JSON report gets a `lighthouse` object on each audited page instead of the f
 
 - `scores`: 0 to 100 for `performance`, `accessibility`, `best-practices` and `seo`
 - `metrics`: `fcp`, `lcp`, `tbt`, `speedIndex` in ms and `cls`
-- `audits`: only the audits scoring below 90, worst first, each with its category, title, score, display value and up to three affected items
+- `audits`: only the audits scoring below 90, worst first, each with its category, title, score, display value, Lighthouse's plain-words `description` and first `learnMore` link, the `savings` (`ms`, `bytes`) when Lighthouse worked them out, and up to five affected `items`. An item has only the fields Lighthouse gave: `url`, `selector`, `nodeLabel`, `snippet`, `explanation` (why it fails, such as the contrast ratio), `label`, `wastedMs`, `wastedBytes` and `totalBytes`, each text capped at 300 characters
 - `warnings`: Lighthouse run warnings, plus a line for any audit that crashed inside Lighthouse
 
 If Chrome cannot start or a page cannot be audited, the page gets an `info` issue `lighthouse-failed`, its `lighthouse` is `null` and the run continues. Pages that redirect to the same final URL are audited once and share the result. Lighthouse findings are not issues and a failed run is only `info`, so neither changes the exit code, even with `--fail-on warning`.

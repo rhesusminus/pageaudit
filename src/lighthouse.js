@@ -1,10 +1,14 @@
 import { SOURCES } from './sources.js'
+import { collapseWhitespace, limit } from './text.js'
 
 export const CATEGORIES = ['performance', 'accessibility', 'best-practices', 'seo']
 
 // Audits scoring below this are kept. Lighthouse itself calls 0.9 and up "good".
 const GOOD_SCORE = 0.9
-const MAX_ITEMS = 3
+const MAX_ITEMS = 5
+const MAX_TEXT = 300
+const MAX_DESCRIPTION = 400
+const MD_LINK = /\[([^\]]+)\]\((https?:[^)\s]+)\)/g
 // Display modes that carry a real score. Informative and manual audits have none.
 const SCORED_MODES = new Set(['binary', 'numeric', 'metricSavings'])
 const METRICS = {
@@ -23,7 +27,43 @@ function metricValue(audit) {
   return audit.id === METRICS.cls ? Number(audit.numericValue.toFixed(3)) : Math.round(audit.numericValue)
 }
 
-const itemLabel = (item) => item.url ?? item.node?.snippet ?? item.label ?? item.source?.url ?? null
+const text = (value) =>
+  typeof value === 'string' && collapseWhitespace(value) ? limit(collapseWhitespace(value), MAX_TEXT) : undefined
+const whole = (value) => (typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : undefined)
+
+// One affected thing, with what a fix needs: where it is (address or CSS selector), its markup, why it fails and
+// how much it costs. Only the fields Lighthouse gave.
+function summarizeItem(item) {
+  const fields = {
+    url: text(item.url ?? item.source?.url),
+    selector: text(item.node?.selector),
+    nodeLabel: text(item.node?.nodeLabel),
+    snippet: text(item.node?.snippet),
+    explanation: text(item.node?.explanation),
+    label: text(item.label),
+    wastedMs: whole(item.wastedMs),
+    wastedBytes: whole(item.wastedBytes),
+    totalBytes: whole(item.totalBytes)
+  }
+  return Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined))
+}
+
+// Lighthouse's explanation of the audit, with its markdown links turned into plain words. The first link is kept apart.
+function describe(audit) {
+  const description = collapseWhitespace((audit.description ?? '').replaceAll(MD_LINK, '$1'))
+  const learnMore = [...(audit.description ?? '').matchAll(MD_LINK)][0]?.[2]
+  return {
+    ...(description ? { description: limit(description, MAX_DESCRIPTION) } : {}),
+    ...(learnMore ? { learnMore } : {})
+  }
+}
+
+// What fixing the audit would save, when Lighthouse worked it out.
+function savings(details) {
+  const ms = whole(details?.overallSavingsMs)
+  const bytes = whole(details?.overallSavingsBytes)
+  return ms || bytes ? { savings: { ...(ms ? { ms } : {}), ...(bytes ? { bytes } : {}) } } : {}
+}
 
 // Which category an audit counts toward, so the report can group findings.
 function categoryByAudit(categories) {
@@ -41,7 +81,12 @@ function summarizeAudit(audit, category) {
     title: audit.title,
     score: percent(audit.score),
     displayValue: audit.displayValue ?? null,
-    items: (audit.details?.items ?? []).map(itemLabel).filter(Boolean).slice(0, MAX_ITEMS)
+    ...describe(audit),
+    ...savings(audit.details),
+    items: (audit.details?.items ?? [])
+      .map(summarizeItem)
+      .filter((item) => Object.keys(item).length > 0)
+      .slice(0, MAX_ITEMS)
   }
 }
 
