@@ -1,6 +1,7 @@
 import chalk from 'chalk'
 import Table from 'cli-table3'
 import wrapAnsi from 'wrap-ansi'
+import { adviceFor } from './advice.js'
 import { limit } from './text.js'
 
 const SEVERITY_ORDER = { error: 0, warning: 1, info: 2 }
@@ -55,10 +56,22 @@ export function countSeverities(issues) {
   return counts
 }
 
+// What each issue type found in the report means, so the JSON is self-explanatory:
+// { title, why, fix } per type, once instead of on every issue.
+function reportRules(issues) {
+  const rules = {}
+  for (const { type } of issues) {
+    const advice = adviceFor(type)
+    if (advice && !(type in rules)) rules[type] = advice
+  }
+  return rules
+}
+
 // The JSON report, which doubles as the data handed to Claude. `facts` is null for
 // pages that returned no HTML.
 export function buildReport({ pages, site, skipped = [], now = new Date() }) {
-  const totals = countSeverities([...pages.flatMap((page) => page.issues), ...site])
+  const issues = [...pages.flatMap((page) => page.issues), ...site]
+  const totals = countSeverities(issues)
   return {
     generatedAt: now.toISOString(),
     pages: pages.map(({ url, finalUrl, status, redirects, issues, facts, lighthouse }) => ({
@@ -73,6 +86,7 @@ export function buildReport({ pages, site, skipped = [], now = new Date() }) {
     })),
     site,
     skipped,
+    rules: reportRules(issues),
     summary: { pages: pages.length, ...totals }
   }
 }

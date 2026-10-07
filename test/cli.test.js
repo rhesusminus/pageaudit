@@ -74,6 +74,7 @@ test('cli: good.html has no issues, exposes its facts and exits 0', async (t) =>
       }
     ],
     site: [],
+    rules: {},
     skipped: [],
     summary: { pages: 1, errors: 0, warnings: 0, infos: 0 }
   })

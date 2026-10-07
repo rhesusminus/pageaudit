@@ -82,7 +82,7 @@ node bin/pageaudit.js --sitemap https://example.com/sitemap.xml --limit 20 --lig
   --html report.html --title "Website audit" --client "Acme Oy" --logo logo.svg
 ```
 
-It has a cover with the client, the date, a one-sentence verdict and, with `--lighthouse`, the four average scores. Then a summary of how many pages have problems, a ranked **What to fix** list, a section per page and a short note on how the audit was done. Inputs that were skipped, and a `--limit` that cut the list short, are mentioned in the summary. Findings are written in plain language (`src/html/advice.js`: what is wrong, why it matters and how to fix it), and the technical message and documentation link stay on each page. The same problem on many pages is one line in the list, with every affected page behind **Show where**. Site-wide problems such as duplicate titles are part of the same list. Severity is shown by a word and a shape, never by color alone.
+It has a cover with the client, the date, a one-sentence verdict and, with `--lighthouse`, the four average scores. Then a summary of how many pages have problems, a ranked **What to fix** list, a section per page and a short note on how the audit was done. Inputs that were skipped, and a `--limit` that cut the list short, are mentioned in the summary. Findings are written in plain language (`src/advice.js`: what is wrong, why it matters and how to fix it), and the technical message and documentation link stay on each page. The same problem on many pages is one line in the list, with every affected page behind **Show where**. Site-wide problems such as duplicate titles are part of the same list. Severity is shown by a word and a shape, never by color alone.
 
 All text taken from audited sites is escaped, and the logo is embedded as a data URI. A logo that cannot be read, or one over the size limit, exits 2 before any page is fetched.
 
@@ -95,6 +95,8 @@ node bin/pageaudit.js --sitemap https://example.com/sitemap.xml --limit 20 --lig
 ```
 
 Then, in Claude Code: "read report.json and summarize the SEO and usability problems, most important first". Each page carries the issues the checks found, the Lighthouse summary and a `facts` object with what is on the page, so a suggestion can refer to the real title or headings. `facts` is `null` for pages that returned no HTML. Free text is capped to keep the file small: heading text and the Open Graph title, description and type at 120 characters (URLs at 2000), the page title, description and `h1s` at 300 characters, with at most 10 `h1s` and 40 headings. `generatedAt` is the time of the audit.
+
+Every issue has a stable `id`, a `type`, a `message` and a `context`. Where the check found a single element it also has a `selector` (a CSS path), the element's `html` and its `parentHtml` (each capped at 500 characters). Length checks add the measured `actual` value and the `expected` limit. The top-level `rules` object explains each issue `type` that occurs in the report once, as `{ title, why, fix }` (the same wording as the HTML report), so a model knows what a finding means and how to fix it.
 
 | `facts` field                              | Meaning                                                                                           |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------- |

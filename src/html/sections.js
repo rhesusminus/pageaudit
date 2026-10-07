@@ -1,5 +1,5 @@
 import { countSeverities, worstFirst } from '../report.js'
-import { adviceFor } from './advice.js'
+import { adviceFor } from '../advice.js'
 import { markup, raw } from './escape.js'
 import { METRIC_BANDS, metricBand } from './model.js'
 
