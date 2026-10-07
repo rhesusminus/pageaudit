@@ -1,7 +1,14 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 import { checkFetchError, checkHtml, checkResponse, extractFacts, mergeRobotsIssues } from './checks/page/index.js'
 import { DEFAULT_TIMEOUT_MS, fetchPage as defaultFetchPage } from './fetch.js'
+import { issueId, uniqueIds } from './issue-id.js'
 import { parse } from './parse.js'
+
+const EVIDENCE_KEYS = ['selector', 'html', 'parentHtml', 'actual', 'expected']
+
+// Only the evidence a check actually found, in a fixed order.
+const pickEvidence = (fields) =>
+  Object.fromEntries(EVIDENCE_KEYS.filter((key) => fields[key] !== undefined).map((key) => [key, fields[key]]))
 
 export const DEFAULT_CONCURRENCY = 3
 export const DEFAULT_DELAY_MS = 200
@@ -10,16 +17,20 @@ export const DEFAULT_DELAY_MS = 200
 // that page instead of an exception, so one bad page never stops the run.
 export async function auditPage(url, { fetchPage = defaultFetchPage, timeout = DEFAULT_TIMEOUT_MS } = {}) {
   // A fixed key order keeps the JSON report stable whichever check built the issue.
-  const withUrl = (issues) =>
-    issues.map(({ type, severity, category, source, message, context }) => ({
+  const withUrl = (issues) => {
+    const ids = uniqueIds(issues.map((issue) => issueId(url, issue.type, issue.selector || issue.context)))
+    return issues.map(({ type, severity, category, source, message, context, ...evidence }, i) => ({
       url,
+      id: ids[i],
       type,
       severity,
       category,
       source,
       message,
-      context
+      context,
+      ...pickEvidence(evidence)
     }))
+  }
   let fetched
   try {
     fetched = await fetchPage(url, { timeout })

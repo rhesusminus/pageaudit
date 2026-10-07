@@ -62,11 +62,14 @@ const SEPARATOR = ' and '
 
 // A page can say noindex or nofollow in its meta tag and in its header. That is one finding with both sources as
 // context, each source getting an equal share of the room so that a long header cannot push the meta tag out.
+// The merged finding keeps the element evidence of the meta tag, which the header has none of.
 export function mergeRobotsIssues(issues) {
   const contexts = new Map()
-  for (const { type, context } of issues) {
+  const evidence = new Map()
+  for (const { type, context, selector, html, parentHtml } of issues) {
     if (!['noindex', 'nofollow'].includes(type)) continue
     contexts.set(type, [...new Set([...(contexts.get(type) ?? []), context])])
+    if (selector && !evidence.has(type)) evidence.set(type, { selector, html, parentHtml })
   }
   const done = new Set()
   return issues.flatMap((issue) => {
@@ -75,6 +78,8 @@ export function mergeRobotsIssues(issues) {
     done.add(issue.type)
     const all = contexts.get(issue.type)
     const room = Math.floor((CONTEXT_MAX - SEPARATOR.length * (all.length - 1)) / all.length)
-    return [{ ...issue, context: all.map((context) => limit(context, room)).join(SEPARATOR) }]
+    return [
+      { ...issue, ...evidence.get(issue.type), context: all.map((context) => limit(context, room)).join(SEPARATOR) }
+    ]
   })
 }

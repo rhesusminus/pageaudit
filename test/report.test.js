@@ -1,3 +1,4 @@
+import { adviceFor } from '../src/advice.js'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { stripVTControlCharacters } from 'node:util'
@@ -132,10 +133,18 @@ const site = [
 test('buildReport: totals pages and severities, including site issues, and keeps facts and a timestamp', () => {
   const report = buildReport({ pages, site, skipped: [{ input: 'x', source: 'argument', reason: 'not a valid URL' }] })
   assert.deepEqual(report.summary, { pages: 5, errors: 2, warnings: 4, infos: 1 })
-  assert.deepEqual(Object.keys(report), ['generatedAt', 'pages', 'site', 'skipped', 'summary'])
+  assert.deepEqual(Object.keys(report), ['generatedAt', 'pages', 'site', 'skipped', 'rules', 'summary'])
   assert.deepEqual(Object.keys(report.pages[0]), ['url', 'finalUrl', 'status', 'redirects', 'issues', 'facts'])
   assert.match(report.generatedAt, /^\d{4}-\d{2}-\d{2}T/)
   assert.equal(report.skipped.length, 1)
+})
+
+test('buildReport: rules explain each issue type in the report once', () => {
+  const { rules } = buildReport({ pages, site })
+  const used = new Set([...pages.flatMap((page) => page.issues), ...site].map((issue) => issue.type))
+  assert.deepEqual(Object.keys(rules).toSorted(), [...used].filter((type) => adviceFor(type)).toSorted())
+  assert.ok(Object.keys(rules).length > 0)
+  for (const { title, why, fix } of Object.values(rules)) assert.ok(title && why && fix)
 })
 
 test('formatPagesTable: worst pages first with right-aligned counts', () => {
@@ -295,4 +304,12 @@ test('buildReport: caps free-text facts in the report but leaves the audited fac
 test('buildReport: a page without facts stays null', () => {
   const failed = { url: 'https://a.test/', finalUrl: null, status: null, redirects: [], issues: [], facts: null }
   assert.equal(buildReport({ pages: [failed], site: [] }).pages[0].facts, null)
+})
+
+test('buildReport: site issues get an id from their type, pages and context', () => {
+  const { site: withIds } = buildReport({ pages, site })
+  assert.match(withIds[0].id, /^duplicate-title-[0-9a-f]{8}$/)
+  assert.deepEqual(buildReport({ pages, site: [...site].reverse() }).site[0].id, withIds[0].id)
+  const twice = buildReport({ pages, site: [site[0], site[0]] }).site
+  assert.notEqual(twice[0].id, twice[1].id)
 })

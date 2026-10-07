@@ -1,5 +1,6 @@
 import { SOURCES } from '../../sources.js'
 import { charCount, collapseWhitespace } from '../../text.js'
+import { evidence, selectorFor } from '../evidence.js'
 import { seoIssue } from '../snippet.js'
 
 // Heuristics: Google gives no numeric limits, truncation depends on pixel width.
@@ -27,38 +28,24 @@ export const canonicalLinks = ($) => $('head link[rel~="canonical" i]').toArray(
 function checkTitle($) {
   const titleEl = titleElement($)
   const title = collapseWhitespace(titleEl.text())
+  const issue = (fields) => [seoIssue({ source: SOURCES.title, severity: 'error', ...fields })]
   if (!titleEl.length) {
-    return [
-      seoIssue({
-        type: 'missing-title',
-        severity: 'error',
-        source: SOURCES.title,
-        message: 'Missing <title>',
-        context: '<head>'
-      })
-    ]
+    return issue({ type: 'missing-title', message: 'Missing <title>', context: '<head>' })
   }
+  const found = evidence($, titleEl.get(0))
   if (!title) {
-    return [
-      seoIssue({
-        type: 'empty-title',
-        severity: 'error',
-        source: SOURCES.title,
-        message: 'Empty <title>',
-        context: '<title></title>'
-      })
-    ]
+    return issue({ type: 'empty-title', message: 'Empty <title>', context: '<title></title>', ...found })
   }
   if (charCount(title) > TITLE_MAX) {
-    return [
-      seoIssue({
-        type: 'long-title',
-        severity: 'warning',
-        source: SOURCES.title,
-        message: `Title is ${charCount(title)} chars (over ~${TITLE_MAX}, may be truncated in results)`,
-        context: `<title>${title}</title>`
-      })
-    ]
+    return issue({
+      type: 'long-title',
+      severity: 'warning',
+      message: `Title is ${charCount(title)} chars (over ~${TITLE_MAX}, may be truncated in results)`,
+      context: `<title>${title}</title>`,
+      actual: charCount(title),
+      expected: `at most ${TITLE_MAX} characters`,
+      ...found
+    })
   }
   return []
 }
@@ -71,7 +58,9 @@ function descriptionLengthIssue(description) {
       type: 'long-description',
       severity: 'info',
       message: `Meta description is ${length} chars (over ~${DESCRIPTION_MAX}, may be truncated)`,
-      context
+      context,
+      actual: length,
+      expected: `at most ${DESCRIPTION_MAX} characters`
     }
   }
   if (length < DESCRIPTION_MIN) {
@@ -79,7 +68,9 @@ function descriptionLengthIssue(description) {
       type: 'short-description',
       severity: 'info',
       message: `Meta description is only ${length} chars (under ~${DESCRIPTION_MIN}, may be too vague)`,
-      context
+      context,
+      actual: length,
+      expected: `at least ${DESCRIPTION_MIN} characters`
     }
   }
   return null
@@ -106,7 +97,12 @@ function checkDescription($) {
     })
   } else {
     const lengthIssue = descriptionLengthIssue(description)
-    if (lengthIssue) issues.push(lengthIssue)
+    if (lengthIssue) {
+      const el = $('meta[name="description" i]')
+        .toArray()
+        .find((meta) => collapseWhitespace($(meta).attr('content') ?? '') === description)
+      issues.push({ ...lengthIssue, ...evidence($, el) })
+    }
   }
   return issues.map((issue) => seoIssue({ source: SOURCES.snippet, ...issue }))
 }
@@ -123,7 +119,8 @@ function missingCanonicalIssue($, outsideHead) {
     message: outsideHead.length
       ? 'Canonical link is outside <head> (Google ignores it there)'
       : 'Missing canonical link',
-    context: outsideHead.length ? $.html(outsideHead[0]) : '<head>'
+    context: outsideHead.length ? $.html(outsideHead[0]) : '<head>',
+    ...(outsideHead.length ? evidence($, outsideHead[0]) : {})
   }
 }
 
@@ -136,27 +133,34 @@ function multipleCanonicalsIssue($, inHead) {
     message: identical
       ? `${inHead.length} identical canonical links found (redundant, keep only one)`
       : `${inHead.length} canonical links found (conflicting signals)`,
-    context: inHead.map((el) => $.html(el)).join(' ')
+    context: inHead.map((el) => $.html(el)).join(' '),
+    selector: inHead.map((el) => selectorFor($, el)).join(', ')
   }
 }
 
 function canonicalHrefIssues($, el) {
   const href = ($(el).attr('href') ?? '').trim()
   const context = $.html(el)
-  if (!href) return [{ type: 'empty-canonical', message: 'Canonical link has no href', context }]
+  const found = evidence($, el)
+  if (!href) return [{ type: 'empty-canonical', message: 'Canonical link has no href', context, ...found }]
   const issues = []
   if (!ABSOLUTE_URL.test(href)) {
     issues.push({
       type: 'relative-canonical',
       message: 'Canonical URL is relative (Google recommends absolute URLs)',
-      context
+      context,
+      actual: href,
+      expected: 'an absolute URL such as https://example.com/page',
+      ...found
     })
   }
   if (href.includes('#')) {
     issues.push({
       type: 'canonical-fragment',
       message: 'Canonical URL contains a fragment (generally not supported)',
-      context
+      context,
+      actual: href,
+      ...found
     })
   }
   return issues

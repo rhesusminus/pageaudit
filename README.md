@@ -82,7 +82,7 @@ node bin/pageaudit.js --sitemap https://example.com/sitemap.xml --limit 20 --lig
   --html report.html --title "Website audit" --client "Acme Oy" --logo logo.svg
 ```
 
-It has a cover with the client, the date, a one-sentence verdict and, with `--lighthouse`, the four average scores. Then a summary of how many pages have problems, a ranked **What to fix** list, a section per page and a short note on how the audit was done. Inputs that were skipped, and a `--limit` that cut the list short, are mentioned in the summary. Findings are written in plain language (`src/html/advice.js`: what is wrong, why it matters and how to fix it), and the technical message and documentation link stay on each page. The same problem on many pages is one line in the list, with every affected page behind **Show where**. Site-wide problems such as duplicate titles are part of the same list. Severity is shown by a word and a shape, never by color alone.
+It has a cover with the client, the date, a one-sentence verdict and, with `--lighthouse`, the four average scores. Then a summary of how many pages have problems, a ranked **What to fix** list, a section per page and a short note on how the audit was done. Inputs that were skipped, and a `--limit` that cut the list short, are mentioned in the summary. Findings are written in plain language (`src/advice.js`: what is wrong, why it matters and how to fix it), and the technical message and documentation link stay on each page. The same problem on many pages is one line in the list, with every affected page behind **Show where**. Site-wide problems such as duplicate titles are part of the same list. Severity is shown by a word and a shape, never by color alone.
 
 All text taken from audited sites is escaped, and the logo is embedded as a data URI. A logo that cannot be read, or one over the size limit, exits 2 before any page is fetched.
 
@@ -96,16 +96,21 @@ node bin/pageaudit.js --sitemap https://example.com/sitemap.xml --limit 20 --lig
 
 Then, in Claude Code: "read report.json and summarize the SEO and usability problems, most important first". Each page carries the issues the checks found, the Lighthouse summary and a `facts` object with what is on the page, so a suggestion can refer to the real title or headings. `facts` is `null` for pages that returned no HTML. Free text is capped to keep the file small: heading text and the Open Graph title, description and type at 120 characters (URLs at 2000), the page title, description and `h1s` at 300 characters, with at most 10 `h1s` and 40 headings. `generatedAt` is the time of the audit.
 
-| `facts` field                              | Meaning                                                                                           |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `title`, `description`, `h1s`, `canonical` | The values the site checks compare (the canonical is resolved to an absolute URL)                 |
-| `lang`, `viewport`, `robots`               | The `lang` attribute and the viewport and robots meta tags                                        |
-| `headings`                                 | Outline of `{ level, text }`, at most 40 headings, text capped at 120 characters                  |
-| `wordCount`                                | Words of visible body text (script, style and noscript are not counted), a rough measure of depth |
-| `links`                                    | `{ internal, external, nofollow }` counts of http(s) links. `www.` is treated as the same site    |
-| `images`                                   | `{ total, missingAlt }`                                                                           |
-| `openGraph`, `twitterCard`                 | Open Graph title, description, image, type and url, and the Twitter card type                     |
-| `jsonLdTypes`                              | The `@type` values of valid JSON-LD blocks, at most 20. Invalid JSON-LD is ignored                |
+Every issue, page or site, has an `id`, a `type`, a `message` and a `context`. Where the check found a single element it also has a `selector` (a CSS path), the element's `html` and its `parentHtml` (capped at 500 and 200 characters, `parentHtml` is left out when the parent is `html`, `head` or `body`). Length checks add the measured `actual` value and the `expected` limit. The top-level `rules` object explains each issue `type` that occurs in the report once, as `{ title, why, fix }` (the same wording as the HTML report), so a model knows what a finding means and how to fix it. The `id` is built from the page, the type and the selector, so it is the same on every run as long as the page keeps its structure. Adding an element earlier in the page changes the ids after it, so compare ids within one report.
+
+| `facts` field                              | Meaning                                                                                                                                                |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `title`, `description`, `h1s`, `canonical` | The values the site checks compare (the canonical is resolved to an absolute URL)                                                                      |
+| `lang`, `viewport`, `robots`               | The `lang` attribute and the viewport and robots meta tags                                                                                             |
+| `headings`                                 | Outline of `{ level, text, excerpt }`, at most 40 headings, text capped at 120 characters and the `excerpt` (the first words under the heading) at 200 |
+| `wordCount`                                | Words of visible body text (script, style and noscript are not counted), a rough measure of depth                                                      |
+| `mainText`                                 | The visible text of `<main>` or `<article>` (else the body without nav, header, footer and aside), cut at 1500 characters                              |
+| `links`                                    | `{ internal, external, nofollow }` counts of http(s) links. `www.` is treated as the same site                                                         |
+| `linkSamples`                              | The first 25 page links as `{ href, text, internal, nofollow }`, with the anchor text (or the alt of an image link) capped at 120 characters           |
+| `images`                                   | `{ total, missingAlt }`                                                                                                                                |
+| `imageSamples`                             | The first 20 images as `{ src, alt, context }`: absolute address, alt text (`null` if missing) and the figure caption or the words around the image    |
+| `openGraph`, `twitterCard`                 | Open Graph title, description, image, type and url, and the Twitter card type                                                                          |
+| `jsonLdTypes`                              | The `@type` values of valid JSON-LD blocks, at most 20. Invalid JSON-LD is ignored                                                                     |
 
 ### Lighthouse
 
@@ -271,6 +276,7 @@ src/
       hygiene.js        URL, HTML size, mixed content and client-side rendered pages
       robots-header.js  the X-Robots-Tag header
       signals.js        extractSignals() and jsonLdBlocks(): content and metadata signals stored in the facts
+      content.js        mainText(), headingExcerpts() and imageSamples(): page text, section excerpts and image context for the facts
       index.js          checkHtml() and extractFacts(): facts for the site checks and the report
     site/               checks across pages, run after every page is done
       duplicates.js

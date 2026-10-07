@@ -38,14 +38,23 @@ const GOOD_FACTS = {
   viewport: 'width=device-width, initial-scale=1',
   robots: null,
   headings: [
-    { level: 1, text: 'Gentle Shampoo' },
-    { level: 2, text: 'Ingredients' },
-    { level: 3, text: 'Plant-based' },
-    { level: 2, text: 'Reviews' }
+    { level: 1, text: 'Gentle Shampoo', excerpt: null },
+    { level: 2, text: 'Ingredients', excerpt: null },
+    { level: 3, text: 'Plant-based', excerpt: null },
+    { level: 2, text: 'Reviews', excerpt: null }
   ],
   wordCount: 5,
+  mainText: 'Gentle Shampoo Ingredients Plant-based Reviews',
   links: { internal: 0, external: 0, nofollow: 0 },
+  linkSamples: [],
   images: { total: 1, missingAlt: 0 },
+  imageSamples: [
+    {
+      src: 'https://fixtures.test/products/shampoo.jpg',
+      alt: 'Bottle of gentle shampoo',
+      context: 'Gentle Shampoo Ingredients Plant-based Reviews'
+    }
+  ],
   openGraph: {
     title: 'Fixture page',
     description: 'Fixture description.',
@@ -74,6 +83,7 @@ test('cli: good.html has no issues, exposes its facts and exits 0', async (t) =>
       }
     ],
     site: [],
+    rules: {},
     skipped: [],
     summary: { pages: 1, errors: 0, warnings: 0, infos: 0 }
   })
@@ -388,6 +398,20 @@ test('cli: --html with --lighthouse shows the scores', async (t) => {
   const out = await readFile(path, 'utf8')
   assert.match(out, /aria-label="Speed: 91 out of 100"/)
   assert.match(out, /Largest Contentful Paint/)
+})
+
+test('cli: --out or --html naming a directory exits 2 before any page is fetched', async (t) => {
+  const dir = await tempDir(t)
+  const fetchMock = mockFixtureFetch(t)
+  const errors = []
+  t.mock.method(console, 'error', (...a) => errors.push(a.join(' ')))
+  assert.equal(await run([fixtureUrl('good.html'), '--out', dir, '--html', `${dir}/`, '--json']), 2)
+  assert.equal(errors.length, 1)
+  assert.ok(errors[0].includes(`--out needs a file path, but "${dir}" is a directory (for example ${dir}/report.json)`))
+  assert.ok(
+    errors[0].includes(`--html needs a file path, but "${dir}/" is a directory (for example ${dir}/report.html)`)
+  )
+  assert.equal(fetchMock.mock.callCount(), 0)
 })
 
 test('cli: --html to an unwritable path exits 2', async (t) => {

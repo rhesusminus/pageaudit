@@ -1,5 +1,6 @@
 import { SOURCES } from '../../sources.js'
 import { charCount, collapseWhitespace } from '../../text.js'
+import { evidence } from '../evidence.js'
 import { seoIssue, snippet } from '../snippet.js'
 import { absolute, baseUrl, wordCount } from './signals.js'
 
@@ -36,7 +37,11 @@ function checkUrl(url) {
   const issues = []
   if (charCount(shown) > URL_MAX) {
     const message = `URL is ${charCount(shown)} characters (over ~${URL_MAX}), shorter addresses are easier to read and share`
-    issues.push(urlIssue('long-url', SOURCES.urlStructure, message, shown))
+    issues.push({
+      ...urlIssue('long-url', SOURCES.urlStructure, message, shown),
+      actual: charCount(shown),
+      expected: `at most ${URL_MAX} characters`
+    })
   }
   if (path.includes('_')) {
     const message = 'URL path uses underscores, Google recommends hyphens to separate words'
@@ -59,7 +64,9 @@ function checkSize(html) {
       severity: 'warning',
       source: SOURCES.googlebot,
       message: `HTML is ${(bytes / 1024 / 1024).toFixed(1)} MB, Googlebot only reads the first 2 MB so anything after that is not indexed`,
-      context: `${bytes} bytes`
+      context: `${bytes} bytes`,
+      actual: bytes,
+      expected: `at most ${HTML_MAX_BYTES} bytes`
     })
   ]
 }
@@ -95,7 +102,8 @@ function checkMixedContent($, url) {
         category: 'best-practice',
         source: SOURCES.mixedContent,
         message: `The https page loads <${el.tagName}> over insecure http, browsers block or rewrite it`,
-        context: snippet($, el)
+        context: snippet($, el),
+        ...evidence($, el)
       })
     )
 }
