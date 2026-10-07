@@ -786,3 +786,104 @@ test('facts: imageSamples give the address, alt and the words around the image',
   assert.equal(imageSamples[2].src.length, 60)
   assert.equal(imageSamples[2].alt, '')
 })
+
+const issuesOf = async (html, url = 'https://a.test/') => {
+  const { auditPage } = await import('../src/runner.js')
+  const fetchPage = async () => ({ finalUrl: url, status: 200, redirects: [], html, robotsHeader: null })
+  return (await auditPage(url, { fetchPage })).issues
+}
+
+test('evidence: a script element has a selector and its own id', async () => {
+  const html = '<head><script src="http://a.com/1.js"></script><script src="http://a.com/2.js"></script></head>'
+  const mixed = (await issuesOf(html)).filter((i) => i.type === 'mixed-content')
+  assert.deepEqual(
+    mixed.map((i) => i.selector),
+    ['html > head > script:nth-of-type(1)', 'html > head > script:nth-of-type(2)']
+  )
+  assert.notEqual(mixed[0].id, mixed[1].id)
+})
+
+test('evidence: an id that is used twice is not a selector, and identical issues get distinct ids', async () => {
+  const html =
+    '<img id="logo" src="a.png" width="1" height="1"><div><img id="logo" src="a.png" width="1" height="1"></div>'
+  const alts = (await issuesOf(html)).filter((i) => i.type === 'missing-alt')
+  assert.deepEqual(
+    alts.map((i) => i.selector),
+    ['html > body > img', 'html > body > div > img']
+  )
+  assert.notEqual(alts[0].id, alts[1].id)
+})
+
+test('evidence: a unique id is the whole selector, and odd ids are not used', async () => {
+  const html = '<div id="box"><img src="a.png"></div><div id="1a:b"><img src="b.png"></div>'
+  const alts = (await issuesOf(html)).filter((i) => i.type === 'missing-alt')
+  assert.deepEqual(
+    alts.map((i) => i.selector),
+    ['#box > img', 'html > body > div:nth-of-type(2) > img']
+  )
+})
+
+test('evidence: identical issues on one page keep distinct ids across runs', async () => {
+  const html = '<img src="a.png"><img src="a.png">'
+  const ids = async () => (await issuesOf(html)).map((i) => i.id)
+  assert.equal(new Set(await ids()).size, (await ids()).length)
+  assert.deepEqual(await ids(), await ids())
+})
+
+test('evidence: parentHtml is short and left out for the page frame', async () => {
+  const html = `<div>${'<p>word</p>'.repeat(100)}<img src="a.png"></div><img src="b.png">`
+  const [inDiv, inBody] = (await issuesOf(html)).filter((i) => i.type === 'missing-alt')
+  assert.ok(Array.from(inDiv.parentHtml).length <= 200)
+  assert.equal('parentHtml' in inBody, false)
+  const lang = (await issuesOf('<p>x</p>')).find((i) => i.type === 'missing-lang')
+  assert.equal(lang.html, '<html>')
+})
+
+test('evidence: a page with thousands of identical siblings is still audited quickly', async () => {
+  const html = `<div>${'<img src="a.png">'.repeat(5000)}</div>`
+  const started = performance.now()
+  const issues = await issuesOf(html)
+  assert.ok(issues.length >= 10_000)
+  assert.ok(performance.now() - started < 5000)
+})
+
+test('evidence: the merged noindex of meta tag and header keeps the element evidence', async () => {
+  const { auditPage } = await import('../src/runner.js')
+  const html = '<head><meta name="robots" content="noindex"></head>'
+  const fetchPage = async () => ({
+    finalUrl: 'https://a.test/',
+    status: 200,
+    redirects: [],
+    html,
+    robotsHeader: 'noindex'
+  })
+  const noindex = (await auditPage('https://a.test/', { fetchPage })).issues.filter((i) => i.type === 'noindex')
+  assert.equal(noindex.length, 1)
+  assert.match(noindex[0].context, /X-Robots-Tag.*and.*meta/)
+  assert.equal(noindex[0].selector, 'html > head > meta')
+})
+
+test('facts: an image link with whitespace around the image still gets the alt as its text', async () => {
+  const { linkSamples } = await factsOf('<body><a href="/x">\n  <img src="a.png" alt="Home">\n</a></body>')
+  assert.equal(linkSamples[0].text, 'Home')
+})
+
+test('facts: imageSamples have no src for an empty one and shorten upper-case data URIs', async () => {
+  const { imageSamples } = await factsOf(
+    `<body><img src=""><img src="DATA:image/gif;base64,${'A'.repeat(100)}"></body>`
+  )
+  assert.equal(imageSamples[0].src, null)
+  assert.equal(imageSamples[1].src.length, 60)
+})
+
+test('facts: imageSamples read the words next to the image, also in a huge wrapper, and in a link', async () => {
+  const wrapper = `<div><p>Far away intro</p>${'<span>filler </span>'.repeat(200)}<b>Lovely</b> <img src="a.png"> <i>view</i></div>`
+  const { imageSamples } = await factsOf(`<body>${wrapper}<p><a href="/"><img src="b.png"></a> Back home</p></body>`)
+  assert.match(imageSamples[0].context, /^(filler )+Lovely view$/)
+  assert.ok(Array.from(imageSamples[0].context).length <= 150)
+  assert.equal(imageSamples[1].context, 'Back home')
+})
+
+test('facts: an empty main area falls back to the body text', async () => {
+  assert.equal((await factsOf('<body><main id="app"></main><p>Real text</p></body>')).mainText, 'Real text')
+})

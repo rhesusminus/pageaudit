@@ -305,3 +305,11 @@ test('buildReport: a page without facts stays null', () => {
   const failed = { url: 'https://a.test/', finalUrl: null, status: null, redirects: [], issues: [], facts: null }
   assert.equal(buildReport({ pages: [failed], site: [] }).pages[0].facts, null)
 })
+
+test('buildReport: site issues get an id from their type, pages and context', () => {
+  const { site: withIds } = buildReport({ pages, site })
+  assert.match(withIds[0].id, /^duplicate-title-[0-9a-f]{8}$/)
+  assert.deepEqual(buildReport({ pages, site: [...site].reverse() }).site[0].id, withIds[0].id)
+  const twice = buildReport({ pages, site: [site[0], site[0]] }).site
+  assert.notEqual(twice[0].id, twice[1].id)
+})

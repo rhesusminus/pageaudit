@@ -48,7 +48,13 @@ const GOOD_FACTS = {
   links: { internal: 0, external: 0, nofollow: 0 },
   linkSamples: [],
   images: { total: 1, missingAlt: 0 },
-  imageSamples: [{ src: 'https://fixtures.test/products/shampoo.jpg', alt: 'Bottle of gentle shampoo', context: null }],
+  imageSamples: [
+    {
+      src: 'https://fixtures.test/products/shampoo.jpg',
+      alt: 'Bottle of gentle shampoo',
+      context: 'Gentle Shampoo Ingredients Plant-based Reviews'
+    }
+  ],
   openGraph: {
     title: 'Fixture page',
     description: 'Fixture description.',

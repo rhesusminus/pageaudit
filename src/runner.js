@@ -1,7 +1,7 @@
-import { createHash } from 'node:crypto'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { checkFetchError, checkHtml, checkResponse, extractFacts, mergeRobotsIssues } from './checks/page/index.js'
 import { DEFAULT_TIMEOUT_MS, fetchPage as defaultFetchPage } from './fetch.js'
+import { issueId, uniqueIds } from './issue-id.js'
 import { parse } from './parse.js'
 
 const EVIDENCE_KEYS = ['selector', 'html', 'parentHtml', 'actual', 'expected']
@@ -10,10 +10,6 @@ const EVIDENCE_KEYS = ['selector', 'html', 'parentHtml', 'actual', 'expected']
 const pickEvidence = (fields) =>
   Object.fromEntries(EVIDENCE_KEYS.filter((key) => fields[key] !== undefined).map((key) => [key, fields[key]]))
 
-// A stable id for one issue on one page, so a suggestion can refer back to it.
-const issueId = (url, type, where = '') =>
-  `${type}-${createHash('sha1').update(`${url}\n${type}\n${where}`).digest('hex').slice(0, 8)}`
-
 export const DEFAULT_CONCURRENCY = 3
 export const DEFAULT_DELAY_MS = 200
 
@@ -21,10 +17,11 @@ export const DEFAULT_DELAY_MS = 200
 // that page instead of an exception, so one bad page never stops the run.
 export async function auditPage(url, { fetchPage = defaultFetchPage, timeout = DEFAULT_TIMEOUT_MS } = {}) {
   // A fixed key order keeps the JSON report stable whichever check built the issue.
-  const withUrl = (issues) =>
-    issues.map(({ type, severity, category, source, message, context, ...evidence }) => ({
+  const withUrl = (issues) => {
+    const ids = uniqueIds(issues.map((issue) => issueId(url, issue.type, issue.selector || issue.context)))
+    return issues.map(({ type, severity, category, source, message, context, ...evidence }, i) => ({
       url,
-      id: issueId(url, type, evidence.selector ?? context),
+      id: ids[i],
       type,
       severity,
       category,
@@ -33,6 +30,7 @@ export async function auditPage(url, { fetchPage = defaultFetchPage, timeout = D
       context,
       ...pickEvidence(evidence)
     }))
+  }
   let fetched
   try {
     fetched = await fetchPage(url, { timeout })

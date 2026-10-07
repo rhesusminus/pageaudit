@@ -74,7 +74,7 @@ function pageLinks($, baseUrl, pageUrl) {
       const raw = ($(el).attr('href') ?? '').trim()
       const href = absolute(raw, baseUrl)
       if (!href || !/^https?:/.test(href) || raw.startsWith('#')) return []
-      const text = clean($(el).text() || $(el).find('img[alt]').first().attr('alt')) ?? ''
+      const text = clean($(el).text()) ?? clean($(el).find('img[alt]').first().attr('alt')) ?? ''
       return [
         {
           href: limit(href, MAX_URL),
