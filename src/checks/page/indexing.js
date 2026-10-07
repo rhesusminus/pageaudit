@@ -1,4 +1,5 @@
 import { SOURCES } from '../../sources.js'
+import { evidence } from '../evidence.js'
 import { seoIssue } from '../snippet.js'
 import { metaContent } from './signals.js'
 
@@ -14,14 +15,15 @@ function robotsTags($) {
           .toLowerCase()
           .split(',')
           .map((part) => part.trim()),
-        html: `<meta name="${$(el).attr('name')}" content="${content}">`
+        html: `<meta name="${$(el).attr('name')}" content="${content}">`,
+        found: evidence($, el)
       }
     })
 }
 
 function robotsIssue(tags, directive, fields) {
   const tag = tags.find(({ rules }) => rules.includes(directive) || rules.includes('none'))
-  return tag ? [seoIssue({ source: SOURCES.robotsMeta, ...fields, context: tag.html })] : []
+  return tag ? [seoIssue({ source: SOURCES.robotsMeta, ...fields, context: tag.html, ...tag.found })] : []
 }
 
 const checkRobots = ($) => {
@@ -64,7 +66,8 @@ const checkLang = ($) =>
           source: SOURCES.languageOfPage,
           message:
             'The <html> element has no lang attribute, so screen readers and translators have to guess the language',
-          context: '<html>'
+          context: '<html>',
+          ...evidence($, $('html').get(0))
         })
       ]
 

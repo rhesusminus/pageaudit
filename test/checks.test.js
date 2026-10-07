@@ -692,3 +692,25 @@ test('hygiene: a prerendered app root with the default noscript message is not a
     '<body><div id="app"><p>Hello world</p></div><noscript>You need to enable JavaScript to run this app.</noscript></body>'
   assert.deepEqual(hygiene(html), [])
 })
+
+test('evidence: length issues carry the measured and expected value', () => {
+  const [title] = checkMeta(parse(`<head><title>${'a'.repeat(72)}</title></head>`)).filter(
+    (i) => i.type === 'long-title'
+  )
+  assert.equal(title.actual, 72)
+  assert.equal(title.expected, 'at most 60 characters')
+  assert.equal(title.selector, 'html > head > title')
+  const [description] = checkMeta(parse('<head><meta name="description" content="Too short"></head>')).filter(
+    (i) => i.type === 'short-description'
+  )
+  assert.equal(description.actual, 9)
+  assert.equal(description.selector, 'html > head > meta')
+})
+
+test('evidence: selectors prefer the nearest id and count same-tag siblings', () => {
+  const issues = checkHeadings(parse('<div id="intro"><h1>A</h1><h3>B</h3><h3></h3></div>'))
+  assert.deepEqual(
+    issues.map((i) => i.selector),
+    ['#intro > h3:nth-of-type(1)', '#intro > h3:nth-of-type(2)']
+  )
+})

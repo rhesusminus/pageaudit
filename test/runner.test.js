@@ -182,10 +182,33 @@ test('runAudit: runs the real fetch and checks over the fixture pages', async (t
   assert.equal(pages[5].issues[0].message, 'Could not fetch the page: timed out after 15s')
 })
 
-test('auditPage: issues have the same key order whichever check built them', async () => {
+test('auditPage: issues keep a fixed key order whichever check built them', async () => {
   const result = await auditPage('https://a.test/', {
     fetchPage: async (url) => page(url, { html: '<img src="a.jpg"><h3>x</h3>' })
   })
-  const keys = new Set(result.issues.map((i) => Object.keys(i).join()))
-  assert.deepEqual([...keys], ['url,type,severity,category,source,message,context'])
+  const order = ['url', 'id', 'type', 'severity', 'category', 'source', 'message', 'context', 'selector', 'html']
+  for (const issue of result.issues) {
+    const keys = Object.keys(issue)
+    assert.deepEqual(keys, order.filter((key) => keys.includes(key)).concat(keys.filter((key) => !order.includes(key))))
+    assert.deepEqual(keys.slice(0, 8), order.slice(0, 8))
+  }
+})
+
+test('auditPage: issues carry a stable id and the evidence of the element', async () => {
+  const run = () =>
+    auditPage('https://a.test/', {
+      fetchPage: async (url) => page(url, { html: '<main><img src="a.jpg"><img src="b.jpg"></main>' })
+    })
+  const { issues } = await run()
+  const alts = issues.filter((i) => i.type === 'missing-alt')
+  assert.equal(alts.length, 2)
+  assert.notEqual(alts[0].id, alts[1].id)
+  assert.match(alts[0].id, /^missing-alt-[0-9a-f]{8}$/)
+  assert.equal(alts[1].selector, 'html > body > main > img:nth-of-type(2)')
+  assert.equal(alts[1].html, '<img src="b.jpg">')
+  assert.match(alts[1].parentHtml, /^<main>/)
+  assert.deepEqual(
+    (await run()).issues.map((i) => i.id),
+    issues.map((i) => i.id)
+  )
 })

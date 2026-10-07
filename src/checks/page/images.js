@@ -1,4 +1,5 @@
 import { SOURCES } from '../../sources.js'
+import { withEvidence } from '../evidence.js'
 import { snippet } from '../snippet.js'
 
 const GENERIC_NAME = /^(img|image|pic|picture|photo|dsc|dscn|untitled|screenshot)[-_ ]?\d*$/i
@@ -120,7 +121,13 @@ export function checkImages($) {
     const found = [...checkAlt($, el, alt), ...checkSrc(img, src), ...checkFileName(src, alt), ...checkDimensions(img)]
     if (!found.length) return
     const context = snippet($, el)
-    issues.push(...found.map((issue) => ({ context, ...issue })))
+    issues.push(
+      ...withEvidence(
+        $,
+        el,
+        found.map((issue) => ({ context, ...issue }))
+      )
+    )
   })
   return issues
 }
