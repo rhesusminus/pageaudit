@@ -1,6 +1,6 @@
 import { collapseWhitespace, limit } from './text.js'
 
-const MAX_ITEMS = 5
+const MAX_ITEMS = 3
 const MAX_TEXT = 300
 const MAX_EXPLANATION = 500
 const MAX_DESCRIPTION = 400

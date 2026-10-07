@@ -6,6 +6,7 @@ import chalk from 'chalk'
 import {
   buildReport,
   formatIssueTable,
+  formatLighthouse,
   formatPagesTable,
   formatReport,
   formatSiteTable,
@@ -312,4 +313,48 @@ test('buildReport: site issues get an id from their type, pages and context', ()
   assert.deepEqual(buildReport({ pages, site: [...site].reverse() }).site[0].id, withIds[0].id)
   const twice = buildReport({ pages, site: [site[0], site[0]] }).site
   assert.notEqual(twice[0].id, twice[1].id)
+})
+
+const auditLine = (id, extra = {}) => ({ id, category: 'seo', title: id, score: 0, displayValue: null, ...extra })
+const lhBlock = (audits, extra = {}) => ({ scores: { seo: 50 }, metrics: {}, audits, warnings: [], ...extra })
+const lhPage = (url, lighthouse) => ({
+  url,
+  finalUrl: url,
+  status: 200,
+  redirects: [],
+  issues: [],
+  facts: null,
+  lighthouse
+})
+
+test('buildReport: audit descriptions move to lighthouseAudits once, first one wins, missing fields are merged', () => {
+  const report = buildReport({
+    pages: [
+      lhPage('https://a.test/1', lhBlock([auditLine('x', { description: 'First.' }), auditLine('constructor')])),
+      lhPage(
+        'https://a.test/2',
+        lhBlock([auditLine('x', { description: 'Second.', learnMore: 'https://x.test/' }), auditLine('short')])
+      ),
+      lhPage('https://a.test/3', null)
+    ],
+    site: []
+  })
+  assert.deepEqual(report.lighthouseAudits, { x: { description: 'First.', learnMore: 'https://x.test/' } })
+  assert.deepEqual(
+    report.pages[0].lighthouse.audits.map((a) => Object.keys(a).includes('description')),
+    [false, false]
+  )
+  assert.equal(report.pages[2].lighthouse, null)
+  assert.equal(
+    'lighthouseAudits' in buildReport({ pages: [lhPage('https://a.test/', lhBlock([auditLine('y')]))], site: [] }),
+    false
+  )
+})
+
+test('formatLighthouse: counts the audits left out by the cap in the "more" line', () => {
+  const audits = Array.from({ length: 10 }, (_, i) => auditLine(`a${i}`))
+  const text = stripVTControlCharacters(formatLighthouse(lhBlock(audits, { omittedAudits: 4 }), 100))
+  assert.match(text, /\.\.\.and 6 more/)
+  const withShown = stripVTControlCharacters(formatLighthouse(lhBlock(audits.slice(0, 3)), 100))
+  assert.doesNotMatch(withShown, /more/)
 })

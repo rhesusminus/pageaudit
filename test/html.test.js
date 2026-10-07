@@ -240,3 +240,11 @@ test('renderHtml: a zero score draws no arc, and page names are headings', () =>
   assert.match(out, /<h4>\s*Speed and quality test\s*<\/h4>/)
   assert.match(out, /10\/100/)
 })
+
+test('renderHtml: the findings left out by the cap are counted in the "more" note', () => {
+  const audits = Array.from({ length: 12 }, (_, i) => ({ ...lighthouse.audits[0], id: `a${i}` }))
+  const out = renderHtml(
+    wrap([page('https://a.test/', [], { lighthouse: { ...lighthouse, audits, omittedAudits: 5 } })])
+  )
+  assert.match(out, /9 more findings not listed here/)
+})
