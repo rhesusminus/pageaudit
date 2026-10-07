@@ -445,3 +445,25 @@ test('cli: --html notes how many URLs a --limit left out', async (t) => {
   await runCli(t, [fixtureUrl('good.html'), fixtureUrl('bad-missing.html'), '--limit', '1', '--html', path, '--json'])
   assert.match(await readFile(path, 'utf8'), /Audited 1 page out of 2 found/)
 })
+
+test('cli: a sitemap run reports robots.txt blocks and sitemap entries that send mixed signals', async (t) => {
+  const { code, report } = await runJson(t, ['--sitemap', fixtureUrl('sitemap-quality.xml')])
+  assert.equal(code, 0)
+  const site = Object.fromEntries(report.site.map((issue) => [issue.type, issue.urls]))
+  assert.deepEqual(site['blocked-by-robots'], [fixtureUrl('blocked.html')])
+  assert.deepEqual(site['sitemap-url-noindex'], [fixtureUrl('noindex.html'), fixtureUrl('noindex-header.html')])
+  assert.deepEqual(site['sitemap-url-not-canonical'], [fixtureUrl('bad-canonical.html')])
+  assert.deepEqual(site['sitemap-url-redirects'], [fixtureUrl('redirect-once')])
+  const header = report.pages.find((page) => page.url === fixtureUrl('noindex-header.html'))
+  assert.deepEqual(
+    header.issues.map((i) => [i.type, i.context]),
+    [['noindex', 'X-Robots-Tag: noindex']]
+  )
+  assert.equal(report.pages.find((page) => page.url === fixtureUrl('noindex.html')).issues[0].type, 'noindex')
+})
+
+test('cli: pages that are not listed in a sitemap get no sitemap issues and allowed pages are not blocked', async (t) => {
+  const { report } = await runJson(t, [fixtureUrl('noindex.html'), fixtureUrl('bad-canonical.html')])
+  assert.ok(report.site.every((issue) => !issue.type.startsWith('sitemap-')))
+  assert.ok(report.site.every((issue) => issue.type !== 'blocked-by-robots'))
+})

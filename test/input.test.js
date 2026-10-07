@@ -162,6 +162,25 @@ test('resolve: limit caps the list after deduplication', () => {
   assert.deepEqual(resolveUrls(entries, { limit: 2 }), {
     urls: ['https://a.test/1', 'https://a.test/2'],
     skipped: [],
-    total: 3
+    total: 3,
+    listed: new Map()
   })
+})
+
+test('resolve: listed maps each kept URL to the sitemaps it came from, also when another input came first', () => {
+  const entries = [
+    ...fromArgs(['https://a.test/1', 'https://a.test/9']),
+    { value: 'https://a.test/1/', source: 'sitemap https://a.test/s1.xml', sitemap: 'https://a.test/s1.xml' },
+    { value: 'https://a.test/2', source: 'sitemap https://a.test/s1.xml', sitemap: 'https://a.test/s1.xml' },
+    { value: 'https://a.test/2', source: 'sitemap https://a.test/s2.xml', sitemap: 'https://a.test/s2.xml' },
+    { value: 'not a url', source: 'sitemap https://a.test/s2.xml', sitemap: 'https://a.test/s2.xml' }
+  ]
+  const { listed } = resolveUrls(entries)
+  assert.deepEqual(
+    [...listed],
+    [
+      ['https://a.test/1', ['https://a.test/s1.xml']],
+      ['https://a.test/2', ['https://a.test/s1.xml', 'https://a.test/s2.xml']]
+    ]
+  )
 })

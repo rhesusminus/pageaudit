@@ -164,7 +164,8 @@ test('fetch: error statuses and non-HTML responses return no html', async (t) =>
     status: 404,
     redirects: [],
     contentType: 'text/html',
-    html: null
+    html: null,
+    robotsHeader: null
   })
   const data = await fetchPage('https://x.test/data')
   assert.equal(data.status, 200)

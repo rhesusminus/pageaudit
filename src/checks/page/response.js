@@ -1,5 +1,6 @@
 import { SOURCES } from '../../sources.js'
 import { seoIssue } from '../snippet.js'
+import { checkRobotsHeader } from './robots-header.js'
 
 // A page that could not be fetched at all: network error, timeout, too many redirects.
 export function checkFetchError(err) {
@@ -71,5 +72,5 @@ function checkStatus({ url, finalUrl, status, contentType, html }) {
 
 // Checks on the HTTP response itself, from a fetchPage() result.
 export function checkResponse(response) {
-  return [...checkRedirects(response), ...checkStatus(response)]
+  return [...checkRedirects(response), ...checkStatus(response), ...checkRobotsHeader(response)]
 }

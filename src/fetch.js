@@ -126,7 +126,7 @@ function decode(bytes, contentType) {
 
 // The page-fetching interface the runner depends on. A headless browser can
 // replace it later as long as it returns the same shape. html is null unless
-// the response is a 200 with an HTML content type.
+// the response is a 200 with an HTML content type. robotsHeader is the X-Robots-Tag value or null.
 export async function fetchPage(url, { timeout } = {}) {
   const res = await request(url, { timeout, accept: 'text/html,application/xhtml+xml' })
   const contentType = res.headers.get('content-type') ?? ''
@@ -136,5 +136,6 @@ export async function fetchPage(url, { timeout } = {}) {
   } else {
     await res.discard()
   }
-  return { url, finalUrl: res.finalUrl, status: res.status, redirects: res.redirects, contentType, html }
+  const robotsHeader = res.headers.get('x-robots-tag')
+  return { url, finalUrl: res.finalUrl, status: res.status, redirects: res.redirects, contentType, html, robotsHeader }
 }
