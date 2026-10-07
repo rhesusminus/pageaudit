@@ -64,12 +64,12 @@ function entries(details, depth = 0) {
   return details.items.flatMap((item) => (NESTED.has(item?.type) ? entries(item, depth + 1) : [item]))
 }
 
-export const itemsOf = (details) =>
+export const itemsOf = (details, max = MAX_ITEMS) =>
   entries(details)
     .filter((item) => item && typeof item === 'object')
     .map(summarizeItem)
     .filter((item) => Object.keys(item).length > 0)
-    .slice(0, MAX_ITEMS)
+    .slice(0, max)
 
 // Lighthouse's explanation of the audit, with its markdown links turned into plain words. The first web link is kept apart.
 export function describe(audit) {

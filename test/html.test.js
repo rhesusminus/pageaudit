@@ -161,7 +161,7 @@ test('renderHtml: a page that could not be fetched has no facts and says so', ()
 
 // Every issue type a check can produce needs plain-language wording.
 test('advice: covers every issue type in the checks and in Lighthouse', async () => {
-  const files = ['src/lighthouse.js']
+  const files = ['src/lighthouse.js', 'src/lighthouse-issues.js']
   const dir = new URL('../src/checks/', import.meta.url)
   for (const entry of await readdir(dir, { recursive: true }))
     if (entry.endsWith('.js')) files.push(`src/checks/${entry}`)

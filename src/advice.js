@@ -276,6 +276,41 @@ export const ADVICE = {
     why: 'Search engines have to follow the redirect to reach the page, which wastes a request for every listed address.',
     fix: 'List the final address of the page in the sitemap instead.'
   },
+  'lcp-slow': {
+    title: 'The main content appears slowly',
+    why: 'The largest element on the screen takes long to show, so visitors wait and may leave. Speed also counts as a search ranking signal. This number is from one test run on one machine, so it varies a little between runs.',
+    fix: 'Make the largest image or text block load sooner: shrink and compress the image, serve it in a modern format, load it first and avoid blocking scripts and styles above it.'
+  },
+  'cls-high': {
+    title: 'The page jumps around while loading',
+    why: 'Content that shifts as it loads makes visitors click the wrong thing. This number is from one test run on one machine, so it varies a little between runs.',
+    fix: 'Give images, videos and embeds a width and height, reserve room for ads and banners, and avoid inserting content above what is already shown.'
+  },
+  'tbt-high': {
+    title: 'The page is slow to react while loading',
+    why: 'Heavy scripts keep the page busy, so taps and clicks feel stuck for a moment. This number is from one test run on one machine, so it varies a little between runs.',
+    fix: 'Remove scripts that are not needed, split large ones and load the rest later.'
+  },
+  'score-low-performance': {
+    title: 'The page scores low on speed',
+    why: 'A low speed score means the page loads slowly for visitors. The score is from one test run on one machine, so it varies a little between runs.',
+    fix: 'Start with the biggest opportunities listed for this page in the speed and quality test.'
+  },
+  'score-low-accessibility': {
+    title: 'The page scores low on accessibility',
+    why: 'Parts of the page are hard or impossible to use with a screen reader, a keyboard or low vision. The score is from one automatic test, which finds only part of the problems.',
+    fix: 'Work through the failed accessibility checks listed for this page, such as contrast, labels and missing text for images.'
+  },
+  'score-low-best-practices': {
+    title: 'The page scores low on best practices',
+    why: 'The page uses outdated or unsafe web techniques, which can cause errors and security problems.',
+    fix: 'Work through the failed best practice checks listed for this page.'
+  },
+  'score-low-seo': {
+    title: 'The page scores low on search basics',
+    why: 'The page misses basics that search engines look for, so it may be harder to find.',
+    fix: 'Work through the failed search checks listed for this page.'
+  },
   'lighthouse-failed': {
     title: 'The speed and quality test could not run',
     why: 'The scores for this page are missing from the report. The other checks still ran.',

@@ -11,9 +11,12 @@ import { fromFile } from './input/file.js'
 import { resolveUrls } from './input/resolve.js'
 import { fromSitemap } from './input/sitemap.js'
 import { lighthouseFailed, runLighthouse, shortSummary } from './lighthouse.js'
+import { lighthouseIssues } from './lighthouse-issues.js'
 import { directoryOutputs, writeReportFile } from './output.js'
 import { buildReport, formatReport } from './report.js'
 import { DEFAULT_CONCURRENCY, DEFAULT_DELAY_MS, runAudit } from './runner.js'
+
+const MAX_LIGHTHOUSE_RUNS = 9
 
 const USAGE = `Usage: pageaudit [url...] [--urls-file <path>] [--sitemap <url>] [options]
 Run "pageaudit --help" for all options.`
@@ -35,6 +38,8 @@ Options:
                        --limit). A URL in a --urls-file can be followed by "lighthouse" to do the same.
                        With these and no --lighthouse, only those pages run. With --lighthouse too, the others
                        get a short summary.
+  --lighthouse-runs <n>
+                       run Lighthouse n times per page (1 to ${MAX_LIGHTHOUSE_RUNS}, default 1) and keep the median run, since single runs vary
   --fail-on <level>    exit 1 on any "error" (default) or on any "warning" or error
   --out <path>         also write the JSON report to a file, for example to hand to Claude
   --html <path>        also write a report for customers as one self-contained HTML file
@@ -54,6 +59,7 @@ const OPTIONS = {
   delay: { type: 'string' },
   lighthouse: { type: 'boolean' },
   'lighthouse-page': { type: 'string', multiple: true },
+  'lighthouse-runs': { type: 'string' },
   out: { type: 'string' },
   html: { type: 'string' },
   title: { type: 'string' },
@@ -70,10 +76,11 @@ export function canSpin(stream) {
   return Boolean(stream.isTTY) && stream.columns > 0
 }
 
-function integer(name, value, min) {
+function integer(name, value, min, max = Infinity) {
   if (value === undefined) return undefined
-  if (!/^\d+$/.test(value) || Number(value) < min) {
-    throw new Error(`--${name} must be a whole number of at least ${min}, got "${value}"`)
+  if (!/^\d+$/.test(value) || Number(value) < min || Number(value) > max) {
+    const range = max === Infinity ? `at least ${min}` : `from ${min} to ${max}`
+    throw new Error(`--${name} must be a whole number ${range}, got "${value}"`)
   }
   return Number(value)
 }
@@ -107,6 +114,7 @@ function parseOptions(argv) {
     failOn,
     lighthouse: values.lighthouse,
     lighthousePages: values['lighthouse-page'] ?? [],
+    lighthouseRuns: integer('lighthouse-runs', values['lighthouse-runs'], 1, MAX_LIGHTHOUSE_RUNS),
     out: values.out,
     html: values.html,
     branding: { title: values.title, client: values.client, logo: values.logo },
@@ -182,7 +190,8 @@ async function auditUrls(urls, options, startSpinner) {
 // picked with --lighthouse-page or a marker, by the URL as given. Picked pages get the full detail, also when
 // another page lands on the same final URL. Without any picked page every page does, and with some the others only
 // get the short summary.
-async function addLighthouse(pages, startSpinner, runner, { all, chosen }) {
+async function addLighthouse(pages, startSpinner, runner, { all, chosen, runs }) {
+  if (!all && chosen.length === 0) return
   const picked = new Set(chosen)
   const isPicked = (page) => picked.has(page.url)
   // A page the user picked but that gave no HTML gets told why, instead of silently losing the run.
@@ -195,6 +204,7 @@ async function addLighthouse(pages, startSpinner, runner, { all, chosen }) {
   const progress = (done) => `Lighthouse ${done}/${urls.length} pages...`
   const spinner = startSpinner(progress(0))
   const results = await runner(urls, {
+    runs,
     onProgress: (done) => {
       if (spinner) spinner.text = progress(done)
     }
@@ -205,6 +215,7 @@ async function addLighthouse(pages, startSpinner, runner, { all, chosen }) {
     const detailed = picked.size === 0 || isPicked(page)
     page.lighthouse = result.summary && !detailed ? shortSummary(result.summary) : (result.summary ?? null)
     if (result.error) page.issues.push(lighthouseFailed(page.url, result.error))
+    if (result.summary) page.issues.push(...lighthouseIssues(page.url, result.summary))
   }
 }
 
@@ -258,6 +269,11 @@ async function outputsAreFiles(options) {
   return directories.length === 0
 }
 
+// The cross-page issues: duplicates, robots.txt and sitemap entries.
+async function checkAllPages(pages, inputs, startSpinner) {
+  return [...checkSite(pages), ...(await readRobots(pages, startSpinner)), ...checkSitemapEntries(pages, inputs.listed)]
+}
+
 export async function run(argv, { stdin = process.stdin, lighthouse = runLighthouse } = {}) {
   let options
   try {
@@ -289,14 +305,12 @@ export async function run(argv, { stdin = process.stdin, lighthouse = runLightho
   if (!announceInputs(inputs, options)) return 2
 
   const pages = await auditUrls(inputs.urls, options, startSpinner)
-  if (options.lighthouse || inputs.marked.length) {
-    await addLighthouse(pages, startSpinner, lighthouse, { all: options.lighthouse, chosen: inputs.marked })
-  }
-  const site = [
-    ...checkSite(pages),
-    ...(await readRobots(pages, startSpinner)),
-    ...checkSitemapEntries(pages, inputs.listed)
-  ]
+  await addLighthouse(pages, startSpinner, lighthouse, {
+    all: options.lighthouse,
+    chosen: inputs.marked,
+    runs: options.lighthouseRuns
+  })
+  const site = await checkAllPages(pages, inputs, startSpinner)
   const report = buildReport({ pages, site, skipped: inputs.skipped })
   console.log(json ? JSON.stringify(report, null, 2) : formatReport(report, process.stdout.columns))
   if (!(await writeFiles(options, report, { logo, totalUrls: inputs.total }))) return 2
