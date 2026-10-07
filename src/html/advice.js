@@ -251,6 +251,31 @@ export const ADVICE = {
     why: 'The page code has almost no text, so the content appears only after scripts run. Some search engines and tools see an empty page, and this audit only reads the code, so its results for this page may be incomplete.',
     fix: 'Render the important content on the server so it is in the page code, or check how the page looks in Google Search Console.'
   },
+  'blocked-by-robots': {
+    title: 'Search engines are told to stay away from the page',
+    why: 'The robots.txt file of the site does not let Google crawl this page, so it cannot read it or rank it for what it says. That is right for private areas, but a problem on a page that should be found.',
+    fix: 'If the page should appear in search, remove the matching Disallow rule from robots.txt. If not, no action is needed.'
+  },
+  'robots-txt-unreachable': {
+    title: 'The robots.txt file could not be read',
+    why: 'The server answered with an error when asked for robots.txt. Google pauses crawling a site while it cannot read the file, and gives up on it after a while.',
+    fix: 'Make the server return the robots.txt file, or a plain "not found" if the site has none. Ask your host if the error keeps coming back.'
+  },
+  'sitemap-url-noindex': {
+    title: 'The sitemap lists a page that asks not to be indexed',
+    why: 'A sitemap says "please index these pages", while the pages themselves say "do not index me". Search engines get contradicting signals and may distrust the sitemap.',
+    fix: 'Remove the page from the sitemap, or remove the noindex if it should be found.'
+  },
+  'sitemap-url-not-canonical': {
+    title: 'The sitemap lists a page that points to another address',
+    why: 'The sitemap should list the preferred address of each page. This page says its preferred address is a different one, so the sitemap lists a duplicate.',
+    fix: 'List the address named as canonical on the page instead, and remove this one from the sitemap.'
+  },
+  'sitemap-url-redirects': {
+    title: 'The sitemap lists an address that redirects',
+    why: 'Search engines have to follow the redirect to reach the page, which wastes a request for every listed address.',
+    fix: 'List the final address of the page in the sitemap instead.'
+  },
   'lighthouse-failed': {
     title: 'The speed and quality test could not run',
     why: 'The scores for this page are missing from the report. The other checks still ran.',

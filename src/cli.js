@@ -1,7 +1,9 @@
 import { parseArgs } from 'node:util'
 import chalk from 'chalk'
 import ora from 'ora'
+import { checkRobotsTxt } from './checks/site/robots.js'
 import { checkSite } from './checks/site/index.js'
+import { checkSitemapEntries } from './checks/site/sitemap.js'
 import { readLogo } from './html/logo.js'
 import { renderHtml } from './html/render.js'
 import { fromArgs } from './input/args.js'
@@ -184,6 +186,17 @@ async function addLighthouse(pages, startSpinner, runner) {
   }
 }
 
+// Reads the robots.txt files of the audited sites, with a spinner because a slow host can take a while.
+async function readRobots(pages, startSpinner) {
+  const loaded = pages.some((page) => page.status === 200 && page.finalUrl)
+  const spinner = loaded ? startSpinner('Reading robots.txt...') : null
+  try {
+    return await checkRobotsTxt(pages)
+  } finally {
+    spinner?.stop()
+  }
+}
+
 // Writes the --out and --html files. Returns false after printing why when one failed.
 async function writeFiles(options, report, { logo, totalUrls }) {
   const files = []
@@ -243,7 +256,12 @@ export async function run(argv, { stdin = process.stdin, lighthouse = runLightho
 
   const pages = await auditUrls(inputs.urls, options, startSpinner)
   if (options.lighthouse) await addLighthouse(pages, startSpinner, lighthouse)
-  const report = buildReport({ pages, site: checkSite(pages), skipped: inputs.skipped })
+  const site = [
+    ...checkSite(pages),
+    ...(await readRobots(pages, startSpinner)),
+    ...checkSitemapEntries(pages, inputs.listed)
+  ]
+  const report = buildReport({ pages, site, skipped: inputs.skipped })
   console.log(json ? JSON.stringify(report, null, 2) : formatReport(report, process.stdout.columns))
   if (!(await writeFiles(options, report, { logo, totalUrls: inputs.total }))) return 2
 

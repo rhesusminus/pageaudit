@@ -23,5 +23,7 @@ export const SOURCES = {
   urlStructure: 'https://developers.google.com/search/docs/crawling-indexing/url-structure',
   googlebot: 'https://developers.google.com/search/docs/crawling-indexing/googlebot',
   javascriptSeo: 'https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics',
+  robotsTxt: 'https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt',
+  sitemaps: 'https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap',
   mixedContent: 'https://web.dev/articles/what-is-mixed-content'
 }

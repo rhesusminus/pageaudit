@@ -9,6 +9,7 @@ import { checkSocial } from './social.js'
 import { checkStructuredData } from './structured-data.js'
 
 export { checkFetchError, checkResponse } from './response.js'
+export { mergeRobotsIssues } from './robots-header.js'
 
 // Every check that looks at the parsed HTML of one page. `page` is { url, html }: the final URL and the raw body.
 export const checkHtml = ($, page = {}) => [

@@ -42,8 +42,8 @@ export async function fromSitemap(url, { timeout } = {}) {
   } catch (err) {
     throw new Error(`Could not read sitemap ${url}: ${reason(err)}`, { cause: err })
   }
-  const entries = (locs, source) => locs.map((value) => ({ value, source }))
-  if (sitemap.kind === 'urlset') return { entries: entries(sitemap.locs, `sitemap ${url}`), skipped: [] }
+  const entries = (locs, file) => locs.map((value) => ({ value, source: `sitemap ${file}`, sitemap: file }))
+  if (sitemap.kind === 'urlset') return { entries: entries(sitemap.locs, url), skipped: [] }
 
   const result = { entries: [], skipped: [] }
   for (const child of sitemap.locs) {
@@ -56,7 +56,7 @@ export async function fromSitemap(url, { timeout } = {}) {
       continue
     }
     if (nested.kind === 'index') skip('nested sitemap index (only one level is followed)')
-    else result.entries.push(...entries(nested.locs, `sitemap ${child}`))
+    else result.entries.push(...entries(nested.locs, child))
   }
   return result
 }

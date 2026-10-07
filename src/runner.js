@@ -1,5 +1,5 @@
 import { setTimeout as sleep } from 'node:timers/promises'
-import { checkFetchError, checkHtml, checkResponse, extractFacts } from './checks/page/index.js'
+import { checkFetchError, checkHtml, checkResponse, extractFacts, mergeRobotsIssues } from './checks/page/index.js'
 import { DEFAULT_TIMEOUT_MS, fetchPage as defaultFetchPage } from './fetch.js'
 import { parse } from './parse.js'
 
@@ -34,7 +34,7 @@ export async function auditPage(url, { fetchPage = defaultFetchPage, timeout = D
     issues.push(...checkHtml($, { url: finalUrl, html }))
     facts = extractFacts($, finalUrl)
   }
-  return { url, finalUrl, status, redirects, issues: withUrl(issues), facts }
+  return { url, finalUrl, status, redirects, issues: withUrl(mergeRobotsIssues(issues)), facts }
 }
 
 // Audits every URL with at most `concurrency` requests in flight, starting
