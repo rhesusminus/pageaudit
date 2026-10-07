@@ -1,12 +1,15 @@
 import { SOURCES } from '../../sources.js'
-import { seoIssue } from '../snippet.js'
+import { seoIssue, truncate } from '../snippet.js'
 
 // Rules that take a value after a colon, so that colon does not start a user agent prefix.
 const VALUE_RULES = new Set(['unavailable_after', 'max-snippet', 'max-image-preview', 'max-video-preview'])
-const PREFIXED = /^([a-z0-9_-]+)\s*:\s*(.*)$/
+// An agent name starts with a letter, so the 16 in a date like "16:00 GMT" is not one.
+const PREFIXED = /^([a-z][a-z0-9_-]*)\s*:\s*(.*)$/
 
 // The X-Robots-Tag rules that apply to Google: those without a user agent and those prefixed with googlebot.
-// A prefix applies to the rules after it. Repeated headers arrive joined with ", " so their boundaries are lost.
+// A prefix applies to the rules after it. Repeated headers arrive joined with ", " and fetch cannot give them back
+// separately, so a generic header after one for another crawler ("bingbot: nofollow" then "noindex") is read as
+// bingbot's and missed.
 export function googleRules(header) {
   const rules = []
   let agent = null
@@ -22,8 +25,9 @@ export function googleRules(header) {
   return rules
 }
 
-export function checkRobotsHeader({ robotsHeader }) {
-  if (!robotsHeader) return []
+// Error pages are often noindex on purpose and are already errors, so only a 200 is checked.
+export function checkRobotsHeader({ robotsHeader, status }) {
+  if (!robotsHeader || status !== 200) return []
   const rules = googleRules(robotsHeader)
   const context = `X-Robots-Tag: ${robotsHeader}`
   const issues = []
@@ -33,8 +37,7 @@ export function checkRobotsHeader({ robotsHeader }) {
         type: 'noindex',
         severity: 'warning',
         source: SOURCES.robotsMeta,
-        message:
-          'The server tells search engines not to index the page (X-Robots-Tag noindex), so it will not appear in search results',
+        message: 'The page tells search engines not to index it (noindex), so it will not appear in search results',
         context
       })
     )
@@ -45,10 +48,21 @@ export function checkRobotsHeader({ robotsHeader }) {
         type: 'nofollow',
         severity: 'info',
         source: SOURCES.robotsMeta,
-        message: 'The server tells search engines not to follow the links on the page (X-Robots-Tag nofollow)',
+        message: 'The page tells search engines not to follow its links (nofollow)',
         context
       })
     )
   }
   return issues
+}
+
+// A page can say noindex or nofollow in its meta tag and in its header. That is one finding with both sources as context.
+export function mergeRobotsIssues(issues) {
+  const merged = []
+  for (const issue of issues) {
+    const first = ['noindex', 'nofollow'].includes(issue.type) && merged.find((m) => m.type === issue.type)
+    if (!first) merged.push({ ...issue })
+    else if (!first.context.includes(issue.context)) first.context = truncate(`${first.context} and ${issue.context}`)
+  }
+  return merged
 }

@@ -179,8 +179,14 @@ test('resolve: listed maps each kept URL to the sitemaps it came from, also when
   assert.deepEqual(
     [...listed],
     [
-      ['https://a.test/1', ['https://a.test/s1.xml']],
-      ['https://a.test/2', ['https://a.test/s1.xml', 'https://a.test/s2.xml']]
+      ['https://a.test/1', [{ sitemap: 'https://a.test/s1.xml', url: 'https://a.test/1/' }]],
+      [
+        'https://a.test/2',
+        [
+          { sitemap: 'https://a.test/s1.xml', url: 'https://a.test/2' },
+          { sitemap: 'https://a.test/s2.xml', url: 'https://a.test/2' }
+        ]
+      ]
     ]
   )
 })

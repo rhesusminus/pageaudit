@@ -36,10 +36,41 @@ function httpUrl(url, value, what) {
   return parsed
 }
 
+// The final answer of a request: where it ended up and how to read the body.
+function answer(url, res, current, redirects, timeout) {
+  return {
+    finalUrl: current.href,
+    status: res.status,
+    redirects,
+    headers: res.headers,
+    async bytes() {
+      try {
+        return new Uint8Array(await res.arrayBuffer())
+      } catch (err) {
+        throw fetchError(url, err, timeout)
+      }
+    },
+    discard: () => res.body?.cancel().catch(() => {})
+  }
+}
+
+function redirectTarget(url, location, current) {
+  let target
+  try {
+    target = new URL(location, current).href
+  } catch {
+    target = location
+  }
+  return httpUrl(url, target, 'redirect location')
+}
+
 // GET that follows redirects by hand so every hop is recorded. One timeout covers
 // the whole chain and the body. Network failures throw a FetchError, HTTP error
-// statuses do not.
-export async function request(url, { timeout = DEFAULT_TIMEOUT_MS, accept = '*/*' } = {}) {
+// statuses do not. `maxRedirects` is the number of hops followed before giving up.
+export async function request(
+  url,
+  { timeout = DEFAULT_TIMEOUT_MS, accept = '*/*', maxRedirects = MAX_REDIRECTS } = {}
+) {
   const signal = AbortSignal.timeout(timeout)
   const redirects = []
   let current = httpUrl(url, url, 'URL')
@@ -47,31 +78,12 @@ export async function request(url, { timeout = DEFAULT_TIMEOUT_MS, accept = '*/*
     for (;;) {
       const res = await fetch(current, { redirect: 'manual', signal, headers: { accept, 'user-agent': USER_AGENT } })
       const location = res.headers.get('location')
-      if (!REDIRECT_STATUSES.has(res.status) || location === null) {
-        return {
-          finalUrl: current.href,
-          status: res.status,
-          redirects,
-          headers: res.headers,
-          async bytes() {
-            try {
-              return new Uint8Array(await res.arrayBuffer())
-            } catch (err) {
-              throw fetchError(url, err, timeout)
-            }
-          },
-          discard: () => res.body?.cancel().catch(() => {})
-        }
-      }
+      if (!REDIRECT_STATUSES.has(res.status) || location === null) return answer(url, res, current, redirects, timeout)
       await res.body?.cancel()
-      if (redirects.length === MAX_REDIRECTS) throw new FetchError(url, `more than ${MAX_REDIRECTS} redirects`)
-      let target
-      try {
-        target = new URL(location, current).href
-      } catch {
-        target = location
+      if (redirects.length === maxRedirects) {
+        throw Object.assign(new FetchError(url, `more than ${maxRedirects} redirects`), { tooManyRedirects: true })
       }
-      const next = httpUrl(url, target, 'redirect location')
+      const next = redirectTarget(url, location, current)
       redirects.push({ url: current.href, status: res.status, location: next.href })
       current = next
     }
