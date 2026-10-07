@@ -6,15 +6,19 @@ const MARKERS = new Set(['lighthouse'])
 
 // One URL per line. Blank lines are ignored, and # starts a comment at the start of a
 // line or after whitespace, so a # inside a URL is still read as a fragment. A URL can be followed by the
-// word "lighthouse" to get the detailed Lighthouse run. Anything else after a URL stays part of it, so the line
-// is skipped as not a valid URL.
+// word "lighthouse" to get the detailed Lighthouse run. Any other text after a URL rejects the line, so a typo in
+// the word never turns into a URL with a space in it.
 export function parseUrlList(content, name) {
   return content.split(/\r?\n/).flatMap((line, i) => {
     const text = line.replace(/(^|\s)#.*$/, '').trim()
     if (!text) return []
     const [first, ...rest] = text.split(/\s+/)
     const marked = rest.length > 0 && rest.every((word) => MARKERS.has(word.toLowerCase()))
-    return [{ value: marked ? first : text, source: `${name}:${i + 1}`, ...(marked ? { lighthouse: true } : {}) }]
+    const source = `${name}:${i + 1}`
+    if (rest.length === 0) return [{ value: first, source }]
+    if (marked) return [{ value: first, source, lighthouse: true }]
+    const reason = `unexpected text after the URL (only "lighthouse" may follow it): ${rest.join(' ')}`
+    return [{ value: text, source, rejected: reason }]
   })
 }
 

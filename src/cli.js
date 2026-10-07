@@ -154,8 +154,11 @@ function announceInputs({ urls, skipped, total }, options) {
     console.error('No URLs to audit.')
     return false
   }
-  if (total > urls.length) {
-    console.error(`Auditing the first ${urls.length} of ${total} URLs (--limit ${options.limit}).`)
+  if (options.limit && total > options.limit) {
+    // Pages picked for Lighthouse are kept past the limit.
+    const extra = urls.length - options.limit
+    const plus = extra > 0 ? `, plus ${extra} picked for Lighthouse` : ''
+    console.error(`Auditing the first ${options.limit} of ${total} URLs (--limit ${options.limit})${plus}.`)
   }
   return true
 }
@@ -176,16 +179,19 @@ async function auditUrls(urls, options, startSpinner) {
 
 // Runs Lighthouse once per distinct final URL (several inputs can redirect to the same
 // page) and attaches the outcome to every page that ended up there. `all` is --lighthouse and `chosen` the pages
-// picked with --lighthouse-page or a marker. Picked pages get the full detail. Without any picked page every
-// page does, and with some the others only get the short summary.
+// picked with --lighthouse-page or a marker, by the URL as given. Picked pages get the full detail, also when
+// another page lands on the same final URL. Without any picked page every page does, and with some the others only
+// get the short summary.
 async function addLighthouse(pages, startSpinner, runner, { all, chosen }) {
   const picked = new Set(chosen)
-  const targets = pages.filter((page) => page.facts !== null && (all || picked.has(page.url)))
+  const isPicked = (page) => picked.has(page.url)
+  // A page the user picked but that gave no HTML gets told why, instead of silently losing the run.
+  for (const page of pages.filter((p) => p.facts === null && isPicked(p))) {
+    page.issues.push(lighthouseFailed(page.url, 'the page did not return HTML'))
+  }
+  const targets = pages.filter((page) => page.facts !== null && (all || isPicked(page)))
   const urls = [...new Set(targets.map((page) => page.finalUrl))]
   if (!urls.length) return
-  const detailed = new Set(
-    targets.filter((page) => picked.size === 0 || picked.has(page.url)).map((page) => page.finalUrl)
-  )
   const progress = (done) => `Lighthouse ${done}/${urls.length} pages...`
   const spinner = startSpinner(progress(0))
   const results = await runner(urls, {
@@ -196,8 +202,8 @@ async function addLighthouse(pages, startSpinner, runner, { all, chosen }) {
   spinner?.stop()
   for (const page of targets) {
     const result = results[urls.indexOf(page.finalUrl)]
-    page.lighthouse =
-      result.summary && !detailed.has(page.finalUrl) ? shortSummary(result.summary) : (result.summary ?? null)
+    const detailed = picked.size === 0 || isPicked(page)
+    page.lighthouse = result.summary && !detailed ? shortSummary(result.summary) : (result.summary ?? null)
     if (result.error) page.issues.push(lighthouseFailed(page.url, result.error))
   }
 }
@@ -264,7 +270,7 @@ export async function run(argv, { stdin = process.stdin, lighthouse = runLightho
     console.log(HELP)
     return 0
   }
-  if (!options.urls.length && !options.files.length && !options.sitemaps.length) {
+  if (!options.urls.length && !options.files.length && !options.sitemaps.length && !options.lighthousePages.length) {
     console.error(USAGE)
     return 2
   }

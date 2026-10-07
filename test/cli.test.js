@@ -369,6 +369,61 @@ test('cli: a urls file marker picks the page, and --limit does not drop it', asy
   assert.equal(report.pages.length, 2)
 })
 
+test('cli: --lighthouse-page alone audits that one page', async (t) => {
+  const seen = []
+  const { code, report } = await runJson(t, ['--lighthouse-page', fixtureUrl('good.html')], {
+    lighthouse: lighthouseFor(seen)
+  })
+  assert.equal(code, 0)
+  assert.deepEqual(seen, [fixtureUrl('good.html')])
+  assert.equal(report.pages.length, 1)
+})
+
+test('cli: the limit message counts the pages picked for Lighthouse separately', async (t) => {
+  const dir = await tempDir(t)
+  const file = join(dir, 'urls.txt')
+  const lines = ['good.html', 'bad-missing.html', 'bad-overlong.html', 'bad-images.html', 'duplicate.html']
+  await writeFile(file, lines.map((name, i) => `${fixtureUrl(name)}${i === 4 ? ' lighthouse' : ''}`).join('\n'))
+  const { report, stderr } = await runJson(t, ['--urls-file', file, '--limit', '2'], {
+    lighthouse: lighthouseFor([])
+  })
+  assert.equal(report.pages.length, 3)
+  assert.match(stderr, /Auditing the first 2 of 5 URLs \(--limit 2\), plus 1 picked for Lighthouse\./)
+})
+
+test('cli: a picked page that gives no HTML says so instead of losing Lighthouse silently', async (t) => {
+  const seen = []
+  const args = [
+    fixtureUrl('good.html'),
+    '--lighthouse-page',
+    fixtureUrl('not-html'),
+    '--lighthouse-page',
+    fixtureUrl('missing-page')
+  ]
+  const { report } = await runJson(t, args, { lighthouse: lighthouseFor(seen) })
+  assert.deepEqual(seen, [])
+  for (const page of report.pages.slice(1)) {
+    const failed = page.issues.find((i) => i.type === 'lighthouse-failed')
+    assert.match(failed.message, /the page did not return HTML/)
+    assert.equal('lighthouse' in page, false)
+  }
+})
+
+test('cli: only picked pages get the full detail, also when an unpicked page redirects to the same final URL', async (t) => {
+  const args = [fixtureUrl('redirect-once'), '--lighthouse-page', fixtureUrl('good.html'), '--lighthouse']
+  const { report } = await runJson(t, args, { lighthouse: lighthouseFor([]) })
+  const [redirected, picked] = report.pages.map((p) => p.lighthouse.audits[0])
+  assert.deepEqual(Object.keys(redirected), ['id', 'category', 'title', 'score', 'displayValue'])
+  assert.deepEqual(picked.items, [{ url: 'a.js' }])
+})
+
+test('cli: a marker in a urls file read from stdin picks the page', async (t) => {
+  const stdin = Readable.from([`${fixtureUrl('good.html')}\n${fixtureUrl('bad-missing.html')}  lighthouse\n`])
+  const seen = []
+  await runJson(t, ['--urls-file', '-'], { stdin, lighthouse: lighthouseFor(seen) })
+  assert.deepEqual(seen, [fixtureUrl('bad-missing.html')])
+})
+
 test('cli: --lighthouse-page needs a value', async (t) => {
   const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), '--lighthouse-page', ''])
   assert.equal(code, 2)

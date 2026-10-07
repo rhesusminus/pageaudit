@@ -33,7 +33,11 @@ export function resolveUrls(entries, { limit = Infinity } = {}) {
   const urls = []
   const marked = new Set()
   const skipped = []
-  for (const { value, source, sitemap, lighthouse } of entries) {
+  for (const { value, source, sitemap, lighthouse, rejected } of entries) {
+    if (rejected) {
+      skipped.push({ input: value, source, reason: rejected })
+      continue
+    }
     let normalized
     try {
       normalized = normalize(value)

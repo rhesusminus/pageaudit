@@ -138,6 +138,8 @@ https://example.com/about
 - With picked pages and no `--lighthouse`, Lighthouse runs on those pages only, with the full detail above.
 - With `--lighthouse` too, the other pages get a short summary: scores, metrics and one line per failing audit (`id`, `category`, `title`, `score`, `displayValue`), without items, savings and descriptions.
 - With `--lighthouse` alone every page gets the full detail, as before.
+- A page is picked by the URL as you wrote it (the same page spelled the same way, ignoring a trailing slash, the host's case and a `#` fragment). `http://` and `https://` are different pages, and a page that redirects to a picked page's final URL does not get the full detail unless it is picked too. A picked page that does not return HTML gets an `info` issue saying so.
+- Any text other than `lighthouse` after a URL in a urls file skips that line with a reason, so a typo is never fetched as a URL with a space in it.
 
 If Chrome cannot start or a page cannot be audited, the page gets an `info` issue `lighthouse-failed`, its `lighthouse` is `null` and the run continues. Pages that redirect to the same final URL are audited once and share the result. Lighthouse findings are not issues and a failed run is only `info`, so neither changes the exit code, even with `--fail-on warning`.
 

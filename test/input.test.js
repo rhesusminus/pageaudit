@@ -157,17 +157,28 @@ test('resolve: merges inputs in order, dedupes and reports skipped inputs', asyn
   assert.equal(skipped[0].source, `${fixturePath('urls.txt')}:8`)
 })
 
-test('parseUrlList: the word lighthouse after a URL marks the page, other words leave the line invalid', () => {
-  const entries = parseUrlList(
-    'https://a.test/ lighthouse\nhttps://b.test/ LIGHTHOUSE # note\nhttps://c.test/ fast\nhttps://d.test/',
-    'f'
-  )
+test('parseUrlList: the word lighthouse after a URL marks the page, in any case, with tabs and a comment', () => {
+  const entries = parseUrlList('https://a.test/ lighthouse\nhttps://b.test/\tLIGHTHOUSE  # note\nhttps://d.test/', 'f')
   assert.deepEqual(entries, [
     { value: 'https://a.test/', source: 'f:1', lighthouse: true },
     { value: 'https://b.test/', source: 'f:2', lighthouse: true },
-    { value: 'https://c.test/ fast', source: 'f:3' },
-    { value: 'https://d.test/', source: 'f:4' }
+    { value: 'https://d.test/', source: 'f:3' }
   ])
+})
+
+test('resolve: other text after a URL, such as a mistyped marker, skips the line instead of fetching an odd URL', () => {
+  const entries = parseUrlList('https://c.test/page lighthuose\nhttps://x.test/d lighthouse,\nhttps://ok.test/', 'f')
+  const { urls, skipped, marked } = resolveUrls(entries)
+  assert.deepEqual(urls, ['https://ok.test/'])
+  assert.deepEqual(marked, [])
+  assert.deepEqual(
+    skipped.map(({ input, source }) => [input, source]),
+    [
+      ['https://c.test/page lighthuose', 'f:1'],
+      ['https://x.test/d lighthouse,', 'f:2']
+    ]
+  )
+  assert.match(skipped[0].reason, /unexpected text after the URL .*: lighthuose/)
 })
 
 test('resolve: limit caps the list after deduplication', () => {

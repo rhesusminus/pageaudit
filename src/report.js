@@ -77,17 +77,23 @@ function withSiteIds(site) {
 // What each failing Lighthouse audit means, once: the description and link are the same on every page, so they
 // move out of the pages into one map. Returns the pages' Lighthouse blocks without them and the map.
 function hoistAuditNotes(pages) {
-  const notes = {}
+  const notes = new Map()
   const lean = (lighthouse) =>
     lighthouse && {
       ...lighthouse,
       audits: lighthouse.audits.map(({ description, learnMore, ...audit }) => {
-        if ((description || learnMore) && !(audit.id in notes)) notes[audit.id] = { description, learnMore }
+        if (description || learnMore) {
+          const known = notes.get(audit.id) ?? {}
+          notes.set(audit.id, {
+            description: known.description ?? description,
+            learnMore: known.learnMore ?? learnMore
+          })
+        }
         return audit
       })
     }
   const blocks = pages.map((page) => lean(page.lighthouse))
-  return { blocks, notes }
+  return { blocks, notes: Object.fromEntries(notes) }
 }
 
 // The JSON report, which doubles as the data handed to Claude. `facts` is null for
@@ -105,7 +111,7 @@ export function buildReport({ pages, site, skipped = [], now = new Date() }) {
       redirects,
       issues,
       facts: reportFacts(facts),
-      // Only present when --lighthouse was used.
+      // Only present when Lighthouse ran for the page (--lighthouse, --lighthouse-page or a urls file marker).
       ...(lighthouse === undefined ? {} : { lighthouse: blocks[i] })
     })),
     site: withSiteIds(site),
