@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import robotsParser from 'robots-parser'
 import { checkRobotsTxt } from '../src/checks/site/robots.js'
 import { checkSitemapEntries } from '../src/checks/site/sitemap.js'
-import { checkRobotsHeader, googleRules } from '../src/checks/page/robots-header.js'
+import { checkRobotsHeader, googleRules, mergeRobotsIssues } from '../src/checks/page/robots-header.js'
 import { fetchPage } from '../src/fetch.js'
 import { auditPage } from '../src/runner.js'
 import { loadRobots } from '../src/robots.js'
@@ -310,4 +310,34 @@ test('loadRobots: more than five redirects count as no file, a body that cannot 
     return new Response(body, { status: 200 })
   })
   assert.equal(await loadRobots('https://x.test'), null)
+})
+
+test('noindex from a long header and the meta tag keep both sources in the context', () => {
+  const header = `X-Robots-Tag: googlebot: noindex, ${'max-snippet: 20, '.repeat(8)}notranslate`
+  const merged = mergeRobotsIssues([
+    { type: 'noindex', context: header.slice(0, 117) + '...' },
+    { type: 'other', context: 'x' },
+    { type: 'noindex', context: '<meta name="robots" content="noindex">' }
+  ])
+  assert.deepEqual(
+    merged.map((i) => i.type),
+    ['noindex', 'other']
+  )
+  assert.ok(merged[0].context.length <= 120)
+  assert.match(merged[0].context, /^X-Robots-Tag: googlebot: noindex.*\.\.\. and <meta name="robots" content="noind/)
+})
+
+test('robots.txt check: no more than eight origins are read at once', async () => {
+  let running = 0
+  let peak = 0
+  const pages = Array.from({ length: 20 }, (_, i) => page(`https://h${i}.test/`))
+  await checkRobotsTxt(pages, {
+    load: async () => {
+      peak = Math.max(peak, ++running)
+      await new Promise((resolve) => setImmediate(resolve))
+      running--
+      return { status: 'missing' }
+    }
+  })
+  assert.equal(peak, 8)
 })

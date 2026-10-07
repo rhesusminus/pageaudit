@@ -1,5 +1,6 @@
 import { SOURCES } from '../../sources.js'
-import { seoIssue, truncate } from '../snippet.js'
+import { limit } from '../../text.js'
+import { seoIssue } from '../snippet.js'
 
 // Rules that take a value after a colon, so that colon does not start a user agent prefix.
 const VALUE_RULES = new Set(['unavailable_after', 'max-snippet', 'max-image-preview', 'max-video-preview'])
@@ -56,13 +57,24 @@ export function checkRobotsHeader({ robotsHeader, status }) {
   return issues
 }
 
-// A page can say noindex or nofollow in its meta tag and in its header. That is one finding with both sources as context.
+const CONTEXT_MAX = 120
+const SEPARATOR = ' and '
+
+// A page can say noindex or nofollow in its meta tag and in its header. That is one finding with both sources as
+// context, each source getting an equal share of the room so that a long header cannot push the meta tag out.
 export function mergeRobotsIssues(issues) {
-  const merged = []
-  for (const issue of issues) {
-    const first = ['noindex', 'nofollow'].includes(issue.type) && merged.find((m) => m.type === issue.type)
-    if (!first) merged.push({ ...issue })
-    else if (!first.context.includes(issue.context)) first.context = truncate(`${first.context} and ${issue.context}`)
+  const contexts = new Map()
+  for (const { type, context } of issues) {
+    if (!['noindex', 'nofollow'].includes(type)) continue
+    contexts.set(type, [...new Set([...(contexts.get(type) ?? []), context])])
   }
-  return merged
+  const done = new Set()
+  return issues.flatMap((issue) => {
+    if (!contexts.has(issue.type)) return [issue]
+    if (done.has(issue.type)) return []
+    done.add(issue.type)
+    const all = contexts.get(issue.type)
+    const room = Math.floor((CONTEXT_MAX - SEPARATOR.length * (all.length - 1)) / all.length)
+    return [{ ...issue, context: all.map((context) => limit(context, room)).join(SEPARATOR) }]
+  })
 }

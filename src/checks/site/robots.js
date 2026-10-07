@@ -2,6 +2,8 @@ import { loadRobots } from '../../robots.js'
 import { SOURCES } from '../../sources.js'
 
 const GOOGLEBOT = 'Googlebot'
+// Most audits touch one or a few hosts, a sitemap index can span many.
+const MAX_CONCURRENT = 8
 
 const issue = (fields) => ({ category: 'seo', source: SOURCES.robotsTxt, ...fields })
 
@@ -41,8 +43,16 @@ export async function checkRobotsTxt(pages, { load = loadRobots } = {}) {
     byOrigin.set(origin, [...(byOrigin.get(origin) ?? []), page])
   }
   // The origins are read at the same time, one slow host should not hold up the rest.
-  const checked = await Promise.all(
-    [...byOrigin].map(async ([origin, group]) => checkOrigin(origin, await load(origin), group))
-  )
+  const origins = [...byOrigin]
+  const checked = new Array(origins.length)
+  let next = 0
+  async function worker() {
+    while (next < origins.length) {
+      const i = next++
+      const [origin, group] = origins[i]
+      checked[i] = checkOrigin(origin, await load(origin), group)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENT, origins.length) }, worker))
   return checked.flat()
 }

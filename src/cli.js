@@ -188,7 +188,8 @@ async function addLighthouse(pages, startSpinner, runner) {
 
 // Reads the robots.txt files of the audited sites, with a spinner because a slow host can take a while.
 async function readRobots(pages, startSpinner) {
-  const spinner = startSpinner('Reading robots.txt...')
+  const loaded = pages.some((page) => page.status === 200 && page.finalUrl)
+  const spinner = loaded ? startSpinner('Reading robots.txt...') : null
   try {
     return await checkRobotsTxt(pages)
   } finally {

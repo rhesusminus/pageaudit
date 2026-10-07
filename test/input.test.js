@@ -190,3 +190,9 @@ test('resolve: listed maps each kept URL to the sitemaps it came from, also when
     ]
   )
 })
+
+test('resolve: the same URL twice in one sitemap is listed once', () => {
+  const entry = { value: 'https://a.test/1', source: 'sitemap https://a.test/s.xml', sitemap: 'https://a.test/s.xml' }
+  const { listed } = resolveUrls([entry, entry])
+  assert.deepEqual(listed.get('https://a.test/1'), [{ sitemap: 'https://a.test/s.xml', url: 'https://a.test/1' }])
+})
