@@ -11,7 +11,7 @@ import { fromFile } from './input/file.js'
 import { resolveUrls } from './input/resolve.js'
 import { fromSitemap } from './input/sitemap.js'
 import { lighthouseFailed, runLighthouse } from './lighthouse.js'
-import { writeReportFile } from './output.js'
+import { directoryOutputs, writeReportFile } from './output.js'
 import { buildReport, formatReport } from './report.js'
 import { DEFAULT_CONCURRENCY, DEFAULT_DELAY_MS, runAudit } from './runner.js'
 
@@ -226,6 +226,16 @@ async function loadLogo(path) {
   }
 }
 
+// Report files that are directories fail only after the whole audit, so they are refused up front.
+async function outputsAreFiles(options) {
+  const directories = await directoryOutputs([
+    ['--out', options.out],
+    ['--html', options.html]
+  ])
+  if (directories.length) console.error(directories.join('\n'))
+  return directories.length === 0
+}
+
 export async function run(argv, { stdin = process.stdin, lighthouse = runLighthouse } = {}) {
   let options
   try {
@@ -242,6 +252,8 @@ export async function run(argv, { stdin = process.stdin, lighthouse = runLightho
     console.error(USAGE)
     return 2
   }
+
+  if (!(await outputsAreFiles(options))) return 2
 
   const logo = await loadLogo(options.branding.logo)
   if (logo === undefined) return 2

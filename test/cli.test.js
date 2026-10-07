@@ -400,6 +400,20 @@ test('cli: --html with --lighthouse shows the scores', async (t) => {
   assert.match(out, /Largest Contentful Paint/)
 })
 
+test('cli: --out or --html naming a directory exits 2 before any page is fetched', async (t) => {
+  const dir = await tempDir(t)
+  const fetchMock = mockFixtureFetch(t)
+  const errors = []
+  t.mock.method(console, 'error', (...a) => errors.push(a.join(' ')))
+  assert.equal(await run([fixtureUrl('good.html'), '--out', dir, '--html', `${dir}/`, '--json']), 2)
+  assert.equal(errors.length, 1)
+  assert.ok(errors[0].includes(`--out needs a file path, but "${dir}" is a directory (for example ${dir}/report.json)`))
+  assert.ok(
+    errors[0].includes(`--html needs a file path, but "${dir}/" is a directory (for example ${dir}/report.html)`)
+  )
+  assert.equal(fetchMock.mock.callCount(), 0)
+})
+
 test('cli: --html to an unwritable path exits 2', async (t) => {
   const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), '--html', '/no/such/dir/r.html', '--json'])
   assert.equal(code, 2)
