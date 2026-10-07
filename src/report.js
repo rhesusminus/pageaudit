@@ -74,14 +74,31 @@ function withSiteIds(site) {
   return site.map((issue, i) => ({ id: ids[i], ...issue }))
 }
 
+// What each failing Lighthouse audit means, once: the description and link are the same on every page, so they
+// move out of the pages into one map. Returns the pages' Lighthouse blocks without them and the map.
+function hoistAuditNotes(pages) {
+  const notes = {}
+  const lean = (lighthouse) =>
+    lighthouse && {
+      ...lighthouse,
+      audits: lighthouse.audits.map(({ description, learnMore, ...audit }) => {
+        if ((description || learnMore) && !(audit.id in notes)) notes[audit.id] = { description, learnMore }
+        return audit
+      })
+    }
+  const blocks = pages.map((page) => lean(page.lighthouse))
+  return { blocks, notes }
+}
+
 // The JSON report, which doubles as the data handed to Claude. `facts` is null for
 // pages that returned no HTML.
 export function buildReport({ pages, site, skipped = [], now = new Date() }) {
   const issues = [...pages.flatMap((page) => page.issues), ...site]
   const totals = countSeverities(issues)
+  const { blocks, notes } = hoistAuditNotes(pages)
   return {
     generatedAt: now.toISOString(),
-    pages: pages.map(({ url, finalUrl, status, redirects, issues, facts, lighthouse }) => ({
+    pages: pages.map(({ url, finalUrl, status, redirects, issues, facts, lighthouse }, i) => ({
       url,
       finalUrl,
       status,
@@ -89,11 +106,12 @@ export function buildReport({ pages, site, skipped = [], now = new Date() }) {
       issues,
       facts: reportFacts(facts),
       // Only present when --lighthouse was used.
-      ...(lighthouse === undefined ? {} : { lighthouse })
+      ...(lighthouse === undefined ? {} : { lighthouse: blocks[i] })
     })),
     site: withSiteIds(site),
     skipped,
     rules: reportRules(issues),
+    ...(Object.keys(notes).length > 0 ? { lighthouseAudits: notes } : {}),
     summary: { pages: pages.length, ...totals }
   }
 }
@@ -183,7 +201,7 @@ const metricText = ({ fcp, lcp, tbt, cls, speedIndex }) => {
 }
 
 // Scores, core metrics and the worst failing audits of one page's Lighthouse run.
-export function formatLighthouse({ scores, metrics, audits }, columns) {
+export function formatLighthouse({ scores, metrics, audits, omittedAudits = 0 }, columns) {
   const scoreLine = Object.entries(scores)
     .map(([id, score]) => `${id} ${score === null ? chalk.dim('n/a') : scoreColor(score)(String(score))}`)
     .join('  ')
@@ -197,8 +215,8 @@ export function formatLighthouse({ scores, metrics, audits }, columns) {
       wrap(a.displayValue ?? '', widths[3])
     ])
   }
-  const more =
-    audits.length > MAX_AUDITS ? chalk.dim(`  ...and ${audits.length - MAX_AUDITS} more in the JSON report`) : ''
+  const left = Math.max(audits.length - MAX_AUDITS, 0) + omittedAudits
+  const more = left > 0 ? chalk.dim(`  ...and ${left} more`) : ''
   return [
     `  Lighthouse: ${scoreLine}`,
     chalk.dim(`  ${metricText(metrics)}`),

@@ -17,6 +17,8 @@ cat urls.txt | node bin/pageaudit.js --urls-file -              # the same list 
 node bin/pageaudit.js --sitemap https://example.com/sitemap.xml
 node bin/pageaudit.js https://example.com --json                # raw JSON report
 node bin/pageaudit.js https://example.com --lighthouse          # also run Lighthouse (needs Chrome)
+node bin/pageaudit.js --sitemap https://example.com/sitemap.xml \
+  --lighthouse-page https://example.com/ --lighthouse-page https://example.com/products/a   # full Lighthouse detail on key pages only
 npm test
 ```
 
@@ -34,21 +36,22 @@ Link-following crawling is not supported.
 
 ### Options
 
-| Option               | Default | Meaning                                                                                                                |
-| -------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `--urls-file <path>` |         | Read URLs from a file, one per line. `#` starts a comment at the start of a line or after whitespace. `-` reads stdin. |
-| `--sitemap <url>`    |         | Read URLs from a sitemap or sitemap index.                                                                             |
-| `--limit <n>`        | all     | Audit at most `n` pages.                                                                                               |
-| `--concurrency <n>`  | 3       | Pages fetched at the same time.                                                                                        |
-| `--delay <ms>`       | 200     | Minimum time between starting requests to the same host.                                                               |
-| `--fail-on <level>`  | `error` | `warning` makes warnings fail the run too (for CI).                                                                    |
-| `--lighthouse`       | off     | Also run Lighthouse on every page that returned HTML. Needs a local Chrome or Chromium. See below.                     |
-| `--out <path>`       |         | Also write the JSON report to a file, for example to hand to Claude. Exits 2 if the file cannot be written.            |
-| `--html <path>`      |         | Also write a report for customers as one self-contained HTML file. See below.                                          |
-| `--title <text>`     |         | Report title in the HTML report (default `Website audit`). Needs `--html`.                                             |
-| `--client <name>`    |         | Client name in the HTML report. Needs `--html`.                                                                        |
-| `--logo <file>`      |         | Logo for the HTML report: png, jpg, gif, webp or svg, at most 512 KB. Needs `--html`.                                  |
-| `--json`             |         | Print the JSON report. Also the default when stdout is not a TTY.                                                      |
+| Option                    | Default | Meaning                                                                                                                                                                                                             |
+| ------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--urls-file <path>`      |         | Read URLs from a file, one per line. `#` starts a comment at the start of a line or after whitespace. A URL can be followed by `lighthouse`. `-` reads stdin.                                                       |
+| `--sitemap <url>`         |         | Read URLs from a sitemap or sitemap index.                                                                                                                                                                          |
+| `--limit <n>`             | all     | Audit at most `n` pages.                                                                                                                                                                                            |
+| `--concurrency <n>`       | 3       | Pages fetched at the same time.                                                                                                                                                                                     |
+| `--delay <ms>`            | 200     | Minimum time between starting requests to the same host.                                                                                                                                                            |
+| `--fail-on <level>`       | `error` | `warning` makes warnings fail the run too (for CI).                                                                                                                                                                 |
+| `--lighthouse`            | off     | Also run Lighthouse on every page that returned HTML. Needs a local Chrome or Chromium. See below.                                                                                                                  |
+| `--lighthouse-page <url>` |         | Run Lighthouse with full detail on this page. Can be repeated. The page is added to the audit if missing and `--limit` never drops it. In a `--urls-file`, a URL followed by `lighthouse` does the same. See below. |
+| `--out <path>`            |         | Also write the JSON report to a file, for example to hand to Claude. Exits 2 if the file cannot be written.                                                                                                         |
+| `--html <path>`           |         | Also write a report for customers as one self-contained HTML file. See below.                                                                                                                                       |
+| `--title <text>`          |         | Report title in the HTML report (default `Website audit`). Needs `--html`.                                                                                                                                          |
+| `--client <name>`         |         | Client name in the HTML report. Needs `--html`.                                                                                                                                                                     |
+| `--logo <file>`           |         | Logo for the HTML report: png, jpg, gif, webp or svg, at most 512 KB. Needs `--html`.                                                                                                                               |
+| `--json`                  |         | Print the JSON report. Also the default when stdout is not a TTY.                                                                                                                                                   |
 
 Each request has a 15 s timeout (covering redirects and the body), follows up to 10 redirects and sends `User-Agent: pageaudit/<version> (+https://github.com/rhesusminus/pageaudit)`.
 
@@ -120,8 +123,21 @@ The JSON report gets a `lighthouse` object on each audited page instead of the f
 
 - `scores`: 0 to 100 for `performance`, `accessibility`, `best-practices` and `seo`
 - `metrics`: `fcp`, `lcp`, `tbt`, `speedIndex` in ms and `cls`
-- `audits`: only the audits scoring below 90, worst first, each with its category, title, score, display value, Lighthouse's plain-words `description` and first `learnMore` link, the `savings` when Lighthouse worked them out, and up to five affected `items`. `savings` can hold `ms` and `bytes` (overall) and `metrics` (the gain per metric: `fcp`, `lcp`, `inp`, `tbt` in ms and `cls`). Zero is left out, as it means no estimate. An item has only the fields Lighthouse gave: `url` (with `line`), `selector`, `nodeLabel`, `snippet`, `explanation` (why it fails, such as the contrast ratio, up to 500 characters), `label` (a failed check, a console error or a third party), `wastedMs`, `wastedBytes` and `totalBytes`. Other text is capped at 300 characters. `items` used to be a list of strings
+- `audits`: only the audits scoring below 90, worst first, at most the 10 worst (`omittedAudits` counts the rest). Each has its category, title, score, display value, the `savings` when Lighthouse worked them out, and up to three affected `items`. `savings` can hold `ms` and `bytes` (overall) and `metrics` (the gain per metric: `fcp`, `lcp`, `inp`, `tbt` in ms and `cls`). Zero is left out, as it means no estimate. An item has only the fields Lighthouse gave: `url` (with `line`), `selector`, `nodeLabel`, `snippet`, `explanation` (why it fails, such as the contrast ratio, up to 500 characters), `label` (a failed check, a console error or a third party), `wastedMs`, `wastedBytes` and `totalBytes`. Other text is capped at 300 characters. `items` used to be a list of strings
+- the top-level `lighthouseAudits` object holds each audit's plain-words `description` and first `learnMore` link once, by audit id, instead of on every page
 - `warnings`: Lighthouse run warnings, plus a line for any audit that crashed inside Lighthouse
+
+**Keeping the report small.** Pick the pages that matter (the landing page, a product page or two) with `--lighthouse-page <url>` or by writing `lighthouse` after a URL in the urls file:
+
+```
+https://example.com/              lighthouse
+https://example.com/products/a    lighthouse
+https://example.com/about
+```
+
+- With picked pages and no `--lighthouse`, Lighthouse runs on those pages only, with the full detail above.
+- With `--lighthouse` too, the other pages get a short summary: scores, metrics and one line per failing audit (`id`, `category`, `title`, `score`, `displayValue`), without items, savings and descriptions.
+- With `--lighthouse` alone every page gets the full detail, as before.
 
 If Chrome cannot start or a page cannot be audited, the page gets an `info` issue `lighthouse-failed`, its `lighthouse` is `null` and the run continues. Pages that redirect to the same final URL are audited once and share the result. Lighthouse findings are not issues and a failed run is only `info`, so neither changes the exit code, even with `--fail-on warning`.
 
@@ -246,7 +262,7 @@ src/
   cli.js                arg parsing, spinner, wires the pipeline together
   input/
     args.js             URLs from CLI arguments
-    file.js             URLs from --urls-file (or stdin)
+    file.js             URLs from --urls-file (or stdin), with the optional lighthouse marker
     sitemap.js          URLs from --sitemap, following a sitemap index one level deep
     resolve.js          merge, normalize, dedupe, apply --limit
   lighthouse.js         runLighthouse(urls): optional Lighthouse run, trimmed to scores, metrics and failing audits

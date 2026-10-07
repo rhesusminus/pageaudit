@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { lighthouseFailed, runLighthouse, summarize } from '../src/lighthouse.js'
+import { lighthouseFailed, runLighthouse, shortSummary, summarize } from '../src/lighthouse.js'
 
 const audit = (id, score, extra = {}) => ({ id, title: `Title ${id}`, score, scoreDisplayMode: 'binary', ...extra })
 
@@ -69,14 +69,12 @@ test('summarize: keeps only failing audits that belong to a category, worst firs
   )
 })
 
-test('summarize: keeps what a fix needs from at most five affected items', () => {
+test('summarize: keeps what a fix needs from at most three affected items', () => {
   const unused = summarize(LHR).audits.find((a) => a.id === 'unused-css')
   assert.deepEqual(unused.items, [
     { url: 'a.css', wastedMs: 81, wastedBytes: 1000, totalBytes: 5000 },
     { selector: 'div.hero > b', nodeLabel: 'Bold', snippet: '<b>', explanation: 'Low contrast' },
-    { label: 'c' },
-    { url: 'd.css' },
-    { url: 'e.css' }
+    { label: 'c' }
   ])
   assert.equal(unused.displayValue, null)
 })
@@ -209,15 +207,13 @@ test('summarize: list details are flattened into tables, nodes and sections', ()
     items: [
       { type: 'node', selector: 'img.hero', snippet: '<img class="hero">', nodeLabel: 'Hero' },
       { type: 'list-section', value: 'Request is not discoverable' },
-      { type: 'table', items: [{ url: 'a.js', wastedMs: 40 }] },
-      { type: 'checklist', items: { preload: { value: false, label: 'Preload the image' } } }
+      { type: 'table', items: [{ url: 'a.js', wastedMs: 40 }] }
     ]
   }
   assert.deepEqual(itemsOf({ details }), [
     { selector: 'img.hero', snippet: '<img class="hero">', nodeLabel: 'Hero' },
     { label: 'Request is not discoverable' },
-    { url: 'a.js', wastedMs: 40 },
-    { label: 'Preload the image' }
+    { url: 'a.js', wastedMs: 40 }
   ])
 })
 
@@ -226,18 +222,25 @@ test('summarize: items with other shapes keep their address, line, message, enti
     items: [
       { source: 'exception', description: 'TypeError: x is undefined', sourceLocation: { url: 'app.js', line: 9 } },
       { url: { type: 'link', url: 'b.js' }, source: { url: 'ignored.js' } },
-      { source: { type: 'node', selector: 'html', snippet: '<html>' } },
-      { entity: { type: 'link', text: 'Google Fonts', url: 'https://fonts.google.com' } },
-      { node: { selector: 'img', snippet: '<img>' }, subItems: { items: [{ reason: 'Use a modern format' }] } },
-      { url: '   ', source: { url: 'fallback.js' } }
+      { source: { type: 'node', selector: 'html', snippet: '<html>' } }
     ]
   }
   assert.deepEqual(itemsOf({ details }), [
     { url: 'app.js', line: 10, label: 'TypeError: x is undefined' },
     { url: 'b.js' },
-    { selector: 'html', snippet: '<html>' },
+    { selector: 'html', snippet: '<html>' }
+  ])
+  const more = {
+    items: [
+      { entity: { type: 'link', text: 'Google Fonts', url: 'https://fonts.google.com' } },
+      { node: { selector: 'img', snippet: '<img>' }, subItems: { items: [{ reason: 'Use a modern format' }] } },
+      { url: '   ', source: { url: 'fallback.js' } }
+    ]
+  }
+  assert.deepEqual(itemsOf({ details: more }), [
     { label: 'Google Fonts' },
-    { selector: 'img', snippet: '<img>', explanation: 'Use a modern format' }
+    { selector: 'img', snippet: '<img>', explanation: 'Use a modern format' },
+    { url: 'fallback.js' }
   ])
 })
 
@@ -287,4 +290,29 @@ test('summarize: descriptions cope with parentheses in links, relative links and
   const none = describe('No links here.')
   assert.equal(none.description, 'No links here.')
   assert.equal('description' in describe(undefined), false)
+})
+
+test('summarize: keeps the ten worst audits and counts the rest', () => {
+  const ids = Array.from({ length: 13 }, (_, i) => `a${i}`)
+  const lhr = {
+    categories: { seo: { score: 0.5, auditRefs: ids.map((id) => ({ id })) } },
+    audits: Object.fromEntries(ids.map((id, i) => [id, audit(id, i / 20)]))
+  }
+  const { audits, omittedAudits } = summarize(lhr)
+  assert.deepEqual(
+    audits.map((a) => a.id),
+    ids.slice(0, 10)
+  )
+  assert.equal(omittedAudits, 3)
+  assert.equal('omittedAudits' in summarize(LHR), false)
+})
+
+test('shortSummary: keeps scores, metrics and one line per audit, without items, descriptions or savings', () => {
+  const full = summarize(LHR)
+  const short = shortSummary(full)
+  assert.deepEqual(short.scores, full.scores)
+  assert.deepEqual(short.metrics, full.metrics)
+  assert.deepEqual(short.warnings, full.warnings)
+  for (const a of short.audits) assert.deepEqual(Object.keys(a), ['id', 'category', 'title', 'score', 'displayValue'])
+  assert.equal(short.audits.length, full.audits.length)
 })

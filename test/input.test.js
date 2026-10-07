@@ -157,14 +157,41 @@ test('resolve: merges inputs in order, dedupes and reports skipped inputs', asyn
   assert.equal(skipped[0].source, `${fixturePath('urls.txt')}:8`)
 })
 
+test('parseUrlList: the word lighthouse after a URL marks the page, other words leave the line invalid', () => {
+  const entries = parseUrlList(
+    'https://a.test/ lighthouse\nhttps://b.test/ LIGHTHOUSE # note\nhttps://c.test/ fast\nhttps://d.test/',
+    'f'
+  )
+  assert.deepEqual(entries, [
+    { value: 'https://a.test/', source: 'f:1', lighthouse: true },
+    { value: 'https://b.test/', source: 'f:2', lighthouse: true },
+    { value: 'https://c.test/ fast', source: 'f:3' },
+    { value: 'https://d.test/', source: 'f:4' }
+  ])
+})
+
 test('resolve: limit caps the list after deduplication', () => {
   const entries = fromArgs(['https://a.test/1', 'https://a.test/1/', 'https://a.test/2', 'https://a.test/3'])
   assert.deepEqual(resolveUrls(entries, { limit: 2 }), {
     urls: ['https://a.test/1', 'https://a.test/2'],
     skipped: [],
     total: 3,
-    listed: new Map()
+    listed: new Map(),
+    marked: []
   })
+})
+
+test('resolve: pages marked for Lighthouse are kept, also past the limit, and marking a duplicate marks the first', () => {
+  const entries = [
+    ...fromArgs(['https://a.test/1', 'https://a.test/2', 'https://a.test/3', 'https://a.test/4']),
+    { value: 'https://a.test/4/', source: 'option', lighthouse: true },
+    { value: 'https://a.test/1', source: 'f:1', lighthouse: true },
+    { value: 'https://a.test/9', source: 'option', lighthouse: true }
+  ]
+  const { urls, total, marked } = resolveUrls(entries, { limit: 2 })
+  assert.deepEqual(urls, ['https://a.test/1', 'https://a.test/2', 'https://a.test/4', 'https://a.test/9'])
+  assert.deepEqual(marked, ['https://a.test/1', 'https://a.test/4', 'https://a.test/9'])
+  assert.equal(total, 5)
 })
 
 test('resolve: listed maps each kept URL to the sitemaps it came from, also when another input came first', () => {

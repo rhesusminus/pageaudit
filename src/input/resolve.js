@@ -24,14 +24,16 @@ const addListing = (listings = [], listing) =>
 
 // Merges entries from every input, in order, into a deduplicated URL list. The
 // first spelling of a page wins. Rejected inputs are returned with the reason.
+// `marked` lists the kept URLs that an entry asked Lighthouse for (`lighthouse: true`). The limit never drops them.
 // `listed` maps each kept URL to where a sitemap listed it, as { sitemap, url } with the
 // spelling that sitemap used, also when the first spelling came from another input.
 export function resolveUrls(entries, { limit = Infinity } = {}) {
   const seen = new Map()
   const sitemaps = new Map()
   const urls = []
+  const marked = new Set()
   const skipped = []
-  for (const { value, source, sitemap } of entries) {
+  for (const { value, source, sitemap, lighthouse } of entries) {
     let normalized
     try {
       normalized = normalize(value)
@@ -41,12 +43,16 @@ export function resolveUrls(entries, { limit = Infinity } = {}) {
     }
     if (sitemap)
       sitemaps.set(normalized.key, addListing(sitemaps.get(normalized.key), { sitemap, url: normalized.url }))
+    if (lighthouse) marked.add(normalized.key)
     if (seen.has(normalized.key)) continue
     seen.set(normalized.key, normalized.url)
     urls.push(normalized.url)
   }
+  const markedUrls = urls.filter((url) => marked.has(pageKey(url)))
+  const keep = new Set(markedUrls)
+  const kept = urls.filter((url, i) => i < limit || keep.has(url))
   const listed = new Map([...seen].filter(([key]) => sitemaps.has(key)).map(([key, url]) => [url, sitemaps.get(key)]))
-  return { urls: urls.slice(0, limit), skipped, total: urls.length, listed }
+  return { urls: kept, skipped, total: urls.length, listed, marked: markedUrls }
 }
 
 // The deduplication key of a URL, or the URL itself when it cannot be normalized.

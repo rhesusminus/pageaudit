@@ -310,6 +310,71 @@ test('cli: a Lighthouse failure is an info issue on the page and does not stop t
   assert.deepEqual(report.summary, { pages: 1, errors: 0, warnings: 0, infos: 1 })
 })
 
+const detailedSummary = {
+  scores: { seo: 90 },
+  metrics: {},
+  audits: [
+    {
+      id: 'x',
+      category: 'seo',
+      title: 'X',
+      score: 0,
+      displayValue: null,
+      description: 'Why x matters.',
+      learnMore: 'https://x.test/',
+      savings: { ms: 5 },
+      items: [{ url: 'a.js' }]
+    }
+  ],
+  warnings: []
+}
+const lighthouseFor = (seen) => async (list) => (seen.push(...list), list.map(() => ({ summary: detailedSummary })))
+
+test('cli: --lighthouse-page runs only those pages, adds them to the audit, and the report keeps the detail', async (t) => {
+  const seen = []
+  const args = [fixtureUrl('good.html'), '--lighthouse-page', fixtureUrl('bad-overlong.html')]
+  const { report } = await runJson(t, args, { lighthouse: lighthouseFor(seen) })
+  assert.deepEqual(seen, [fixtureUrl('bad-overlong.html')])
+  assert.equal(report.pages.length, 2)
+  assert.equal('lighthouse' in report.pages[0], false)
+  assert.deepEqual(report.pages[1].lighthouse.audits[0].items, [{ url: 'a.js' }])
+  assert.deepEqual(report.lighthouseAudits, { x: { description: 'Why x matters.', learnMore: 'https://x.test/' } })
+  assert.equal('description' in report.pages[1].lighthouse.audits[0], false)
+})
+
+test('cli: --lighthouse with --lighthouse-page gives the others the short summary, and no pick gives all detail', async (t) => {
+  const both = [fixtureUrl('good.html'), fixtureUrl('bad-overlong.html'), '--lighthouse']
+  const picked = await runJson(t, [...both, '--lighthouse-page', fixtureUrl('bad-overlong.html')], {
+    lighthouse: lighthouseFor([])
+  })
+  assert.deepEqual(Object.keys(picked.report.pages[0].lighthouse.audits[0]), [
+    'id',
+    'category',
+    'title',
+    'score',
+    'displayValue'
+  ])
+  assert.deepEqual(picked.report.pages[1].lighthouse.audits[0].items, [{ url: 'a.js' }])
+  const plain = await runJson(t, both, { lighthouse: lighthouseFor([]) })
+  assert.deepEqual(plain.report.pages[0].lighthouse.audits[0].items, [{ url: 'a.js' }])
+})
+
+test('cli: a urls file marker picks the page, and --limit does not drop it', async (t) => {
+  const dir = await tempDir(t)
+  const file = join(dir, 'urls.txt')
+  await writeFile(file, `${fixtureUrl('good.html')}\n${fixtureUrl('bad-overlong.html')} lighthouse\n`)
+  const seen = []
+  const { report } = await runJson(t, ['--urls-file', file, '--limit', '1'], { lighthouse: lighthouseFor(seen) })
+  assert.deepEqual(seen, [fixtureUrl('bad-overlong.html')])
+  assert.equal(report.pages.length, 2)
+})
+
+test('cli: --lighthouse-page needs a value', async (t) => {
+  const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), '--lighthouse-page', ''])
+  assert.equal(code, 2)
+  assert.match(stderr, /--lighthouse-page needs a value/)
+})
+
 test('cli: without --lighthouse the report has no lighthouse key and the runner is not called', async (t) => {
   const lighthouse = async () => assert.fail('should not run')
   const { report } = await runJson(t, [fixtureUrl('good.html')], { lighthouse })

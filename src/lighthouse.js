@@ -5,6 +5,8 @@ export const CATEGORIES = ['performance', 'accessibility', 'best-practices', 'se
 
 // Audits scoring below this are kept. Lighthouse itself calls 0.9 and up "good".
 const GOOD_SCORE = 0.9
+// The worst audits kept per page. The rest are only counted, so one page cannot grow the report without bound.
+const MAX_AUDITS = 10
 // Display modes that carry a real score. Informative and manual audits have none.
 const SCORED_MODES = new Set(['binary', 'numeric', 'metricSavings'])
 const METRICS = {
@@ -55,17 +57,31 @@ const brokenMessage = (audit) => `Audit ${audit.id} failed: ${audit.errorMessage
 export function summarize(lhr) {
   const categoryOf = categoryByAudit(lhr.categories)
   const audits = Object.values(lhr.audits)
+  const failing = audits
+    .filter((a) => SCORED_MODES.has(a.scoreDisplayMode) && a.score !== null && a.score < GOOD_SCORE)
+    .filter((a) => categoryOf.has(a.id))
+    .sort((a, b) => a.score - b.score)
   return {
     scores: Object.fromEntries(Object.entries(lhr.categories).map(([id, { score }]) => [id, percent(score)])),
     metrics: Object.fromEntries(Object.entries(METRICS).map(([key, id]) => [key, metricValue(lhr.audits[id])])),
-    audits: audits
-      .filter((a) => SCORED_MODES.has(a.scoreDisplayMode) && a.score !== null && a.score < GOOD_SCORE)
-      .filter((a) => categoryOf.has(a.id))
-      .sort((a, b) => a.score - b.score)
-      .map((a) => summarizeAudit(a, categoryOf.get(a.id))),
+    audits: failing.slice(0, MAX_AUDITS).map((a) => summarizeAudit(a, categoryOf.get(a.id))),
+    ...(failing.length > MAX_AUDITS ? { omittedAudits: failing.length - MAX_AUDITS } : {}),
     warnings: [...(lhr.runWarnings ?? []), ...audits.filter(isBroken).map(brokenMessage)]
   }
 }
+
+// The short form for pages that were not picked: scores, metrics and one line per failing audit, without the
+// affected items, descriptions and savings.
+export const shortSummary = (summary) => ({
+  ...summary,
+  audits: summary.audits.map(({ id, category, title, score, displayValue }) => ({
+    id,
+    category,
+    title,
+    score,
+    displayValue
+  }))
+})
 
 // Loaded on demand: Lighthouse is heavy and most runs never use it.
 async function loadDefaults() {

@@ -10,7 +10,7 @@ import { fromArgs } from './input/args.js'
 import { fromFile } from './input/file.js'
 import { resolveUrls } from './input/resolve.js'
 import { fromSitemap } from './input/sitemap.js'
-import { lighthouseFailed, runLighthouse } from './lighthouse.js'
+import { lighthouseFailed, runLighthouse, shortSummary } from './lighthouse.js'
 import { directoryOutputs, writeReportFile } from './output.js'
 import { buildReport, formatReport } from './report.js'
 import { DEFAULT_CONCURRENCY, DEFAULT_DELAY_MS, runAudit } from './runner.js'
@@ -30,6 +30,11 @@ Options:
   --concurrency <n>    pages fetched at the same time (default ${DEFAULT_CONCURRENCY})
   --delay <ms>         minimum time between requests to the same host (default ${DEFAULT_DELAY_MS})
   --lighthouse         also run Lighthouse (needs Chrome) on every page that returned HTML, one at a time
+  --lighthouse-page <url>
+                       run Lighthouse with full detail on this page (added to the audit if missing, never cut by
+                       --limit). A URL in a --urls-file can be followed by "lighthouse" to do the same.
+                       With these and no --lighthouse, only those pages run. With --lighthouse too, the others
+                       get a short summary.
   --fail-on <level>    exit 1 on any "error" (default) or on any "warning" or error
   --out <path>         also write the JSON report to a file, for example to hand to Claude
   --html <path>        also write a report for customers as one self-contained HTML file
@@ -39,7 +44,7 @@ Options:
   --json               print the report as JSON (default when stdout is not a TTY)
   -h, --help           show this help
 
---urls-file and --sitemap can be given more than once.`
+--urls-file, --sitemap and --lighthouse-page can be given more than once.`
 
 const OPTIONS = {
   'urls-file': { type: 'string', multiple: true },
@@ -48,6 +53,7 @@ const OPTIONS = {
   concurrency: { type: 'string' },
   delay: { type: 'string' },
   lighthouse: { type: 'boolean' },
+  'lighthouse-page': { type: 'string', multiple: true },
   out: { type: 'string' },
   html: { type: 'string' },
   title: { type: 'string' },
@@ -82,6 +88,7 @@ function requireValues(values, names) {
 function parseOptions(argv) {
   const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: OPTIONS })
   requireValues(values, ['out', 'html', 'title', 'client', 'logo'])
+  if (values['lighthouse-page']?.includes('')) throw new Error('--lighthouse-page needs a value')
   const failOn = values['fail-on'] ?? 'error'
   if (failOn !== 'error' && failOn !== 'warning') {
     throw new Error(`--fail-on must be "error" or "warning", got "${failOn}"`)
@@ -99,6 +106,7 @@ function parseOptions(argv) {
     delay: integer('delay', values.delay, 0),
     failOn,
     lighthouse: values.lighthouse,
+    lighthousePages: values['lighthouse-page'] ?? [],
     out: values.out,
     html: values.html,
     branding: { title: values.title, client: values.client, logo: values.logo },
@@ -110,6 +118,7 @@ function parseOptions(argv) {
 // that cannot be read, a sitemap that cannot be fetched); bad URLs are skipped.
 async function readInputs(options, stdin, spinner) {
   const entries = fromArgs(options.urls)
+  const chosen = options.lighthousePages.map((value) => ({ value, source: '--lighthouse-page', lighthouse: true }))
   const skipped = []
   for (const path of options.files) entries.push(...(await fromFile(path, { stdin })))
   for (const url of options.sitemaps) {
@@ -118,7 +127,7 @@ async function readInputs(options, stdin, spinner) {
     entries.push(...sitemap.entries)
     skipped.push(...sitemap.skipped)
   }
-  const resolved = resolveUrls(entries, { limit: options.limit })
+  const resolved = resolveUrls([...entries, ...chosen], { limit: options.limit })
   return { ...resolved, skipped: [...skipped, ...resolved.skipped] }
 }
 
@@ -166,11 +175,17 @@ async function auditUrls(urls, options, startSpinner) {
 }
 
 // Runs Lighthouse once per distinct final URL (several inputs can redirect to the same
-// page) and attaches the outcome to every page that ended up there.
-async function addLighthouse(pages, startSpinner, runner) {
-  const targets = pages.filter((page) => page.facts !== null)
+// page) and attaches the outcome to every page that ended up there. `all` is --lighthouse and `chosen` the pages
+// picked with --lighthouse-page or a marker. Picked pages get the full detail. Without any picked page every
+// page does, and with some the others only get the short summary.
+async function addLighthouse(pages, startSpinner, runner, { all, chosen }) {
+  const picked = new Set(chosen)
+  const targets = pages.filter((page) => page.facts !== null && (all || picked.has(page.url)))
   const urls = [...new Set(targets.map((page) => page.finalUrl))]
   if (!urls.length) return
+  const detailed = new Set(
+    targets.filter((page) => picked.size === 0 || picked.has(page.url)).map((page) => page.finalUrl)
+  )
   const progress = (done) => `Lighthouse ${done}/${urls.length} pages...`
   const spinner = startSpinner(progress(0))
   const results = await runner(urls, {
@@ -181,7 +196,8 @@ async function addLighthouse(pages, startSpinner, runner) {
   spinner?.stop()
   for (const page of targets) {
     const result = results[urls.indexOf(page.finalUrl)]
-    page.lighthouse = result.summary ?? null
+    page.lighthouse =
+      result.summary && !detailed.has(page.finalUrl) ? shortSummary(result.summary) : (result.summary ?? null)
     if (result.error) page.issues.push(lighthouseFailed(page.url, result.error))
   }
 }
@@ -267,7 +283,9 @@ export async function run(argv, { stdin = process.stdin, lighthouse = runLightho
   if (!announceInputs(inputs, options)) return 2
 
   const pages = await auditUrls(inputs.urls, options, startSpinner)
-  if (options.lighthouse) await addLighthouse(pages, startSpinner, lighthouse)
+  if (options.lighthouse || inputs.marked.length) {
+    await addLighthouse(pages, startSpinner, lighthouse, { all: options.lighthouse, chosen: inputs.marked })
+  }
   const site = [
     ...checkSite(pages),
     ...(await readRobots(pages, startSpinner)),

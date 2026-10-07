@@ -224,7 +224,7 @@ function metricRow([key, { label }], metrics) {
 function lighthouseBlock(lighthouse) {
   if (!lighthouse) return ''
   const audits = lighthouse.audits.slice(0, MAX_AUDITS)
-  const more = lighthouse.audits.length - audits.length
+  const more = lighthouse.audits.length - audits.length + (lighthouse.omittedAudits ?? 0)
   return markup`<h4>Speed and quality test</h4>
     <ul class="chips">
       ${Object.entries(lighthouse.scores).map(([id, score]) => markup`<li class="chip chip-${score === null ? 'unknown' : scoreBand(score)}">${CATEGORY_NAMES[id] ?? id} <strong>${score ?? 'n/a'}</strong></li>`)}
@@ -240,7 +240,7 @@ function lighthouseBlock(lighthouse) {
             <ul class="audits">
               ${audits.map((a) => markup`<li><span class="audit-score">${a.score}/100</span> ${a.title}${a.displayValue ? markup` <span class="note">${a.displayValue}</span>` : ''}</li>`)}
             </ul>
-            ${more > 0 ? markup`<p class="note">${plural(more, 'more finding')} in the JSON report.</p>` : ''}`
+            ${more > 0 ? markup`<p class="note">${plural(more, 'more finding')} not listed here.</p>` : ''}`
         : ''
     }`
 }
