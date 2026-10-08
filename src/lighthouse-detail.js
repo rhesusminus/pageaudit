@@ -79,7 +79,11 @@ export function describe(audit) {
   return defined({ description, learnMore })
 }
 
-const rounded = (value) => (typeof value === 'number' && value > 0 ? Number(value.toFixed(3)) : undefined)
+// Rounded first, so a value that rounds to zero is no estimate, like any other zero.
+const rounded = (value) => {
+  const result = typeof value === 'number' ? Number(value.toFixed(3)) : 0
+  return result > 0 ? result : undefined
+}
 
 // What fixing the audit would save, when Lighthouse worked it out: overall time and bytes, and the gain per metric
 // (`metricSavings`, which all the newer audits use). Layout shift is unitless, the rest are milliseconds.

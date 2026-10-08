@@ -78,6 +78,15 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["url", "finalUrl", "status", "redirects", "issues", "facts"],
+      "if": { "properties": { "status": { "type": "null" } }, "required": ["status"] },
+      "then": {
+        "properties": {
+          "finalUrl": { "type": "null" },
+          "redirects": { "type": "array", "maxItems": 0 },
+          "facts": { "type": "null" }
+        }
+      },
+      "else": { "properties": { "finalUrl": { "type": "string" }, "status": { "type": "integer" } } },
       "properties": {
         "url": { "type": "string", "description": "The address as audited, after normalizing." },
         "finalUrl": {
@@ -282,8 +291,8 @@
         },
         "runs": {
           "type": "integer",
-          "minimum": 2,
-          "description": "Runs that succeeded. Only with --lighthouse-runs above 1."
+          "minimum": 1,
+          "description": "Runs that succeeded, so it can be lower than asked for. Only with --lighthouse-runs above 1."
         },
         "scoreSpread": {
           "description": "Lowest and highest score by category over the runs.",
@@ -341,7 +350,7 @@
       "required": ["id", "category", "title", "score", "displayValue"],
       "properties": {
         "id": { "type": "string" },
-        "category": { "type": "string" },
+        "category": { "enum": ["performance", "accessibility", "best-practices", "seo"] },
         "title": { "type": "string" },
         "score": { "$ref": "#/$defs/score" },
         "displayValue": { "$ref": "#/$defs/nullableString" },

@@ -4,11 +4,13 @@ import assert from 'node:assert/strict'
 import Ajv2020 from 'ajv/dist/2020.js'
 import addFormats from 'ajv-formats'
 import { run } from '../src/cli.js'
+import { runLighthouse } from '../src/lighthouse.js'
 import { SCHEMA_VERSION } from '../src/report.js'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
 
 const schema = JSON.parse(await readFile(new URL('../schema/report.schema.json', import.meta.url), 'utf8'))
-const ajv = new Ajv2020({ strict: true, strictTypes: false, allErrors: true })
+// allowUnionTypes: fields such as `actual` are a number or a string and `facts` an object or null.
+const ajv = new Ajv2020({ strict: true, allowUnionTypes: true, allErrors: true })
 addFormats(ajv)
 const validate = ajv.compile(schema)
 const check = (report) => {
@@ -18,43 +20,75 @@ const check = (report) => {
 
 const url = (name) => `${FIXTURE_HOST}/${name}`
 
-// A Lighthouse result with every optional field, so the schema is tested against all of them.
-const fullSummary = {
-  lighthouseVersion: '13.5.0',
-  formFactor: 'mobile',
-  scores: { performance: 40, accessibility: null, 'best-practices': 100, seo: 90 },
-  runs: 2,
-  scoreSpread: { performance: [40, 50], accessibility: null },
-  metrics: { fcp: 1000, lcp: 5000, tbt: 300, cls: 0.5, speedIndex: null },
-  lcpElement: { selector: 'main > img', snippet: null },
-  audits: [
-    {
-      id: 'unused-css',
-      category: 'performance',
-      title: 'Reduce unused CSS',
-      score: 0,
-      displayValue: null,
-      description: 'Remove unused rules.',
-      learnMore: 'https://web.dev/x',
-      savings: { ms: 100, bytes: 2048, metrics: { lcp: 300, cls: 0.02 } },
-      items: [
-        {
-          url: 'a.css',
-          line: 3,
-          selector: 'div > b',
-          nodeLabel: 'Bold',
-          snippet: '<b>',
-          explanation: 'Why',
-          label: 'c',
-          wastedMs: 80,
-          wastedBytes: 1000,
-          totalBytes: 5000
-        }
-      ]
-    }
-  ],
-  omittedAudits: 3,
-  warnings: ['slow CPU']
+// Lighthouse through the real runLighthouse with a fake Chrome and a result with every optional field, so the
+// digest is built by the code and not by hand. `behave(n)` says what the nth run does: a score, or 'fail'.
+const FAILING = Array.from({ length: 12 }, (_, i) => `audit-${i}`)
+
+const audit = (id, extra = {}) => ({ id, title: id, score: 0, scoreDisplayMode: 'binary', ...extra })
+
+// An audit with a saving of every kind and an affected item with every field.
+const UNUSED_CSS = audit('unused-css', {
+  scoreDisplayMode: 'metricSavings',
+  description: 'Remove unused rules. [Learn more](https://web.dev/x).',
+  metricSavings: { LCP: 300, CLS: 0.02, INP: 0.2 },
+  details: {
+    overallSavingsMs: 100,
+    overallSavingsBytes: 2048,
+    items: [
+      {
+        url: 'a.css',
+        sourceLocation: { url: 'a.css', line: 2 },
+        node: { selector: 'div > b', snippet: '<b>', nodeLabel: 'Bold', explanation: 'Why' },
+        label: 'c',
+        wastedMs: 80,
+        wastedBytes: 1000,
+        totalBytes: 5000
+      }
+    ]
+  }
+})
+
+const METRIC_AUDITS = {
+  'first-contentful-paint': audit('first-contentful-paint', { score: 1, numericValue: 1000 }),
+  'largest-contentful-paint': audit('largest-contentful-paint', { score: 1, numericValue: 5000 }),
+  'total-blocking-time': audit('total-blocking-time', { score: 1, numericValue: 300 }),
+  'cumulative-layout-shift': audit('cumulative-layout-shift', { score: 1, numericValue: 0.5 }),
+  'speed-index': audit('speed-index', { score: 1 }),
+  'lcp-breakdown-insight': audit('lcp-breakdown-insight', {
+    scoreDisplayMode: 'informative',
+    details: { type: 'list', items: [{ type: 'node', selector: 'main > img', snippet: '<img>' }] }
+  })
+}
+
+function lhr(performance) {
+  return {
+    lighthouseVersion: '13.5.0',
+    configSettings: { formFactor: 'mobile' },
+    categories: {
+      performance: { score: performance, auditRefs: [{ id: 'unused-css' }, ...FAILING.map((id) => ({ id }))] },
+      accessibility: { score: null, auditRefs: [] },
+      'best-practices': { score: 1, auditRefs: [] },
+      seo: { score: 0.9, auditRefs: [] }
+    },
+    audits: {
+      ...METRIC_AUDITS,
+      'unused-css': UNUSED_CSS,
+      ...Object.fromEntries(FAILING.map((id, i) => [id, audit(id, { score: i / 20 })]))
+    },
+    runWarnings: ['slow CPU']
+  }
+}
+
+// A runner for run(): Lighthouse itself is real, Chrome and the Lighthouse call are fakes.
+function lighthouseRunner(behave) {
+  let n = 0
+  const lighthouse = async () => {
+    const outcome = behave(n++)
+    if (outcome === 'fail') throw new Error('Chrome crashed')
+    return { lhr: lhr(outcome) }
+  }
+  const launch = async () => ({ port: 1, kill: async () => {} })
+  return (urls, options) => runLighthouse(urls, { ...options, launch, lighthouse })
 }
 
 // Pages that between them produce every kind of issue, an unreachable page and a page without HTML.
@@ -78,12 +112,12 @@ const NAMES = [
 ]
 
 // Every kind of page and issue the fixtures produce, plus both Lighthouse levels.
-async function fullReport(t, extra = []) {
+async function fullReport(t, extra = [], behave = (n) => 0.4 + (n % 2) / 10) {
   mockFixtureFetch(t)
   const out = []
   t.mock.method(console, 'log', (...a) => out.push(a.join(' ')))
   t.mock.method(console, 'error', () => {})
-  const lighthouse = async (urls) => urls.map(() => ({ summary: fullSummary }))
+  const lighthouse = lighthouseRunner(behave)
   const args = [
     ...NAMES.map(url),
     '--sitemap',
@@ -95,6 +129,8 @@ async function fullReport(t, extra = []) {
     '--lighthouse',
     '--lighthouse-page',
     url('good.html'),
+    '--lighthouse-runs',
+    '2',
     '--json',
     '--delay',
     '0',
@@ -117,6 +153,41 @@ test('schema: a report with every kind of page, issue and Lighthouse level match
   assert.ok(report.pages.flatMap((p) => p.issues).some((i) => i.selector && i.html && i.parentHtml))
   assert.ok(report.pages.flatMap((p) => p.issues).some((i) => i.actual !== undefined && i.expected))
   assert.ok(report.lighthouseAudits)
+})
+
+test('schema: Lighthouse output built by the real code matches, with the digest fields the schema lists', async (t) => {
+  const report = await fullReport(t)
+  const digest = report.pages.find((p) => p.lighthouse?.audits[0]?.items).lighthouse
+  assert.equal(digest.runs, 2)
+  assert.ok(digest.scoreSpread.performance)
+  assert.equal(digest.lcpElement.selector, 'main > img')
+  assert.ok(digest.omittedAudits > 0)
+  const audit = digest.audits.find((a) => a.id === 'unused-css')
+  assert.deepEqual(Object.keys(audit.savings).toSorted(), ['bytes', 'metrics', 'ms'])
+  assert.deepEqual(Object.keys(audit.savings.metrics).toSorted(), ['cls', 'lcp'])
+  assert.deepEqual(Object.keys(audit.items[0]).toSorted(), [
+    'explanation',
+    'label',
+    'line',
+    'nodeLabel',
+    'selector',
+    'snippet',
+    'totalBytes',
+    'url',
+    'wastedBytes',
+    'wastedMs'
+  ])
+})
+
+test('schema: failed Lighthouse runs match it - partial, total and a page that gave no HTML', async (t) => {
+  const partial = await fullReport(t, ['--lighthouse-runs', '3'], (n) => (n % 3 === 0 ? 0.5 : 'fail'))
+  assert.deepEqual(check(partial), [])
+  assert.ok(partial.pages.some((p) => p.lighthouse?.runs === 1))
+  const total = await fullReport(t, [], () => 'fail')
+  assert.deepEqual(check(total), [])
+  const failed = total.pages.filter((p) => p.lighthouse === null)
+  assert.ok(failed.length > 0)
+  for (const page of failed) assert.ok(page.issues.some((i) => i.type === 'lighthouse-failed' && i.id))
 })
 
 test('schema: a report without Lighthouse matches it', async (t) => {
@@ -143,6 +214,10 @@ const BREAKING = {
   'a negative count': (r) => (r.summary.errors = -1),
   'a mistyped metric': (r) => (lighthouseOf(r).metrics.lcp = 'slow'),
   'an unknown audit field': (r) => (lighthouseOf(r).audits[0].junk = 1),
+  'a final URL without a status': (r) => (r.pages.find((p) => p.status === null).finalUrl = 'https://a.test/'),
+  'an issue without an id': (r) => delete r.pages.find((p) => p.issues.length).issues[0].id,
+  "an audit category outside Lighthouse's four": (r) => (lighthouseOf(r).audits[0].category = 'best-practice'),
+  'no successful run': (r) => (lighthouseOf(r).runs = 0),
   'more audits than the cap': (r) => (lighthouseOf(r).audits = Array(11).fill(lighthouseOf(r).audits[0]))
 }
 

@@ -1,3 +1,4 @@
+import { issueId } from './issue-id.js'
 import { SOURCES } from './sources.js'
 import { describe, itemsOf, savings } from './lighthouse-detail.js'
 
@@ -187,6 +188,7 @@ export async function runLighthouse(
 // tooling one because the failed run covered all four Lighthouse categories.
 export const lighthouseFailed = (url, message) => ({
   url,
+  id: issueId(url, 'lighthouse-failed', ''),
   type: 'lighthouse-failed',
   severity: 'info',
   category: 'best-practice',
