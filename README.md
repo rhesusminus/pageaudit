@@ -121,8 +121,11 @@ With `--lighthouse`, each page that returned HTML is also audited by [Lighthouse
 
 The JSON report gets a `lighthouse` object on each audited page instead of the full Lighthouse result, which is far too large to read or hand to a model:
 
+- `lighthouseVersion` and `formFactor` (`mobile` by default), so a number can be placed later
 - `scores`: 0 to 100 for `performance`, `accessibility`, `best-practices` and `seo`
 - `metrics`: `fcp`, `lcp`, `tbt`, `speedIndex` in ms and `cls`
+- `lcpElement`: `{ selector, snippet }` of the element behind the largest contentful paint, when Lighthouse found it
+- `runs` and `scoreSpread` (`[lowest, highest]` per category), placed after `scores`, only with `--lighthouse-runs` above 1
 - `audits`: only the audits scoring below 90, worst first, at most the 10 worst (`omittedAudits` counts the rest). Each has its category, title, score, display value, the `savings` when Lighthouse worked them out, and up to three affected `items`. `savings` can hold `ms` and `bytes` (overall) and `metrics` (the gain per metric: `fcp`, `lcp`, `inp`, `tbt` in ms and `cls`). Zero is left out, as it means no estimate. An item has only the fields Lighthouse gave: `url` (with `line`), `selector`, `nodeLabel`, `snippet`, `explanation` (why it fails, such as the contrast ratio, up to 500 characters), `label` (a failed check, a console error or a third party), `wastedMs`, `wastedBytes` and `totalBytes`. Other text is capped at 300 characters. `items` used to be a list of strings
 - the top-level `lighthouseAudits` object holds each audit's plain-words `description` and first `learnMore` link once, by audit id, instead of on every page
 - `warnings`: Lighthouse run warnings, plus a line for any audit that crashed inside Lighthouse
@@ -141,7 +144,11 @@ https://example.com/about
 - A page is picked by the URL as you wrote it (the same page spelled the same way, ignoring a trailing slash, the host's case and a `#` fragment). `http://` and `https://` are different pages, and a page that redirects to a picked page's final URL does not get the full detail unless it is picked too. A picked page that does not return HTML gets an `info` issue saying so.
 - Any text other than `lighthouse` after a URL in a urls file skips that line with a reason, so a typo is never fetched as a URL with a space in it.
 
-If Chrome cannot start or a page cannot be audited, the page gets an `info` issue `lighthouse-failed`, its `lighthouse` is `null` and the run continues. Pages that redirect to the same final URL are audited once and share the result. Lighthouse findings are not issues and a failed run is only `info`, so neither changes the exit code, even with `--fail-on warning`.
+**Lab numbers and the rules built on them.** Lighthouse measures one simulated load on one machine, so the same page can score 58 on one run and 86 on the next. Use `--lighthouse-runs 3` for steadier numbers: the page is run three times, one after another, and the median run (by performance score, the lower one for an even count) supplies the scores, metrics and audits. A failed run is dropped, and only when every run fails does the page get `lighthouse-failed`. The time grows with the number of runs, the size of the report does not.
+
+The numbers also become normal issues, so they show up in the `rules` block and the HTML "What to fix" list: `lcp-slow`, `cls-high` and `tbt-high` (an `info` past the "good" limit and a `warning` past the "poor" one) and `score-low-performance`, `score-low-accessibility`, `score-low-best-practices` and `score-low-seo` (`info` under 90, `warning` under 50). They are never errors, so at the default `--fail-on error` a noisy run cannot fail a build. With `--fail-on warning` they count, so a run that tips LCP from 3.9 s to 4.1 s can fail it: use `--lighthouse-runs 3` there. This is a change from earlier versions, where Lighthouse never touched the exit code. The slow LCP issue carries the LCP element as `selector` and `html`. The audits behind the issues stay in the `lighthouse` object.
+
+If Chrome cannot start or a page cannot be audited, the page gets an `info` issue `lighthouse-failed`, its `lighthouse` is `null` and the run continues. Pages that redirect to the same final URL are audited once and share the result. A failed run is only `info`, so it never changes the exit code, even with `--fail-on warning`.
 
 ## Checks
 
@@ -149,49 +156,51 @@ Rules follow what Google and the W3C actually say, not folklore, so severities a
 
 ### Page checks
 
-| Group    | Rule                                                                                                                                                        | Severity | Category      |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------- |
-| Images   | `missing-alt`: no `alt` attribute                                                                                                                           | error    | accessibility |
-| Images   | `empty-alt-in-link`: empty alt on an image that is the only content of a link or button                                                                     | error    | accessibility |
-| Images   | `empty-alt`: `alt=""` (correct for decorative images, flagged for review)                                                                                   | info     | accessibility |
-| Images   | `alt-is-filename`: alt text repeats the file name                                                                                                           | warning  | accessibility |
-| Images   | `missing-src`: no `src` or `srcset`                                                                                                                         | warning  | seo           |
-| Images   | `generic-filename`: e.g. `IMG00023.JPG`, `image1.jpg`                                                                                                       | info     | seo           |
-| Images   | `missing-dimensions`: no `width` or `height` (layout shift)                                                                                                 | warning  | performance   |
-| Meta     | `missing-title`, `empty-title` (the title is also found outside `<head>`, but not inside an `<svg>`)                                                        | error    | seo           |
-| Meta     | `long-title`: over 60 characters                                                                                                                            | warning  | seo           |
-| Meta     | `missing-description` (Google may build the snippet from the page instead)                                                                                  | warning  | seo           |
-| Meta     | `long-description` (over 160) and `short-description` (under 70)                                                                                            | info     | seo           |
-| Meta     | `multiple-descriptions` (only one is used, the first non-empty one is checked; empty ones count toward the total)                                           | warning  | seo           |
-| Meta     | `missing-canonical` (also when the link is outside `<head>`, where Google ignores it)                                                                       | warning  | seo           |
-| Meta     | `multiple-canonicals`: several canonicals with different hrefs (conflicting signals)                                                                        | warning  | seo           |
-| Meta     | `multiple-canonicals`: several canonicals with identical hrefs (redundant)                                                                                  | info     | seo           |
-| Meta     | `relative-canonical`, `canonical-fragment`, `empty-canonical`                                                                                               | warning  | seo           |
-| Headings | `missing-h1` (Google does not require one)                                                                                                                  | warning  | best-practice |
-| Headings | `multiple-h1` (Google does not mind)                                                                                                                        | info     | best-practice |
-| Headings | `skipped-heading-level`: e.g. `<h3>` with no preceding `<h2>`                                                                                               | warning  | accessibility |
-| Headings | `empty-heading` (no text, `aria-label`, `aria-labelledby` or image alt)                                                                                     | warning  | accessibility |
-| Social   | `missing-open-graph`: no `og:*` tags (Google Search does not use them, they shape link previews)                                                            | info     | best-practice |
-| Social   | `incomplete-open-graph`: `og:title`, `og:description` or `og:image` missing                                                                                 | info     | best-practice |
-| Social   | `missing-twitter-card`: no `twitter:card`                                                                                                                   | info     | best-practice |
-| Indexing | `noindex`: `robots` or `googlebot` meta tag with `noindex` or `none` (often intentional). The `X-Robots-Tag` header is checked too and gives the same issue | warning  | seo           |
-| Indexing | `nofollow`: `robots` or `googlebot` meta tag with `nofollow` or `none`                                                                                      | info     | seo           |
-| Indexing | `missing-viewport`: no viewport meta tag                                                                                                                    | warning  | seo           |
-| Indexing | `missing-lang`: no `lang` on `<html>`                                                                                                                       | warning  | accessibility |
-| Schema   | `invalid-json-ld`: a JSON-LD block that does not parse                                                                                                      | warning  | seo           |
-| Schema   | `json-ld-missing-context`: no `@context`                                                                                                                    | warning  | seo           |
-| Schema   | `json-ld-relative-url`: `url`, `image`, `logo`, `sameAs` or `contentUrl` is not absolute                                                                    | warning  | seo           |
-| Schema   | `unsupported-schema-type`: HowTo, FAQPage and other types Google's search gallery has no rich result for                                                    | info     | seo           |
-| Schema   | `missing-schema-property`: Product without `name` and one of `offers`, `review`, `aggregateRating`; BreadcrumbList without `itemListElement`                | warning  | seo           |
-| URL      | `long-url` (over 100 characters), `url-underscores`, `url-uppercase`                                                                                        | info     | seo           |
-| HTML     | `html-too-large`: over 2 MB, the part Googlebot reads                                                                                                       | warning  | seo           |
-| HTML     | `mixed-content`: `http://` resource on an `https` page                                                                                                      | warning  | best-practice |
-| HTML     | `client-side-rendered`: almost no text and an empty app root, so the raw HTML results may be incomplete                                                     | info     | best-practice |
-| Response | `fetch-failed`: network error, timeout or more than 10 redirects                                                                                            | error    | seo           |
-| Response | `http-status`: any status other than 200 (the HTML checks are skipped)                                                                                      | error    | seo           |
-| Response | `not-html`: the content type is not HTML, for example a PDF in a sitemap (the HTML checks are skipped)                                                      | info     | seo           |
-| Response | `redirect-chain`: more than one redirect before the final page                                                                                              | warning  | seo           |
-| Response | `redirect`: one redirect (the final URL is audited)                                                                                                         | info     | seo           |
+| Group      | Rule                                                                                                                                                        | Severity        | Category      |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ------------- |
+| Images     | `missing-alt`: no `alt` attribute                                                                                                                           | error           | accessibility |
+| Images     | `empty-alt-in-link`: empty alt on an image that is the only content of a link or button                                                                     | error           | accessibility |
+| Images     | `empty-alt`: `alt=""` (correct for decorative images, flagged for review)                                                                                   | info            | accessibility |
+| Images     | `alt-is-filename`: alt text repeats the file name                                                                                                           | warning         | accessibility |
+| Images     | `missing-src`: no `src` or `srcset`                                                                                                                         | warning         | seo           |
+| Images     | `generic-filename`: e.g. `IMG00023.JPG`, `image1.jpg`                                                                                                       | info            | seo           |
+| Images     | `missing-dimensions`: no `width` or `height` (layout shift)                                                                                                 | warning         | performance   |
+| Meta       | `missing-title`, `empty-title` (the title is also found outside `<head>`, but not inside an `<svg>`)                                                        | error           | seo           |
+| Meta       | `long-title`: over 60 characters                                                                                                                            | warning         | seo           |
+| Meta       | `missing-description` (Google may build the snippet from the page instead)                                                                                  | warning         | seo           |
+| Meta       | `long-description` (over 160) and `short-description` (under 70)                                                                                            | info            | seo           |
+| Meta       | `multiple-descriptions` (only one is used, the first non-empty one is checked; empty ones count toward the total)                                           | warning         | seo           |
+| Meta       | `missing-canonical` (also when the link is outside `<head>`, where Google ignores it)                                                                       | warning         | seo           |
+| Meta       | `multiple-canonicals`: several canonicals with different hrefs (conflicting signals)                                                                        | warning         | seo           |
+| Meta       | `multiple-canonicals`: several canonicals with identical hrefs (redundant)                                                                                  | info            | seo           |
+| Meta       | `relative-canonical`, `canonical-fragment`, `empty-canonical`                                                                                               | warning         | seo           |
+| Headings   | `missing-h1` (Google does not require one)                                                                                                                  | warning         | best-practice |
+| Headings   | `multiple-h1` (Google does not mind)                                                                                                                        | info            | best-practice |
+| Headings   | `skipped-heading-level`: e.g. `<h3>` with no preceding `<h2>`                                                                                               | warning         | accessibility |
+| Headings   | `empty-heading` (no text, `aria-label`, `aria-labelledby` or image alt)                                                                                     | warning         | accessibility |
+| Social     | `missing-open-graph`: no `og:*` tags (Google Search does not use them, they shape link previews)                                                            | info            | best-practice |
+| Social     | `incomplete-open-graph`: `og:title`, `og:description` or `og:image` missing                                                                                 | info            | best-practice |
+| Social     | `missing-twitter-card`: no `twitter:card`                                                                                                                   | info            | best-practice |
+| Indexing   | `noindex`: `robots` or `googlebot` meta tag with `noindex` or `none` (often intentional). The `X-Robots-Tag` header is checked too and gives the same issue | warning         | seo           |
+| Indexing   | `nofollow`: `robots` or `googlebot` meta tag with `nofollow` or `none`                                                                                      | info            | seo           |
+| Indexing   | `missing-viewport`: no viewport meta tag                                                                                                                    | warning         | seo           |
+| Indexing   | `missing-lang`: no `lang` on `<html>`                                                                                                                       | warning         | accessibility |
+| Schema     | `invalid-json-ld`: a JSON-LD block that does not parse                                                                                                      | warning         | seo           |
+| Schema     | `json-ld-missing-context`: no `@context`                                                                                                                    | warning         | seo           |
+| Schema     | `json-ld-relative-url`: `url`, `image`, `logo`, `sameAs` or `contentUrl` is not absolute                                                                    | warning         | seo           |
+| Schema     | `unsupported-schema-type`: HowTo, FAQPage and other types Google's search gallery has no rich result for                                                    | info            | seo           |
+| Schema     | `missing-schema-property`: Product without `name` and one of `offers`, `review`, `aggregateRating`; BreadcrumbList without `itemListElement`                | warning         | seo           |
+| URL        | `long-url` (over 100 characters), `url-underscores`, `url-uppercase`                                                                                        | info            | seo           |
+| HTML       | `html-too-large`: over 2 MB, the part Googlebot reads                                                                                                       | warning         | seo           |
+| HTML       | `mixed-content`: `http://` resource on an `https` page                                                                                                      | warning         | best-practice |
+| HTML       | `client-side-rendered`: almost no text and an empty app root, so the raw HTML results may be incomplete                                                     | info            | best-practice |
+| Response   | `fetch-failed`: network error, timeout or more than 10 redirects                                                                                            | error           | seo           |
+| Response   | `http-status`: any status other than 200 (the HTML checks are skipped)                                                                                      | error           | seo           |
+| Response   | `not-html`: the content type is not HTML, for example a PDF in a sitemap (the HTML checks are skipped)                                                      | info            | seo           |
+| Response   | `redirect-chain`: more than one redirect before the final page                                                                                              | warning         | seo           |
+| Response   | `redirect`: one redirect (the final URL is audited)                                                                                                         | info            | seo           |
+| Lighthouse | `lcp-slow`, `cls-high`, `tbt-high`: lab LCP over 2.5 s, CLS over 0.1, TBT over 200 ms (warning past 4 s, 0.25, 600 ms)                                      | info or warning | performance   |
+| Lighthouse | `score-low-performance`, `-accessibility`, `-best-practices`, `-seo`: category score under 90 (warning under 50)                                            | info or warning | per category  |
 
 ### Site checks
 
@@ -268,6 +277,8 @@ src/
     sitemap.js          URLs from --sitemap, following a sitemap index one level deep
     resolve.js          merge, normalize, dedupe, apply --limit
   lighthouse.js         runLighthouse(urls): optional Lighthouse run, trimmed to scores, metrics and failing audits
+  lighthouse-detail.js  the affected items, descriptions and savings of a failing audit
+  lighthouse-issues.js  lighthouseIssues(): slow LCP, CLS, TBT and low scores as issues
   output.js             writeReportFile(): writes a report file without throwing
   html/                 the customer-facing HTML report
     render.js           renderHtml(): the whole document

@@ -17,6 +17,10 @@ const METRICS = {
   speedIndex: 'speed-index'
 }
 
+// The audits that name the element behind the largest contentful paint: the breakdown insight of current
+// Lighthouse and the element audit of older versions.
+const LCP_ELEMENT_AUDITS = ['lcp-breakdown-insight', 'largest-contentful-paint-element']
+
 const percent = (score) => (score === null || score === undefined ? null : Math.round(score * 100))
 
 function metricValue(audit) {
@@ -54,16 +58,23 @@ const brokenMessage = (audit) => `Audit ${audit.id} failed: ${audit.errorMessage
 // Reduces a Lighthouse result (lhr) to what is worth reading: category scores, the
 // core metrics and the audits that did not pass. The full lhr is far too big to hand
 // to a person or a model.
-export function summarize(lhr) {
+export function summarize(lhr, runInfo = {}) {
   const categoryOf = categoryByAudit(lhr.categories)
   const audits = Object.values(lhr.audits)
   const failing = audits
     .filter((a) => SCORED_MODES.has(a.scoreDisplayMode) && a.score !== null && a.score < GOOD_SCORE)
     .filter((a) => categoryOf.has(a.id))
     .sort((a, b) => a.score - b.score)
+  const lcpElement = LCP_ELEMENT_AUDITS.flatMap((id) => itemsOf(lhr.audits[id]?.details, 10)).find(
+    (item) => item.selector
+  )
   return {
+    ...(lhr.lighthouseVersion ? { lighthouseVersion: lhr.lighthouseVersion } : {}),
+    ...(lhr.configSettings?.formFactor ? { formFactor: lhr.configSettings.formFactor } : {}),
     scores: Object.fromEntries(Object.entries(lhr.categories).map(([id, { score }]) => [id, percent(score)])),
+    ...runInfo,
     metrics: Object.fromEntries(Object.entries(METRICS).map(([key, id]) => [key, metricValue(lhr.audits[id])])),
+    ...(lcpElement ? { lcpElement: { selector: lcpElement.selector, snippet: lcpElement.snippet ?? null } } : {}),
     audits: failing.slice(0, MAX_AUDITS).map((a) => summarizeAudit(a, categoryOf.get(a.id))),
     ...(failing.length > MAX_AUDITS ? { omittedAudits: failing.length - MAX_AUDITS } : {}),
     warnings: [...(lhr.runWarnings ?? []), ...audits.filter(isBroken).map(brokenMessage)]
@@ -89,12 +100,43 @@ async function loadDefaults() {
   return { lighthouse, launch }
 }
 
-async function auditOne(url, { lighthouse, port }) {
+async function runOnce(url, { lighthouse, port }) {
+  const result = await lighthouse(url, { port, output: 'json', logLevel: 'silent', onlyCategories: CATEGORIES })
+  if (!result?.lhr) throw new Error('no result')
+  if (result.lhr.runtimeError) throw new Error(result.lhr.runtimeError.message)
+  return result.lhr
+}
+
+const performanceOf = (lhr) => lhr.categories?.performance?.score ?? -1
+
+// The lowest and highest score of each category over the runs, to show how much the numbers move.
+function scoreSpread(lhrs) {
+  const ids = new Set(lhrs.flatMap((lhr) => Object.keys(lhr.categories ?? {})))
+  return Object.fromEntries(
+    [...ids].map((id) => {
+      const scores = lhrs.map((lhr) => percent(lhr.categories?.[id]?.score)).filter((score) => score !== null)
+      return [id, scores.length ? [Math.min(...scores), Math.max(...scores)] : null]
+    })
+  )
+}
+
+// Runs the page `runs` times, one after another, and keeps the run in the middle by performance score. Scores and
+// metrics then come from the same run. A failed run is dropped. Only when every run fails is it an error, and a
+// result that cannot be read is an error too instead of an exception.
+async function auditOne(url, { lighthouse, port, runs }) {
+  const lhrs = []
+  let failure
+  for (let i = 0; i < runs; i++) {
+    try {
+      lhrs.push(await runOnce(url, { lighthouse, port }))
+    } catch (err) {
+      failure = err
+    }
+  }
+  if (!lhrs.length) return { error: failure.message }
   try {
-    const result = await lighthouse(url, { port, output: 'json', logLevel: 'silent', onlyCategories: CATEGORIES })
-    if (!result?.lhr) throw new Error('no result')
-    if (result.lhr.runtimeError) throw new Error(result.lhr.runtimeError.message)
-    return { summary: summarize(result.lhr) }
+    const median = lhrs.toSorted((a, b) => performanceOf(a) - performanceOf(b))[Math.floor((lhrs.length - 1) / 2)]
+    return { summary: summarize(median, runs > 1 ? { runs: lhrs.length, scoreSpread: scoreSpread(lhrs) } : {}) }
   } catch (err) {
     return { error: err.message }
   }
@@ -102,9 +144,12 @@ async function auditOne(url, { lighthouse, port }) {
 
 // Runs Lighthouse for every URL, one at a time in a single Chrome: parallel runs
 // compete for the CPU and skew each other's performance numbers. Never throws, each
-// entry is { summary } or { error }, in input order. `launch`, `lighthouse` and `load` can be
+// entry is { summary } or { error }, in input order. `runs` is how many times each page is run. `launch`, `lighthouse` and `load` can be
 // injected so tests do not need Chrome.
-export async function runLighthouse(urls, { launch, lighthouse, load = loadDefaults, onProgress = () => {} } = {}) {
+export async function runLighthouse(
+  urls,
+  { launch, lighthouse, load = loadDefaults, onProgress = () => {}, runs = 1 } = {}
+) {
   let chrome
   const fail = (message) => urls.map(() => ({ error: message }))
   try {
@@ -122,7 +167,7 @@ export async function runLighthouse(urls, { launch, lighthouse, load = loadDefau
   try {
     const results = []
     for (const url of urls) {
-      results.push(await auditOne(url, { lighthouse, port: chrome.port }))
+      results.push(await auditOne(url, { lighthouse, port: chrome.port, runs }))
       onProgress(results.length)
     }
     return results

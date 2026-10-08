@@ -90,8 +90,8 @@ test('pageHealth, averageScores, verdict and metricBand', () => {
   })
   assert.equal(averageScores([PAGES[1]]), null)
   assert.deepEqual(
-    [metricBand('lcp', 2500), metricBand('lcp', 3000), metricBand('lcp', 4000), metricBand('lcp', null)],
-    ['good', 'average', 'poor', 'unknown']
+    [2500, 3000, 4000, 4001, null].map((value) => metricBand('lcp', value)),
+    ['good', 'average', 'average', 'poor', 'unknown']
   )
 })
 
@@ -161,7 +161,7 @@ test('renderHtml: a page that could not be fetched has no facts and says so', ()
 
 // Every issue type a check can produce needs plain-language wording.
 test('advice: covers every issue type in the checks and in Lighthouse', async () => {
-  const files = ['src/lighthouse.js']
+  const files = ['src/lighthouse.js', 'src/lighthouse-issues.js']
   const dir = new URL('../src/checks/', import.meta.url)
   for (const entry of await readdir(dir, { recursive: true }))
     if (entry.endsWith('.js')) files.push(`src/checks/${entry}`)
@@ -247,4 +247,16 @@ test('renderHtml: the findings left out by the cap are counted in the "more" not
     wrap([page('https://a.test/', [], { lighthouse: { ...lighthouse, audits, omittedAudits: 5 } })])
   )
   assert.match(out, /9 more findings not listed here/)
+})
+
+test('renderHtml: the Lighthouse issue types show their advice and escape the element', () => {
+  const issues = [
+    { ...issue('lcp-slow', 'warning'), context: '<h1 class="x">Hi</h1>', category: 'performance' },
+    { ...issue('score-low-performance', 'info'), context: 'performance 40', category: 'performance' }
+  ]
+  const out = renderHtml(wrap([page('https://a.test/', issues)]))
+  assert.match(out, /The main content appears slowly/)
+  assert.match(out, /The page scores low on speed/)
+  assert.match(out, /&lt;h1 class=&quot;x&quot;&gt;Hi&lt;\/h1&gt;/)
+  assert.doesNotMatch(out, /<h1 class="x">/)
 })

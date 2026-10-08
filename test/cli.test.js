@@ -424,6 +424,48 @@ test('cli: a marker in a urls file read from stdin picks the page', async (t) =>
   assert.deepEqual(seen, [fixtureUrl('bad-missing.html')])
 })
 
+test('cli: slow Lighthouse numbers become warnings that count for --fail-on warning but not for the default exit code', async (t) => {
+  const slow = { ...detailedSummary, scores: { performance: 40, seo: 95 }, metrics: { lcp: 4500, cls: 0.05, tbt: 100 } }
+  const lighthouse = async (list) => list.map(() => ({ summary: slow }))
+  const args = [fixtureUrl('good.html'), '--lighthouse']
+  const normal = await runJson(t, args, { lighthouse })
+  assert.equal(normal.code, 0)
+  assert.deepEqual(pageTypes(normal.report.pages[0]), ['lcp-slow', 'score-low-performance'])
+  assert.ok('lcp-slow' in normal.report.rules)
+  const strict = await runJson(t, [...args, '--fail-on', 'warning'], { lighthouse })
+  assert.equal(strict.code, 1)
+})
+
+test('cli: slow numbers also become issues for pages with the short summary, and for inputs sharing a final URL', async (t) => {
+  const slow = { ...detailedSummary, scores: { performance: 40 }, metrics: { lcp: 4500 } }
+  const lighthouse = async (list) => list.map(() => ({ summary: slow }))
+  const args = [fixtureUrl('redirect-once'), fixtureUrl('good.html'), fixtureUrl('bad-overlong.html')]
+  const { report } = await runJson(t, [...args, '--lighthouse', '--lighthouse-page', fixtureUrl('bad-overlong.html')], {
+    lighthouse
+  })
+  const lcpIssues = report.pages.map((p) => p.issues.filter((i) => i.type === 'lcp-slow').length)
+  assert.deepEqual(lcpIssues, [1, 1, 1])
+  const ids = report.pages.flatMap((p) => p.issues.filter((i) => i.type === 'lcp-slow').map((i) => i.id))
+  assert.equal(new Set(ids).size, 3)
+})
+
+test('cli: --lighthouse-runs without any Lighthouse run says it has no effect', async (t) => {
+  const { stderr } = await runJson(t, [fixtureUrl('good.html'), '--lighthouse-runs', '3'])
+  assert.match(stderr, /--lighthouse-runs has no effect/)
+})
+
+test('cli: --lighthouse-runs reaches the runner and must be a number from 1 to 9', async (t) => {
+  let runs
+  const lighthouse = async (list, options) => ((runs = options.runs), list.map(() => ({ summary: detailedSummary })))
+  await runJson(t, [fixtureUrl('good.html'), '--lighthouse', '--lighthouse-runs', '3'], { lighthouse })
+  assert.equal(runs, 3)
+  for (const bad of ['0', '10', 'x']) {
+    const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), '--lighthouse-runs', bad])
+    assert.equal(code, 2)
+    assert.match(stderr, /--lighthouse-runs must be a whole number from 1 to 9/)
+  }
+})
+
 test('cli: --lighthouse-page needs a value', async (t) => {
   const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), '--lighthouse-page', ''])
   assert.equal(code, 2)

@@ -10,6 +10,8 @@ export const SOURCES = {
   starterGuide: 'https://developers.google.com/search/docs/fundamentals/seo-starter-guide',
   lighthouse: 'https://developer.chrome.com/docs/lighthouse/overview',
   cls: 'https://web.dev/articles/optimize-cls',
+  lcp: 'https://web.dev/articles/lcp',
+  tbt: 'https://web.dev/articles/tbt',
   decorativeImages: 'https://www.w3.org/WAI/tutorials/images/decorative/',
   headings: 'https://www.w3.org/WAI/tutorials/page-structure/headings/',
   openGraph: 'https://ogp.me/',

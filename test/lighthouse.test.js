@@ -316,3 +316,131 @@ test('shortSummary: keeps scores, metrics and one line per audit, without items,
   for (const a of short.audits) assert.deepEqual(Object.keys(a), ['id', 'category', 'title', 'score', 'displayValue'])
   assert.equal(short.audits.length, full.audits.length)
 })
+
+test('summarize: records the Lighthouse version, the form factor and the LCP element', () => {
+  const lhr = structuredClone(LHR)
+  lhr.lighthouseVersion = '13.5.0'
+  lhr.configSettings = { formFactor: 'mobile' }
+  lhr.audits['largest-contentful-paint-element'] = audit('largest-contentful-paint-element', 0, {
+    details: {
+      type: 'list',
+      items: [
+        { type: 'table', items: [{ node: { selector: 'div > img.hero', snippet: '<img class="hero">' } }] },
+        { type: 'table', items: [{ phase: 'TTFB', timing: 200 }] }
+      ]
+    }
+  })
+  const out = summarize(lhr)
+  assert.deepEqual(Object.keys(out).slice(0, 2), ['lighthouseVersion', 'formFactor'])
+  assert.equal(out.lighthouseVersion, '13.5.0')
+  assert.equal(out.formFactor, 'mobile')
+  assert.deepEqual(out.lcpElement, { selector: 'div > img.hero', snippet: '<img class="hero">' })
+  delete lhr.audits['largest-contentful-paint-element']
+  lhr.audits['lcp-breakdown-insight'] = audit('lcp-breakdown-insight', null, {
+    scoreDisplayMode: 'informative',
+    details: {
+      type: 'list',
+      items: [
+        { type: 'table', items: [{ subpart: 'timeToFirstByte', label: 'Time to first byte', duration: 518 }] },
+        { type: 'node', selector: 'main > h1', snippet: '<h1>Hi</h1>', nodeLabel: 'Hi' }
+      ]
+    }
+  })
+  assert.deepEqual(summarize(lhr).lcpElement, { selector: 'main > h1', snippet: '<h1>Hi</h1>' })
+  const bare = summarize(LHR)
+  for (const key of ['lighthouseVersion', 'formFactor', 'lcpElement']) assert.equal(key in bare, false)
+})
+
+// Gives each run its own performance score, in the order the runs happen.
+function scripted(performances, { fail = [] } = {}) {
+  let n = 0
+  return {
+    launch: async () => ({ port: 1, kill: async () => {} }),
+    lighthouse: async () => {
+      const i = n++
+      if (fail.includes(i)) throw new Error(`run ${i} failed`)
+      const lhr = structuredClone(LHR)
+      lhr.categories.performance.score = performances[i] / 100
+      lhr.categories.seo.score = (performances[i] + 1) / 100
+      lhr.audits['first-contentful-paint'].numericValue = performances[i] * 10
+      return { lhr }
+    },
+    count: () => n
+  }
+}
+
+test('runLighthouse: runs the page n times and keeps the median run with the spread of the scores', async () => {
+  const f = scripted([60, 90, 70])
+  const [result] = await runLighthouse(['https://a.test/'], { ...f, runs: 3 })
+  assert.equal(f.count(), 3)
+  assert.equal(result.summary.scores.performance, 70)
+  assert.equal(result.summary.metrics.fcp, 700)
+  assert.equal(result.summary.runs, 3)
+  assert.deepEqual(result.summary.scoreSpread.performance, [60, 90])
+  assert.deepEqual(result.summary.scoreSpread.seo, [61, 91])
+  assert.equal(result.summary.scoreSpread.accessibility, null)
+})
+
+test('runLighthouse: a failed run is dropped, and only every run failing is an error', async () => {
+  const some = scripted([60, 90, 70], { fail: [1] })
+  const [kept] = await runLighthouse(['https://a.test/'], { ...some, runs: 3 })
+  assert.equal(kept.summary.runs, 2)
+  assert.equal(kept.summary.scores.performance, 60)
+  const none = scripted([1, 2], { fail: [0, 1] })
+  assert.deepEqual(await runLighthouse(['https://a.test/'], { ...none, runs: 2 }), [{ error: 'run 1 failed' }])
+})
+
+test('runLighthouse: a single run has no runs or spread', async () => {
+  const f = scripted([60])
+  const [result] = await runLighthouse(['https://a.test/'], f)
+  assert.equal('runs' in result.summary, false)
+  assert.equal('scoreSpread' in result.summary, false)
+})
+
+test('runLighthouse: a result that cannot be read is an error entry, not an exception', async () => {
+  const launch = async () => ({ port: 1, kill: async () => {} })
+  const broken = { launch, lighthouse: async () => ({ lhr: { audits: {} } }) }
+  const [single] = await runLighthouse(['https://a.test/'], broken)
+  assert.match(single.error, /undefined|null/)
+  const [several] = await runLighthouse(['https://a.test/'], { ...broken, runs: 3 })
+  assert.match(several.error, /undefined|null/)
+})
+
+test('runLighthouse: scoreSpread copes with runs that report different categories', async () => {
+  let n = 0
+  const launch = async () => ({ port: 1, kill: async () => {} })
+  const lighthouse = async () => {
+    const lhr = structuredClone(LHR)
+    lhr.categories.performance.score = (n + 5) / 10
+    if (n++ === 1) delete lhr.categories.seo
+    return { lhr }
+  }
+  const [result] = await runLighthouse(['https://a.test/'], { launch, lighthouse, runs: 2 })
+  assert.deepEqual(result.summary.scoreSpread.performance, [50, 60])
+  assert.deepEqual(result.summary.scoreSpread.seo, [50, 50])
+})
+
+test('runLighthouse: the median handles a null performance score and takes the lower one for an even count', async () => {
+  const median = async (scores) => {
+    let n = 0
+    const lighthouse = async () => {
+      const lhr = structuredClone(LHR)
+      lhr.categories.performance.score = scores[n++]
+      lhr.categories.seo.score = n / 100
+      return { lhr }
+    }
+    const launch = async () => ({ port: 1, kill: async () => {} })
+    const [result] = await runLighthouse(['https://a.test/'], { launch, lighthouse, runs: scores.length })
+    return result.summary.scores
+  }
+  assert.equal((await median([null, 0.8, 0.9])).performance, 80)
+  assert.equal((await median([null, null, 0.9])).performance, null)
+  assert.equal((await median([0.9, 0.5, 0.7, 0.6])).performance, 60)
+  assert.equal((await median([0.7, 0.6])).performance, 60)
+})
+
+test('summarize: runs and the score spread sit right after the scores', () => {
+  const out = summarize(LHR, { runs: 2, scoreSpread: { seo: [1, 2] } })
+  const keys = Object.keys(out)
+  assert.deepEqual(keys.slice(keys.indexOf('scores'), keys.indexOf('scores') + 3), ['scores', 'runs', 'scoreSpread'])
+})
