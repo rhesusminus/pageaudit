@@ -1,0 +1,396 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "pageaudit report",
+  "description": "The JSON report written by pageaudit (--json, --out). schemaVersion goes up by one when a field is removed, renamed or changes its meaning. Adding an optional field does not change it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "generatedAt", "pages", "site", "skipped", "rules", "summary"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "pages": { "type": "array", "items": { "$ref": "#/$defs/page" } },
+    "site": {
+      "description": "Issues that involve several pages, such as duplicate titles.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/siteIssue" }
+    },
+    "skipped": {
+      "description": "Inputs that were not audited, with the reason.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/skipped" }
+    },
+    "rules": {
+      "description": "What each issue type that occurs in the report means, by type.",
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/rule" }
+    },
+    "lighthouseAudits": {
+      "description": "Description and first link of each Lighthouse audit that occurs in the report, by audit id. Only present when Lighthouse ran.",
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/auditNote" }
+    },
+    "summary": { "$ref": "#/$defs/summary" }
+  },
+  "$defs": {
+    "nullableString": { "type": ["string", "null"] },
+    "severity": { "enum": ["error", "warning", "info"] },
+    "category": { "enum": ["seo", "accessibility", "performance", "best-practice"] },
+    "skipped": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input", "source", "reason"],
+      "properties": {
+        "input": { "type": "string" },
+        "source": { "type": "string", "description": "Where the input came from, such as argument or urls.txt:8." },
+        "reason": { "type": "string" }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "why", "fix"],
+      "properties": {
+        "title": { "type": "string" },
+        "why": { "type": "string" },
+        "fix": { "type": "string" }
+      }
+    },
+    "auditNote": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "description": { "type": "string" },
+        "learnMore": { "type": "string" }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pages", "errors", "warnings", "infos"],
+      "properties": {
+        "pages": { "type": "integer", "minimum": 0 },
+        "errors": { "type": "integer", "minimum": 0 },
+        "warnings": { "type": "integer", "minimum": 0 },
+        "infos": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "finalUrl", "status", "redirects", "issues", "facts"],
+      "if": { "properties": { "status": { "type": "null" } }, "required": ["status"] },
+      "then": {
+        "properties": {
+          "finalUrl": { "type": "null" },
+          "redirects": { "type": "array", "maxItems": 0 },
+          "facts": { "type": "null" }
+        }
+      },
+      "else": { "properties": { "finalUrl": { "type": "string" }, "status": { "type": "integer" } } },
+      "properties": {
+        "url": { "type": "string", "description": "The address as audited, after normalizing." },
+        "finalUrl": {
+          "type": ["string", "null"],
+          "description": "Where the page ended up after redirects. Null when it could not be fetched."
+        },
+        "status": {
+          "type": ["integer", "null"],
+          "description": "HTTP status of the final response. Null when it could not be fetched."
+        },
+        "redirects": { "type": "array", "items": { "$ref": "#/$defs/redirect" } },
+        "issues": { "type": "array", "items": { "$ref": "#/$defs/pageIssue" } },
+        "facts": {
+          "description": "What is on the page. Null when the page returned no HTML.",
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/facts" }]
+        },
+        "lighthouse": {
+          "description": "Only present when Lighthouse was asked for this page. Null when the run failed.",
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/lighthouse" }]
+        }
+      }
+    },
+    "redirect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "status", "location"],
+      "properties": {
+        "url": { "type": "string" },
+        "status": { "type": "integer" },
+        "location": { "type": "string" }
+      }
+    },
+    "pageIssue": {
+      "description": "An issue on one page. The page is named by `url`.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "id", "type", "severity", "category", "source", "message", "context"],
+      "properties": {
+        "url": { "type": "string" },
+        "id": {
+          "type": "string",
+          "description": "Stable while the page keeps its structure. Compare ids within one report."
+        },
+        "type": { "type": "string", "description": "The rule. Explained in `rules`." },
+        "severity": { "$ref": "#/$defs/severity" },
+        "category": { "$ref": "#/$defs/category" },
+        "source": { "type": "string", "description": "Documentation the rule is based on." },
+        "message": { "type": "string" },
+        "context": { "type": "string", "description": "The markup or value concerned, at most 120 characters." },
+        "selector": { "type": "string", "description": "CSS path to the element, when the issue is about one." },
+        "html": { "type": "string", "description": "The element's markup, at most 500 characters." },
+        "parentHtml": { "type": "string", "description": "The parent element's markup, at most 200 characters." },
+        "actual": { "type": ["number", "string"], "description": "The measured value, such as a length." },
+        "expected": { "type": "string", "description": "The limit or form it should have." }
+      }
+    },
+    "siteIssue": {
+      "description": "An issue that involves several pages. The pages are named by `urls`.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "urls", "type", "severity", "category", "source", "message", "context"],
+      "properties": {
+        "id": { "type": "string" },
+        "urls": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "type": { "type": "string" },
+        "severity": { "$ref": "#/$defs/severity" },
+        "category": { "$ref": "#/$defs/category" },
+        "source": { "type": "string" },
+        "message": { "type": "string" },
+        "context": { "type": "string" }
+      }
+    },
+    "facts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "description",
+        "h1s",
+        "canonical",
+        "lang",
+        "viewport",
+        "robots",
+        "headings",
+        "wordCount",
+        "mainText",
+        "links",
+        "linkSamples",
+        "images",
+        "imageSamples",
+        "openGraph",
+        "twitterCard",
+        "jsonLdTypes"
+      ],
+      "properties": {
+        "title": { "$ref": "#/$defs/nullableString" },
+        "description": { "$ref": "#/$defs/nullableString" },
+        "h1s": { "type": "array", "items": { "type": "string" }, "maxItems": 10 },
+        "canonical": { "$ref": "#/$defs/nullableString" },
+        "lang": { "$ref": "#/$defs/nullableString" },
+        "viewport": { "$ref": "#/$defs/nullableString" },
+        "robots": { "$ref": "#/$defs/nullableString" },
+        "headings": {
+          "type": "array",
+          "maxItems": 40,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["level", "text", "excerpt"],
+            "properties": {
+              "level": { "type": "integer", "minimum": 1, "maximum": 6 },
+              "text": { "type": "string" },
+              "excerpt": { "$ref": "#/$defs/nullableString" }
+            }
+          }
+        },
+        "wordCount": { "type": "integer", "minimum": 0 },
+        "mainText": { "$ref": "#/$defs/nullableString" },
+        "links": {
+          "description": "Counts of every http(s) link to a page. `www.` counts as the same site.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["internal", "external", "nofollow"],
+          "properties": {
+            "internal": { "type": "integer", "minimum": 0 },
+            "external": { "type": "integer", "minimum": 0 },
+            "nofollow": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "linkSamples": {
+          "description": "The first 25 links.",
+          "type": "array",
+          "maxItems": 25,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["href", "text", "internal", "nofollow"],
+            "properties": {
+              "href": { "type": "string" },
+              "text": { "type": "string" },
+              "internal": { "type": "boolean" },
+              "nofollow": { "type": "boolean" }
+            }
+          }
+        },
+        "images": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["total", "missingAlt"],
+          "properties": {
+            "total": { "type": "integer", "minimum": 0 },
+            "missingAlt": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "imageSamples": {
+          "description": "The first 20 images.",
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["src", "alt", "context"],
+            "properties": {
+              "src": { "$ref": "#/$defs/nullableString" },
+              "alt": { "$ref": "#/$defs/nullableString", "description": "Null when the image has no alt attribute." },
+              "context": {
+                "$ref": "#/$defs/nullableString",
+                "description": "The figure caption or the words around the image."
+              }
+            }
+          }
+        },
+        "openGraph": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["title", "description", "image", "type", "url"],
+          "properties": {
+            "title": { "$ref": "#/$defs/nullableString" },
+            "description": { "$ref": "#/$defs/nullableString" },
+            "image": { "$ref": "#/$defs/nullableString" },
+            "type": { "$ref": "#/$defs/nullableString" },
+            "url": { "$ref": "#/$defs/nullableString" }
+          }
+        },
+        "twitterCard": { "$ref": "#/$defs/nullableString" },
+        "jsonLdTypes": { "type": "array", "items": { "type": "string" }, "maxItems": 20 }
+      }
+    },
+    "score": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+    "lighthouse": {
+      "description": "A digest of one Lighthouse run, never the raw result.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scores", "metrics", "audits", "warnings"],
+      "properties": {
+        "lighthouseVersion": { "type": "string" },
+        "formFactor": { "type": "string" },
+        "scores": {
+          "description": "0 to 100 by category: performance, accessibility, best-practices and seo.",
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/score" }
+        },
+        "runs": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Runs that succeeded, so it can be lower than asked for. Only with --lighthouse-runs above 1."
+        },
+        "scoreSpread": {
+          "description": "Lowest and highest score by category over the runs.",
+          "type": "object",
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": { "type": "integer", "minimum": 0, "maximum": 100 }
+              }
+            ]
+          }
+        },
+        "metrics": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["fcp", "lcp", "tbt", "cls", "speedIndex"],
+          "properties": {
+            "fcp": { "type": ["integer", "null"], "description": "Milliseconds." },
+            "lcp": { "type": ["integer", "null"], "description": "Milliseconds." },
+            "tbt": { "type": ["integer", "null"], "description": "Milliseconds." },
+            "cls": { "type": ["number", "null"], "description": "Unitless." },
+            "speedIndex": { "type": ["integer", "null"], "description": "Milliseconds." }
+          }
+        },
+        "lcpElement": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["selector", "snippet"],
+          "properties": {
+            "selector": { "type": "string" },
+            "snippet": { "$ref": "#/$defs/nullableString" }
+          }
+        },
+        "audits": {
+          "description": "The worst failing audits, at most 10.",
+          "type": "array",
+          "maxItems": 10,
+          "items": { "$ref": "#/$defs/audit" }
+        },
+        "omittedAudits": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many more failing audits were left out."
+        },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "category", "title", "score", "displayValue"],
+      "properties": {
+        "id": { "type": "string" },
+        "category": { "enum": ["performance", "accessibility", "best-practices", "seo"] },
+        "title": { "type": "string" },
+        "score": { "$ref": "#/$defs/score" },
+        "displayValue": { "$ref": "#/$defs/nullableString" },
+        "savings": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ms": { "type": "integer", "minimum": 1 },
+            "bytes": { "type": "integer", "minimum": 1 },
+            "metrics": {
+              "description": "Gain per metric (fcp, lcp, inp, tbt in milliseconds, cls unitless).",
+              "type": "object",
+              "additionalProperties": { "type": "number", "exclusiveMinimum": 0 }
+            }
+          }
+        },
+        "items": {
+          "description": "The affected things, at most 3. Only on pages that were picked for the full detail.",
+          "type": "array",
+          "maxItems": 3,
+          "items": { "$ref": "#/$defs/auditItem" }
+        }
+      }
+    },
+    "auditItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "url": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "selector": { "type": "string" },
+        "nodeLabel": { "type": "string" },
+        "snippet": { "type": "string" },
+        "explanation": { "type": "string" },
+        "label": { "type": "string" },
+        "wastedMs": { "type": "integer", "minimum": 1 },
+        "wastedBytes": { "type": "integer", "minimum": 1 },
+        "totalBytes": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

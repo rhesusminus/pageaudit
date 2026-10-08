@@ -176,7 +176,8 @@ test('runLighthouse: a synchronous kill, as chrome-launcher has, works and may t
 
 test('lighthouseFailed: builds an info issue with the same keys as other page issues', () => {
   const issue = lighthouseFailed('https://a.test/', 'boom')
-  assert.deepEqual(Object.keys(issue), ['url', 'type', 'severity', 'category', 'source', 'message', 'context'])
+  assert.deepEqual(Object.keys(issue), ['url', 'id', 'type', 'severity', 'category', 'source', 'message', 'context'])
+  assert.match(issue.id, /^lighthouse-failed-[0-9a-f]{8}$/)
   assert.equal(issue.severity, 'info')
 })
 
@@ -443,4 +444,11 @@ test('summarize: runs and the score spread sit right after the scores', () => {
   const out = summarize(LHR, { runs: 2, scoreSpread: { seo: [1, 2] } })
   const keys = Object.keys(out)
   assert.deepEqual(keys.slice(keys.indexOf('scores'), keys.indexOf('scores') + 3), ['scores', 'runs', 'scoreSpread'])
+})
+
+test('summarize: a saving that rounds to zero is no estimate', () => {
+  const only = (metricSavings) => summarize(withAudit({ metricSavings })).audits[0].savings
+  assert.equal(only({ CLS: 0.0001, LCP: 0.2 }), undefined)
+  assert.deepEqual(only({ CLS: 0.0004, INP: 40 }), { metrics: { inp: 40 } })
+  assert.deepEqual(only({ CLS: 0.0006 }), { metrics: { cls: 0.001 } })
 })

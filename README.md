@@ -99,6 +99,8 @@ node bin/pageaudit.js --sitemap https://example.com/sitemap.xml --limit 20 --lig
 
 Then, in Claude Code: "read report.json and summarize the SEO and usability problems, most important first". Each page carries the issues the checks found, the Lighthouse summary and a `facts` object with what is on the page, so a suggestion can refer to the real title or headings. `facts` is `null` for pages that returned no HTML. Free text is capped to keep the file small: heading text and the Open Graph title, description and type at 120 characters (URLs at 2000), the page title, description and `h1s` at 300 characters, with at most 10 `h1s` and 40 headings. `generatedAt` is the time of the audit.
 
+**Schema.** The shape of the JSON report is described in [`schema/report.schema.json`](schema/report.schema.json) (JSON Schema, draft 2020-12), and every report starts with `schemaVersion`. The version goes up by one when a field is removed, renamed or changes its meaning, and stays the same when an optional field is added, so a script can check it before reading the rest. The tests validate reports from every kind of fixture against the schema, with no extra properties allowed, so the schema cannot drift from the code. Page issues name their page in `url` and site issues name theirs in `urls`, which the schema keeps apart as `pageIssue` and `siteIssue`. Both have an `id`.
+
 Every issue, page or site, has an `id`, a `type`, a `message` and a `context`. Where the check found a single element it also has a `selector` (a CSS path), the element's `html` and its `parentHtml` (capped at 500 and 200 characters, `parentHtml` is left out when the parent is `html`, `head` or `body`). Length checks add the measured `actual` value and the `expected` limit. The top-level `rules` object explains each issue `type` that occurs in the report once, as `{ title, why, fix }` (the same wording as the HTML report), so a model knows what a finding means and how to fix it. The `id` is built from the page, the type and the selector, so it is the same on every run as long as the page keeps its structure. Adding an element earlier in the page changes the ids after it, so compare ids within one report.
 
 | `facts` field                              | Meaning                                                                                                                                                |
@@ -315,8 +317,11 @@ src/
       index.js          checkSite()
     snippet.js          truncate()/snippet(): caps issue contexts at 120 characters
   sources.js            documentation URLs referenced by each issue's `source` field
-  report.js             buildReport() for JSON, formatReport() for the terminal
+  report.js             buildReport() for JSON (with SCHEMA_VERSION), formatReport() for the terminal
+schema/
+  report.schema.json    JSON Schema of the JSON report
 test/
+  schema.test.js        reports from the fixtures against the schema, and drift checks
   input.test.js         URL files, sitemaps and normalization, against fixtures
   runner.test.js        runner with a mocked fetchPage: concurrency, delay, failures
   site.test.js          site checks over runner results

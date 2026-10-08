@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import { canSpin, run } from '../src/cli.js'
+import { SCHEMA_VERSION } from '../src/report.js'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
 
 const fixtureUrl = (name) => `${FIXTURE_HOST}/${name}`
@@ -69,7 +70,8 @@ const GOOD_FACTS = {
 test('cli: good.html has no issues, exposes its facts and exits 0', async (t) => {
   const { code, report } = await runJson(t, [fixtureUrl('good.html')])
   assert.equal(code, 0)
-  const { generatedAt, ...rest } = report
+  const { generatedAt, schemaVersion, ...rest } = report
+  assert.equal(schemaVersion, SCHEMA_VERSION)
   assert.ok(!Number.isNaN(Date.parse(generatedAt)))
   assert.deepEqual(rest, {
     pages: [
