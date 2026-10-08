@@ -69,7 +69,8 @@ const GOOD_FACTS = {
 test('cli: good.html has no issues, exposes its facts and exits 0', async (t) => {
   const { code, report } = await runJson(t, [fixtureUrl('good.html')])
   assert.equal(code, 0)
-  const { generatedAt, ...rest } = report
+  const { generatedAt, schemaVersion, ...rest } = report
+  assert.equal(schemaVersion, 1)
   assert.ok(!Number.isNaN(Date.parse(generatedAt)))
   assert.deepEqual(rest, {
     pages: [

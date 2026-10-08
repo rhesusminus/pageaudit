@@ -96,6 +96,10 @@ function hoistAuditNotes(pages) {
   return { blocks, notes: Object.fromEntries(notes) }
 }
 
+// Goes up by one when a field of the JSON report is removed, renamed or changes its meaning. The shape is
+// described in schema/report.schema.json.
+export const SCHEMA_VERSION = 1
+
 // The JSON report, which doubles as the data handed to Claude. `facts` is null for
 // pages that returned no HTML.
 export function buildReport({ pages, site, skipped = [], now = new Date() }) {
@@ -103,6 +107,7 @@ export function buildReport({ pages, site, skipped = [], now = new Date() }) {
   const totals = countSeverities(issues)
   const { blocks, notes } = hoistAuditNotes(pages)
   return {
+    schemaVersion: SCHEMA_VERSION,
     generatedAt: now.toISOString(),
     pages: pages.map(({ url, finalUrl, status, redirects, issues, facts, lighthouse }, i) => ({
       url,
