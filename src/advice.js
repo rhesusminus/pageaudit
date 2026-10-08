@@ -278,22 +278,22 @@ export const ADVICE = {
   },
   'lcp-slow': {
     title: 'The main content appears slowly',
-    why: 'The largest element on the screen takes long to show, so visitors wait and may leave. Speed also counts as a search ranking signal. This number is from one test run on one machine, so it varies a little between runs.',
+    why: 'The largest element on the screen takes long to show, so visitors wait and may leave. Speed also counts as a search ranking signal. This number comes from a lab test on one machine, so it varies a little between runs.',
     fix: 'Make the largest image or text block load sooner: shrink and compress the image, serve it in a modern format, load it first and avoid blocking scripts and styles above it.'
   },
   'cls-high': {
     title: 'The page jumps around while loading',
-    why: 'Content that shifts as it loads makes visitors click the wrong thing. This number is from one test run on one machine, so it varies a little between runs.',
+    why: 'Content that shifts as it loads makes visitors click the wrong thing. This number comes from a lab test on one machine, so it varies a little between runs.',
     fix: 'Give images, videos and embeds a width and height, reserve room for ads and banners, and avoid inserting content above what is already shown.'
   },
   'tbt-high': {
     title: 'The page is slow to react while loading',
-    why: 'Heavy scripts keep the page busy, so taps and clicks feel stuck for a moment. This number is from one test run on one machine, so it varies a little between runs.',
+    why: 'Heavy scripts keep the page busy, so taps and clicks feel stuck for a moment. This number comes from a lab test on one machine, so it varies a little between runs.',
     fix: 'Remove scripts that are not needed, split large ones and load the rest later.'
   },
   'score-low-performance': {
     title: 'The page scores low on speed',
-    why: 'A low speed score means the page loads slowly for visitors. The score is from one test run on one machine, so it varies a little between runs.',
+    why: 'A low speed score means the page loads slowly for visitors. The score comes from a lab test on one machine, so it varies a little between runs.',
     fix: 'Start with the biggest opportunities listed for this page in the speed and quality test.'
   },
   'score-low-accessibility': {

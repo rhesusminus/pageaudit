@@ -191,7 +191,10 @@ async function auditUrls(urls, options, startSpinner) {
 // another page lands on the same final URL. Without any picked page every page does, and with some the others only
 // get the short summary.
 async function addLighthouse(pages, startSpinner, runner, { all, chosen, runs }) {
-  if (!all && chosen.length === 0) return
+  if (!all && chosen.length === 0) {
+    if (runs) console.error('--lighthouse-runs has no effect without --lighthouse or a page picked for Lighthouse.')
+    return
+  }
   const picked = new Set(chosen)
   const isPicked = (page) => picked.has(page.url)
   // A page the user picked but that gave no HTML gets told why, instead of silently losing the run.

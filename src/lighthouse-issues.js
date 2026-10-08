@@ -1,21 +1,21 @@
 import { issueId } from './issue-id.js'
+import { METRIC_BANDS } from './lighthouse-limits.js'
 import { SOURCES } from './sources.js'
 
-// Lighthouse numbers come from one simulated load on one machine, so they are lab data and vary from run to run.
+// Lighthouse numbers come from simulated loads on one machine, so they are lab data and vary from run to run.
 // Two levels keep them from shouting: a value past "good" is only info, one past "poor" is a warning. They are
-// never errors, so a noisy run cannot fail a build on its own.
+// never errors, so at the default --fail-on error a noisy run cannot fail a build. With --fail-on warning it can.
 //
-// Metric limits follow web.dev: LCP 2.5 s and 4 s, TBT 200 ms and 600 ms, CLS 0.1 and 0.25.
-// A category score under 90 is info and under 50 a warning, which is how Lighthouse colors them.
+// Metric limits follow web.dev and are shared with the HTML report (lighthouse-limits.js). TBT is the lab
+// stand-in for responsiveness. A category score under 90 is info and under 50 a warning, which is how Lighthouse
+// colors them.
 const METRIC_RULES = [
   {
     type: 'lcp-slow',
     metric: 'lcp',
     category: 'performance',
     source: SOURCES.lcp,
-    good: 2500,
-    poor: 4000,
-    format: (value) => `${(value / 1000).toFixed(1)} s`,
+    format: (value) => `${Number((value / 1000).toFixed(2))} s`,
     name: 'Largest Contentful Paint'
   },
   {
@@ -23,8 +23,6 @@ const METRIC_RULES = [
     metric: 'cls',
     category: 'performance',
     source: SOURCES.cls,
-    good: 0.1,
-    poor: 0.25,
     format: (value) => String(value),
     name: 'Cumulative Layout Shift'
   },
@@ -33,12 +31,12 @@ const METRIC_RULES = [
     metric: 'tbt',
     category: 'performance',
     source: SOURCES.tbt,
-    good: 200,
-    poor: 600,
     format: (value) => `${value} ms`,
     name: 'Total Blocking Time'
   }
 ]
+
+const limits = (metric) => METRIC_BANDS[metric]
 
 const SCORE_RULES = [
   { type: 'score-low-performance', score: 'performance', category: 'performance', name: 'performance' },
@@ -66,17 +64,18 @@ const make = (url, rule, fields) => ({
 
 function metricIssue(url, rule, summary) {
   const value = summary.metrics?.[rule.metric]
-  if (typeof value !== 'number' || value <= rule.good) return []
-  const severity = value > rule.poor ? 'warning' : 'info'
+  const { good, poor } = limits(rule.metric)
+  if (typeof value !== 'number' || value <= good) return []
+  const severity = value > poor ? 'warning' : 'info'
   const element = rule.metric === 'lcp' ? summary.lcpElement : undefined
   return [
     make(url, rule, {
       severity,
-      message: `${rule.name} is ${rule.format(value)} in the lab test (good is ${rule.format(rule.good)} or less)`,
-      context: element?.snippet ?? element?.selector ?? `${rule.name} ${rule.format(value)}`,
-      evidence: element ? { selector: element.selector, html: element.snippet } : {},
+      message: `${rule.name} is ${rule.format(value)} in the lab test (good is ${rule.format(good)} or less)`,
+      context: element?.selector ?? `${rule.name} ${rule.format(value)}`,
+      evidence: element ? { selector: element.selector, ...(element.snippet ? { html: element.snippet } : {}) } : {},
       actual: value,
-      expected: `at most ${rule.good}${rule.metric === 'cls' ? '' : ' ms'}`
+      expected: `at most ${good}${rule.metric === 'cls' ? '' : ' ms'}`
     })
   ]
 }

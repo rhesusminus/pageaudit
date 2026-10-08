@@ -436,6 +436,24 @@ test('cli: slow Lighthouse numbers become warnings that count for --fail-on warn
   assert.equal(strict.code, 1)
 })
 
+test('cli: slow numbers also become issues for pages with the short summary, and for inputs sharing a final URL', async (t) => {
+  const slow = { ...detailedSummary, scores: { performance: 40 }, metrics: { lcp: 4500 } }
+  const lighthouse = async (list) => list.map(() => ({ summary: slow }))
+  const args = [fixtureUrl('redirect-once'), fixtureUrl('good.html'), fixtureUrl('bad-overlong.html')]
+  const { report } = await runJson(t, [...args, '--lighthouse', '--lighthouse-page', fixtureUrl('bad-overlong.html')], {
+    lighthouse
+  })
+  const lcpIssues = report.pages.map((p) => p.issues.filter((i) => i.type === 'lcp-slow').length)
+  assert.deepEqual(lcpIssues, [1, 1, 1])
+  const ids = report.pages.flatMap((p) => p.issues.filter((i) => i.type === 'lcp-slow').map((i) => i.id))
+  assert.equal(new Set(ids).size, 3)
+})
+
+test('cli: --lighthouse-runs without any Lighthouse run says it has no effect', async (t) => {
+  const { stderr } = await runJson(t, [fixtureUrl('good.html'), '--lighthouse-runs', '3'])
+  assert.match(stderr, /--lighthouse-runs has no effect/)
+})
+
 test('cli: --lighthouse-runs reaches the runner and must be a number from 1 to 9', async (t) => {
   let runs
   const lighthouse = async (list, options) => ((runs = options.runs), list.map(() => ({ summary: detailedSummary })))

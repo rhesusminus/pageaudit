@@ -1,22 +1,15 @@
+import { METRIC_BANDS } from '../lighthouse-limits.js'
 import { countSeverities } from '../report.js'
 
 const SEVERITY_ORDER = { error: 0, warning: 1, info: 2 }
 
-// Core Web Vitals and the other Lighthouse metrics: [good up to, poor from]. Lighthouse
-// and web.dev publish these thresholds, a value in between "needs improvement".
-export const METRIC_BANDS = {
-  lcp: { label: 'Largest Contentful Paint', unit: 'ms', good: 2500, poor: 4000 },
-  cls: { label: 'Cumulative Layout Shift', unit: '', good: 0.1, poor: 0.25 },
-  tbt: { label: 'Total Blocking Time', unit: 'ms', good: 200, poor: 600 },
-  fcp: { label: 'First Contentful Paint', unit: 'ms', good: 1800, poor: 3000 },
-  speedIndex: { label: 'Speed Index', unit: 'ms', good: 3400, poor: 5800 }
-}
+export { METRIC_BANDS }
 
 export function metricBand(key, value) {
   if (value === null || value === undefined) return 'unknown'
   const { good, poor } = METRIC_BANDS[key]
   if (value <= good) return 'good'
-  return value >= poor ? 'poor' : 'average'
+  return value > poor ? 'poor' : 'average'
 }
 
 const worst = (a, b) => (SEVERITY_ORDER[a] <= SEVERITY_ORDER[b] ? a : b)

@@ -80,16 +80,27 @@ test('lighthouseIssues: an issue has the usual fields, the measured value and th
 test('lighthouseIssues: the slow LCP names the element when Lighthouse found it', () => {
   const element = { selector: 'div.hero > img', snippet: '<img class="hero" src="h.jpg">' }
   const [lcp] = lighthouseIssues(URL_, summary({ lcp: 5000 }, {}, { lcpElement: element }))
-  assert.equal(lcp.context, element.snippet)
+  assert.equal(lcp.context, element.selector)
   assert.equal(lcp.selector, element.selector)
   assert.equal(lcp.html, element.snippet)
+  const [bare] = lighthouseIssues(URL_, summary({ lcp: 5000 }, {}, { lcpElement: { selector: 'h1', snippet: null } }))
+  assert.equal(bare.selector, 'h1')
+  assert.equal('html' in bare, false)
   const [plain] = lighthouseIssues(URL_, summary({ lcp: 5000 }))
-  assert.equal(plain.context, 'Largest Contentful Paint 5.0 s')
+  assert.equal(plain.context, 'Largest Contentful Paint 5 s')
   assert.equal('selector' in plain, false)
 })
 
 test('lighthouseIssues: every rule has plain-language advice that says it is lab data where it should', () => {
   for (const type of ['lcp-slow', 'cls-high', 'tbt-high', 'score-low-performance']) {
-    assert.match(ADVICE[type].why, /one test run on one machine/)
+    assert.match(ADVICE[type].why, /lab test on one machine/)
   }
+})
+
+test('lighthouseIssues: the shown value never looks compliant when the rule says it is not', () => {
+  const [info] = lighthouseIssues(URL_, summary({ lcp: 2549 }))
+  assert.equal(info.message, 'Largest Contentful Paint is 2.55 s in the lab test (good is 2.5 s or less)')
+  const [warning] = lighthouseIssues(URL_, summary({ lcp: 4049 }))
+  assert.equal(warning.severity, 'warning')
+  assert.match(warning.message, /is 4\.05 s/)
 })

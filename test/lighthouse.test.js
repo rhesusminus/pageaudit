@@ -396,3 +396,51 @@ test('runLighthouse: a single run has no runs or spread', async () => {
   assert.equal('runs' in result.summary, false)
   assert.equal('scoreSpread' in result.summary, false)
 })
+
+test('runLighthouse: a result that cannot be read is an error entry, not an exception', async () => {
+  const launch = async () => ({ port: 1, kill: async () => {} })
+  const broken = { launch, lighthouse: async () => ({ lhr: { audits: {} } }) }
+  const [single] = await runLighthouse(['https://a.test/'], broken)
+  assert.match(single.error, /undefined|null/)
+  const [several] = await runLighthouse(['https://a.test/'], { ...broken, runs: 3 })
+  assert.match(several.error, /undefined|null/)
+})
+
+test('runLighthouse: scoreSpread copes with runs that report different categories', async () => {
+  let n = 0
+  const launch = async () => ({ port: 1, kill: async () => {} })
+  const lighthouse = async () => {
+    const lhr = structuredClone(LHR)
+    lhr.categories.performance.score = (n + 5) / 10
+    if (n++ === 1) delete lhr.categories.seo
+    return { lhr }
+  }
+  const [result] = await runLighthouse(['https://a.test/'], { launch, lighthouse, runs: 2 })
+  assert.deepEqual(result.summary.scoreSpread.performance, [50, 60])
+  assert.deepEqual(result.summary.scoreSpread.seo, [50, 50])
+})
+
+test('runLighthouse: the median handles a null performance score and takes the lower one for an even count', async () => {
+  const median = async (scores) => {
+    let n = 0
+    const lighthouse = async () => {
+      const lhr = structuredClone(LHR)
+      lhr.categories.performance.score = scores[n++]
+      lhr.categories.seo.score = n / 100
+      return { lhr }
+    }
+    const launch = async () => ({ port: 1, kill: async () => {} })
+    const [result] = await runLighthouse(['https://a.test/'], { launch, lighthouse, runs: scores.length })
+    return result.summary.scores
+  }
+  assert.equal((await median([null, 0.8, 0.9])).performance, 80)
+  assert.equal((await median([null, null, 0.9])).performance, null)
+  assert.equal((await median([0.9, 0.5, 0.7, 0.6])).performance, 60)
+  assert.equal((await median([0.7, 0.6])).performance, 60)
+})
+
+test('summarize: runs and the score spread sit right after the scores', () => {
+  const out = summarize(LHR, { runs: 2, scoreSpread: { seo: [1, 2] } })
+  const keys = Object.keys(out)
+  assert.deepEqual(keys.slice(keys.indexOf('scores'), keys.indexOf('scores') + 3), ['scores', 'runs', 'scoreSpread'])
+})
