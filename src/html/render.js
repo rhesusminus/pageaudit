@@ -32,7 +32,7 @@ export function renderHtml(
       <body>
         ${cover({ report, title, client, logo, timeZone, scores, verdict: verdict(report.summary, health) })}
         <main class="wrap">
-          ${healthSection(health, report.summary, { skipped: report.skipped, totalUrls })} ${fixesSection(groups)} ${pagesSection(pages)}
+          ${healthSection(health, report.summary, { skipped: report.skipped, totalUrls })} ${fixesSection(groups)} ${pagesSection(pages, report.lighthouseAudits)}
           ${methodSection(report)}
         </main>
         <footer class="wrap site-footer"><p>Created with pageaudit ${pkg.version}.</p></footer>

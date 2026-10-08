@@ -22,9 +22,20 @@ const facts = {
   title: 'Home',
   description: null,
   h1s: ['Welcome'],
+  canonical: null,
+  lang: 'en',
+  viewport: null,
+  robots: null,
+  headings: [{ level: 1, text: 'Welcome', excerpt: 'Hello there' }],
   wordCount: 120,
+  mainText: null,
   links: { internal: 4, external: 1, nofollow: 0 },
-  images: { total: 2, missingAlt: 0 }
+  linkSamples: [{ href: 'https://a.test/b', text: 'Other page', internal: true, nofollow: false }],
+  images: { total: 2, missingAlt: 1 },
+  imageSamples: [{ src: 'https://a.test/x.png', alt: null, context: 'Next to the logo' }],
+  openGraph: { title: null, description: null, image: null, type: null, url: null },
+  twitterCard: null,
+  jsonLdTypes: ['Organization']
 }
 const lighthouse = {
   scores: { performance: 95, accessibility: 60, 'best-practices': 30, seo: null },
@@ -259,4 +270,107 @@ test('renderHtml: the Lighthouse issue types show their advice and escape the el
   assert.match(out, /The page scores low on speed/)
   assert.match(out, /&lt;h1 class=&quot;x&quot;&gt;Hi&lt;\/h1&gt;/)
   assert.doesNotMatch(out, /<h1 class="x">/)
+})
+
+test('renderHtml: an issue with an element shows its selector, markup and measurement, escaped', () => {
+  const found = issue('title-too-long', 'warning', {
+    selector: 'html > head > title',
+    html: '<title><script>alert(1)</script></title>',
+    parentHtml: '<head>...</head>',
+    actual: 74,
+    expected: 'at most 60 characters'
+  })
+  const out = renderHtml(wrap([page('https://a.test/', [found])]))
+  assert.match(out, /Show the element/)
+  assert.match(out, /html &gt; head &gt; title/)
+  assert.match(out, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/)
+  assert.doesNotMatch(out, /<script>alert/)
+  assert.match(out, /Found 74\. Expected at most 60 characters\./)
+  // Once in "Show where" and once on the page card.
+  assert.equal(out.match(/Show the element/g).length, 2)
+  assert.doesNotMatch(renderHtml(report), /class="evidence"><summary>Show the (element|measurement)/)
+})
+
+test('renderHtml: element details are shown for the first 20 hits of a problem only', () => {
+  const pages = Array.from({ length: 25 }, (_, i) =>
+    page(`https://a.test/${i}`, [issue('missing-alt', 'warning', { selector: 'img', html: '<img>' })])
+  )
+  const out = renderHtml(wrap(pages))
+  const group = out.slice(out.indexOf('class="affected"'), out.indexOf('</ul>', out.indexOf('class="affected"')))
+  assert.equal(group.match(/Show the element/g).length, 20)
+  assert.equal(group.match(/<li>/g).length, 25)
+  assert.match(out, /Element details are shown for the first 20 of 25/)
+})
+
+const detailedLighthouse = {
+  ...lighthouse,
+  lighthouseVersion: '12.0.0',
+  formFactor: 'mobile',
+  runs: 3,
+  scoreSpread: { performance: [70, 90], seo: null },
+  lcpElement: { selector: 'img.hero', snippet: '<img class="hero">' },
+  audits: [
+    {
+      id: 'unused-css',
+      category: 'performance',
+      title: 'Remove unused CSS',
+      score: 20,
+      displayValue: null,
+      savings: { ms: 1200, bytes: 51200, metrics: { lcp: 800, cls: 0.05 } },
+      items: [
+        { url: 'https://a.test/app.css', line: 4, selector: 'div.x', snippet: '<div class="x">', wastedBytes: 2048 }
+      ]
+    }
+  ]
+}
+
+test('renderHtml: Lighthouse audits show their category, savings, items and explanation', () => {
+  const withNotes = buildReport({
+    pages: [page('https://a.test/', [], { lighthouse: structuredClone(detailedLighthouse) })],
+    site: [],
+    now: NOW
+  })
+  withNotes.lighthouseAudits = { 'unused-css': { description: 'Cut <b>CSS</b>.', learnMore: 'https://web.dev/x' } }
+  const out = renderHtml(withNotes)
+  assert.match(out, /Speed<\/span>/)
+  assert.match(out, /Could save about 1\.2 s and 50 KiB\./)
+  assert.match(out, /Improves LCP 800 ms, CLS 0\.05\./)
+  assert.match(out, /<a href="https:\/\/a\.test\/app\.css"[^>]*>https:\/\/a\.test\/app\.css<\/a>:4/)
+  assert.match(out, /wastes 2 KiB/)
+  assert.match(out, /Cut &lt;b&gt;CSS&lt;\/b&gt;\./)
+  assert.match(out, /<a href="https:\/\/web\.dev\/x"[^>]*>\s*Learn more\s*<\/a>/)
+  assert.match(out, /img\.hero/)
+  assert.match(out, /Lighthouse 12\.0\.0, mobile\. The middle of 3 runs; scores ranged: speed 70 to 90\./)
+  // Without notes, items or savings an audit has no details block.
+  const plain = renderHtml(report)
+  assert.doesNotMatch(plain, /Show details/)
+})
+
+test('renderHtml: "More about this page" lists the facts that are not shown at first', () => {
+  const out = renderHtml(report)
+  assert.match(out, /More about this page/)
+  assert.match(out, /<strong>H1<\/strong>\s*Welcome/)
+  assert.match(out, /Hello there/)
+  assert.match(out, /Next to the logo/)
+  assert.match(out, /Organization/)
+  assert.match(out, /Other page/)
+  const failed = page('https://a.test/', [issue('fetch-failed', 'error')], {
+    status: null,
+    finalUrl: null,
+    facts: null
+  })
+  assert.doesNotMatch(renderHtml(wrap([failed])), /More about this page/)
+})
+
+test('renderHtml: every redirect hop is listed, with its status', () => {
+  const hops = [
+    { url: 'http://a.test/', status: 301, location: 'https://a.test/' },
+    { url: 'https://a.test/', status: 302, location: 'https://a.test/home' }
+  ]
+  const out = renderHtml(wrap([page('http://a.test/', [], { finalUrl: 'https://a.test/home', redirects: hops })]))
+  assert.match(out, /class="redirects"/)
+  assert.match(out, />301<\/span>/)
+  assert.match(out, />302<\/span>/)
+  assert.match(out, /Reachable \(200\)/)
+  assert.doesNotMatch(renderHtml(report), /class="redirects"|Redirects to/)
 })
