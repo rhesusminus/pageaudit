@@ -1,6 +1,6 @@
 import { countSeverities, worstFirst } from '../report.js'
 import { adviceFor } from '../advice.js'
-import { auditRow, evidence, lcpElement, lighthouseNote, moreFacts, redirectList } from './detail.js'
+import { auditRow, evidence, hasEvidence, lcpElement, lighthouseNote, moreFacts, redirectList } from './detail.js'
 import { markup, raw } from './escape.js'
 import { CATEGORY_NAMES, formatMetric, link, plural } from './format.js'
 import { METRIC_BANDS, metricBand } from './model.js'
@@ -113,8 +113,6 @@ function affectedItem(hit, group, showEvidence) {
   </li>`
 }
 
-const hasEvidence = (hit) => Boolean(hit.selector || hit.html || hit.actual !== undefined || hit.expected)
-
 function fixItem(group, index) {
   const advice = adviceFor(group.type)
   return markup`<li class="fix">
@@ -136,7 +134,7 @@ function fixItem(group, index) {
           ${group.hits.map((hit, i) => affectedItem(hit, group, i < MAX_EVIDENCE_HITS))}
         </ul>
         ${
-          group.hits.length > MAX_EVIDENCE_HITS && group.hits.some(hasEvidence)
+          group.hits.slice(MAX_EVIDENCE_HITS).some(hasEvidence)
             ? markup`<p class="note">Element details are shown for the first ${MAX_EVIDENCE_HITS} of ${group.hits.length}.</p>`
             : ''
         }
@@ -206,7 +204,6 @@ function issueItem(issue) {
     <span class="issue-text">${advice?.title ?? issue.message}</span>
     ${issue.context ? markup`<code>${issue.context}</code>` : ''}
     <span class="note">${advice ? markup`${issue.message}. ` : ''}${link(issue.source, 'Source')}</span>
-    ${evidence(issue)}
   </li>`
 }
 

@@ -9,10 +9,17 @@ const EVIDENCE_LABEL = { element: 'Show the element', measurement: 'Show the mea
 
 // The element an issue is about and, for length checks, what was measured against what was expected.
 // Takes an issue or a group hit, both carry the same optional fields.
-export function evidence({ selector, html, parentHtml, actual, expected }) {
-  const hasElement = Boolean(selector || html)
-  const hasMeasurement = actual !== undefined || Boolean(expected)
-  if (!hasElement && !hasMeasurement) return ''
+const hasElementOf = ({ selector, html }) => Boolean(selector || html)
+const hasMeasurementOf = ({ actual, expected }) => actual !== undefined || Boolean(expected)
+
+// Whether evidence() has anything to show for the issue or hit.
+export const hasEvidence = (issue) => hasElementOf(issue) || hasMeasurementOf(issue)
+
+export function evidence(issue) {
+  if (!hasEvidence(issue)) return ''
+  const { selector, html, parentHtml, actual, expected } = issue
+  const hasElement = hasElementOf(issue)
+  const hasMeasurement = hasMeasurementOf(issue)
   return markup`<details class="evidence">
     <summary>${hasElement ? EVIDENCE_LABEL.element : EVIDENCE_LABEL.measurement}</summary>
     ${selector ? markup`<p class="note">Selector</p><code>${selector}</code>` : ''}
@@ -127,18 +134,24 @@ function headingOutline(headings) {
   </ul>`
 }
 
-function missingAlt(imageSamples) {
+// The samples are only the first images of the page, so the total says how many more there are.
+function missingAlt({ imageSamples, images }) {
   const bare = imageSamples.filter((image) => image.alt === null)
-  if (!bare.length) return ''
+  const unlisted = images.missingAlt - bare.length
+  if (!bare.length && unlisted <= 0) return ''
+  const more = unlisted > 0 ? plural(unlisted, bare.length ? 'more image' : 'image') : ''
   return markup`<ul class="outline">
     ${bare.map((image) => markup`<li>${image.src ? link(image.src) : 'Image without address'}${image.context ? markup` <span class="note">${image.context}</span>` : ''}</li>`)}
+    ${more ? markup`<li class="note">${more} without alt text not listed here.</li>` : ''}
   </ul>`
 }
 
-function linkList(samples) {
-  if (!samples.length) return ''
+function linkList({ linkSamples, links }) {
+  if (!linkSamples.length) return ''
+  const total = links.internal + links.external
   return markup`<ul class="outline">
-    ${samples.map((s) => markup`<li>${link(s.href, s.text || s.href)} <span class="note">${s.internal ? 'internal' : 'external'}${s.nofollow ? ', nofollow' : ''}</span></li>`)}
+    ${linkSamples.map((s) => markup`<li>${link(s.href, s.text || s.href)} <span class="note">${s.internal ? 'internal' : 'external'}${s.nofollow ? ', nofollow' : ''}</span></li>`)}
+    ${total > linkSamples.length ? markup`<li class="note">The first ${linkSamples.length} of ${total} links.</li>` : ''}
   </ul>`
 }
 
@@ -156,10 +169,11 @@ function moreRows(facts) {
     ['Robots', facts.robots ?? 'Not set'],
     ['Open Graph', social.length ? social.join(' / ') : orMissing(null)],
     ['Twitter card', orMissing(facts.twitterCard)],
-    ['Structured data', facts.jsonLdTypes.length ? facts.jsonLdTypes.join(', ') : orMissing(null)],
+    // No check asks for structured data, so its absence is not styled as a problem.
+    ['Structured data', facts.jsonLdTypes.length ? facts.jsonLdTypes.join(', ') : 'None found'],
     ['Headings', headingOutline(facts.headings)],
-    ['Images without alt text', missingAlt(facts.imageSamples)],
-    ['Links', linkList(facts.linkSamples)]
+    ['Images without alt text', missingAlt(facts)],
+    ['Links', linkList(facts)]
   ].filter(([, value]) => value !== '')
 }
 

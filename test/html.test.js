@@ -29,7 +29,7 @@ const facts = {
   headings: [{ level: 1, text: 'Welcome', excerpt: 'Hello there' }],
   wordCount: 120,
   mainText: null,
-  links: { internal: 4, external: 1, nofollow: 0 },
+  links: { internal: 1, external: 0, nofollow: 0 },
   linkSamples: [{ href: 'https://a.test/b', text: 'Other page', internal: true, nofollow: false }],
   images: { total: 2, missingAlt: 1 },
   imageSamples: [{ src: 'https://a.test/x.png', alt: null, context: 'Next to the logo' }],
@@ -286,9 +286,9 @@ test('renderHtml: an issue with an element shows its selector, markup and measur
   assert.match(out, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/)
   assert.doesNotMatch(out, /<script>alert/)
   assert.match(out, /Found 74\. Expected at most 60 characters\./)
-  // Once in "Show where" and once on the page card.
-  assert.equal(out.match(/Show the element/g).length, 2)
-  assert.doesNotMatch(renderHtml(report), /class="evidence"><summary>Show the (element|measurement)/)
+  // Once, under "Show where": the page card does not repeat it.
+  assert.equal(out.match(/Show the element/g).length, 1)
+  assert.doesNotMatch(renderHtml(report), /Show the (element|measurement)/)
 })
 
 test('renderHtml: element details are shown for the first 20 hits of a problem only', () => {
@@ -373,4 +373,37 @@ test('renderHtml: every redirect hop is listed, with its status', () => {
   assert.match(out, />302<\/span>/)
   assert.match(out, /Reachable \(200\)/)
   assert.doesNotMatch(renderHtml(report), /class="redirects"|Redirects to/)
+})
+
+test('renderHtml: the cap note appears only when later hits have details that were left out', () => {
+  const bare = (i) => page(`https://a.test/${i}`, [issue('missing-alt', 'warning')])
+  const rich = (i) => page(`https://a.test/${i}`, [issue('missing-alt', 'warning', { selector: 'img' })])
+  const none = Array.from({ length: 25 }, (_, i) => bare(i))
+  assert.doesNotMatch(renderHtml(wrap(none)), /Element details are shown/)
+  const late = [...none.slice(0, 20), ...Array.from({ length: 5 }, (_, i) => rich(20 + i))]
+  assert.match(renderHtml(wrap(late)), /Element details are shown for the first 20 of 25/)
+  const early = Array.from({ length: 25 }, (_, i) => (i < 20 ? rich(i) : bare(i)))
+  assert.doesNotMatch(renderHtml(wrap(early)), /Element details are shown/)
+})
+
+test('renderHtml: lists built from samples say how many are not shown', () => {
+  const partial = {
+    ...facts,
+    images: { total: 80, missingAlt: 12 },
+    imageSamples: [{ src: 'https://a.test/x.png', alt: null, context: null }],
+    links: { internal: 290, external: 10, nofollow: 0 }
+  }
+  const out = renderHtml(wrap([page('https://a.test/', [], { facts: partial })]))
+  assert.match(out, /11 more images without alt text not listed here/)
+  assert.match(out, /The first 1 of 300 links/)
+  const unseen = { ...partial, imageSamples: [] }
+  const none = renderHtml(wrap([page('https://a.test/', [], { facts: unseen })]))
+  assert.match(none, /12 images without alt text not listed here/)
+  // Complete lists carry no note.
+  assert.doesNotMatch(renderHtml(report), /not listed here|The first \d+ of/)
+})
+
+test('renderHtml: no structured data is not styled as a missing item', () => {
+  const out = renderHtml(wrap([page('https://a.test/', [], { facts: { ...facts, jsonLdTypes: [] } })]))
+  assert.match(out, /None found/)
 })
