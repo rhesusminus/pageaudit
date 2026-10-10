@@ -26,7 +26,8 @@ export function groupIssues(report) {
       hits: []
     }
     group.severity = worst(group.severity, issue.severity)
-    group.hits.push({ urls, context: issue.context, message: issue.message })
+    const { context, message, selector, html, parentHtml, actual, expected } = issue
+    group.hits.push({ urls, context, message, selector, html, parentHtml, actual, expected })
     groups.set(issue.type, group)
   }
   for (const page of report.pages) for (const issue of page.issues) add(issue, [page.url])

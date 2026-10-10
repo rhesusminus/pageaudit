@@ -1,24 +1,14 @@
 import { countSeverities, worstFirst } from '../report.js'
 import { adviceFor } from '../advice.js'
+import { auditRow, evidence, hasEvidence, lcpElement, lighthouseNote, moreFacts, redirectList } from './detail.js'
 import { markup, raw } from './escape.js'
+import { CATEGORY_NAMES, formatMetric, link, plural } from './format.js'
 import { METRIC_BANDS, metricBand } from './model.js'
 
 const SEVERITY_WORDS = { error: 'Needs fixing', warning: 'Should fix', info: 'Worth a look' }
-const CATEGORY_NAMES = {
-  performance: 'Speed',
-  accessibility: 'Accessibility',
-  'best-practices': 'Best practices',
-  seo: 'Search (SEO)'
-}
 const BAND_WORDS = { good: 'Good', average: 'Needs work', poor: 'Poor', unknown: 'Not measured' }
 const MAX_AUDITS = 8
 const RING_RADIUS = 52
-
-const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
-
-// Only http(s) addresses become links. Everything audited is one, this is a safety net.
-const link = (url, text = url) =>
-  /^https?:\/\//i.test(url) ? markup`<a href="${url}" rel="noopener noreferrer">${text}</a>` : markup`${text}`
 
 // The audit date as the person running the audit saw it, in their own time zone.
 const formatDate = (iso, timeZone) =>
@@ -110,12 +100,16 @@ export function healthSection(health, { pages }, inputs) {
   </section>`
 }
 
-function affectedItem(hit, group) {
+// Evidence is shown for the first hits only, so a problem on hundreds of pages stays readable.
+const MAX_EVIDENCE_HITS = 20
+
+function affectedItem(hit, group, showEvidence) {
   const note = hit.message === group.message ? '' : hit.message
   return markup`<li>
     ${hit.context ? markup`<code>${hit.context}</code>` : ''}
     <span class="urls">${hit.urls.map((url) => link(url))}</span>
     ${note ? markup`<span class="note">${note}</span>` : ''}
+    ${showEvidence ? evidence(hit) : ''}
   </li>`
 }
 
@@ -137,8 +131,13 @@ function fixItem(group, index) {
       <details>
         <summary>Show where</summary>
         <ul class="affected">
-          ${group.hits.map((hit) => affectedItem(hit, group))}
+          ${group.hits.map((hit, i) => affectedItem(hit, group, i < MAX_EVIDENCE_HITS))}
         </ul>
+        ${
+          group.hits.slice(MAX_EVIDENCE_HITS).some(hasEvidence)
+            ? markup`<p class="note">Element details are shown for the first ${MAX_EVIDENCE_HITS} of ${group.hits.length}.</p>`
+            : ''
+        }
       </details>
     </div>
   </li>`
@@ -169,7 +168,7 @@ const issueCounts = ({ errors, warnings, infos }) =>
 
 function statusText(status) {
   if (status === null) return 'Not reachable'
-  return status === 200 ? 'Reachable' : `Error ${status}`
+  return status === 200 ? 'Reachable (200)' : `Error ${status}`
 }
 
 const missing = markup`<span class="missing">Missing</span>`
@@ -180,6 +179,8 @@ function pageFacts(facts) {
     ['Title', facts.title ?? missing],
     ['Description', facts.description ?? missing],
     ['Main heading', facts.h1s.length ? facts.h1s.join(' / ') : missing],
+    ['Canonical address', facts.canonical ?? missing],
+    ['Language', facts.lang ?? missing],
     [
       'Content',
       `${plural(facts.wordCount, 'word')}, ${plural(facts.links.internal, 'internal link')}, ${plural(facts.links.external, 'external link')}, ${plural(facts.images.total, 'image')}`
@@ -206,12 +207,6 @@ function issueItem(issue) {
   </li>`
 }
 
-const formatMetric = (key, value) => {
-  if (value === null || value === undefined) return 'n/a'
-  if (key === 'cls') return String(value)
-  return value >= 1000 ? `${(value / 1000).toFixed(1)} s` : `${value} ms`
-}
-
 function metricRow([key, { label }], metrics) {
   const band = metricBand(key, metrics[key])
   return markup`<tr>
@@ -221,7 +216,7 @@ function metricRow([key, { label }], metrics) {
   </tr>`
 }
 
-function lighthouseBlock(lighthouse) {
+function lighthouseBlock(lighthouse, auditNotes) {
   if (!lighthouse) return ''
   const audits = lighthouse.audits.slice(0, MAX_AUDITS)
   const more = lighthouse.audits.length - audits.length + (lighthouse.omittedAudits ?? 0)
@@ -234,21 +229,22 @@ function lighthouseBlock(lighthouse) {
         ${Object.entries(METRIC_BANDS).map((entry) => metricRow(entry, lighthouse.metrics))}
       </tbody>
     </table>
+    ${lcpElement(lighthouse.lcpElement)}
     ${
       audits.length
         ? markup`<h4>Biggest opportunities</h4>
             <ul class="audits">
-              ${audits.map((a) => markup`<li><span class="audit-score">${a.score}/100</span> ${a.title}${a.displayValue ? markup` <span class="note">${a.displayValue}</span>` : ''}</li>`)}
+              ${audits.map((a) => auditRow(a, auditNotes))}
             </ul>
             ${more > 0 ? markup`<p class="note">${plural(more, 'more finding')} not listed here.</p>` : ''}`
         : ''
-    }`
+    }
+    ${lighthouseNote(lighthouse)}`
 }
 
-function pageBody(page) {
-  const redirected = page.finalUrl && page.finalUrl !== page.url
+function pageBody(page, auditNotes) {
   return markup`<div class="page-body">
-    ${redirected ? markup`<p class="note">Redirects to ${link(page.finalUrl)}</p>` : ''} ${pageFacts(page.facts)}
+    ${redirectList(page)} ${pageFacts(page.facts)} ${moreFacts(page.facts)}
     ${
       page.issues.length
         ? markup`<h4>Problems found</h4>
@@ -257,11 +253,11 @@ function pageBody(page) {
             </ul>`
         : markup`<p class="clean">No problems found on this page.</p>`
     }
-    ${lighthouseBlock(page.lighthouse)}
+    ${lighthouseBlock(page.lighthouse, auditNotes)}
   </div>`
 }
 
-function pageCard(page, open) {
+function pageCard(page, open, auditNotes) {
   return markup`<details class="page" ${open ? raw('open') : ''}>
     <summary>
       <h3 class="page-url">${page.url}</h3>
@@ -269,17 +265,17 @@ function pageCard(page, open) {
         ><span class="chip">${statusText(page.status)}</span><span class="chip">${issueCounts(page.counts)}</span></span
       >
     </summary>
-    ${pageBody(page)}
+    ${pageBody(page, auditNotes)}
   </details>`
 }
 
-export function pagesSection(pages) {
+export function pagesSection(pages, auditNotes) {
   const open = pages.length <= 3
   return markup`<section aria-labelledby="pages">
     <h2 id="pages">Pages</h2>
     <p class="lede">Worst first. Open a page to see what was found on it.</p>
     <div class="pages">
-      ${worstFirst(pages).map((page) => pageCard(page, open || countSeverities(page.issues).errors > 0))}
+      ${worstFirst(pages).map((page) => pageCard(page, open || countSeverities(page.issues).errors > 0, auditNotes))}
     </div>
   </section>`
 }

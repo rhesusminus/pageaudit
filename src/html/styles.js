@@ -184,6 +184,28 @@ h4 { font-size: 1.05rem; line-height: 1.35; margin: 0 0 0.35rem; }
 .band-average { color: var(--warn); }
 .band-poor { color: var(--err); }
 .audit-score { display: inline-block; min-width: 4rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.evidence { margin-top: 0.5rem; }
+.evidence > summary { color: var(--accent); font-size: 0.875rem; }
+.evidence > summary::before {
+  content: ""; display: inline-block; width: 0.45em; height: 0.45em; margin-right: 0.55em;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: translateY(-0.12em) rotate(-45deg); transition: transform 0.15s;
+}
+.evidence[open] > summary::before { transform: translateY(-0.2em) rotate(45deg); }
+.evidence > p { margin: 0.6rem 0 0; }
+pre {
+  margin: 0.15rem 0 0; padding: 0.6rem 0.75rem; background: var(--canvas); border: 1px solid var(--line);
+  border-radius: 8px; font: 0.8125rem/1.5 var(--mono); color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+pre code { margin: 0; display: inline; }
+.audits > li { display: block; }
+.audit-category { margin-left: 0.5rem; }
+.audit-items { display: grid; gap: 0.75rem; margin-top: 0.6rem; padding-left: 1rem; border-left: 2px solid var(--line); }
+.audit-items li { display: grid; gap: 0.15rem; overflow-wrap: anywhere; }
+.facts-more { margin-top: 1rem; }
+.outline { display: grid; gap: 0.3rem; overflow-wrap: anywhere; }
+.redirects { margin-top: 1rem; }
+.redirects ol { display: grid; gap: 0.25rem; margin-top: 0.25rem; overflow-wrap: anywhere; font-size: 0.9375rem; }
 .sources { display: grid; gap: 0.25rem; margin-top: 0.5rem; font-size: 0.875rem; overflow-wrap: anywhere; }
 .site-footer { padding-bottom: 3rem; color: var(--ink-2); font-size: 0.875rem; }
 
