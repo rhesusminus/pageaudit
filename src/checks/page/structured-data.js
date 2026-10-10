@@ -19,15 +19,18 @@ const NO_RICH_RESULT = new Set([
 
 const has = (node, key) => node[key] !== undefined && node[key] !== null && node[key] !== ''
 
-// A URL value is a string, an array of strings, or an object with a url (ImageObject).
-function relativeUrls(value) {
-  if (Array.isArray(value)) return value.flatMap(relativeUrls)
-  if (value && typeof value === 'object') return relativeUrls(value.url)
+// A URL value is a string, an array of strings, or an object with a url (ImageObject). The value comes from any
+// page, so nesting deeper than MAX_NESTING is not followed, or one page could overflow the stack and stop the audit.
+function relativeUrls(value, depth = 0) {
+  if (depth > MAX_NESTING) return []
+  if (Array.isArray(value)) return value.flatMap((item) => relativeUrls(item, depth + 1))
+  if (value && typeof value === 'object') return relativeUrls(value.url, depth + 1)
   return typeof value === 'string' && value.trim() && !/^([a-z][a-z0-9+.-]*:|\/\/)/i.test(value.trim()) ? [value] : []
 }
 
-const withoutUrl = (value) => {
-  if (Array.isArray(value)) return value.map(withoutUrl)
+const withoutUrl = (value, depth = 0) => {
+  if (depth > MAX_NESTING) return value
+  if (Array.isArray(value)) return value.map((item) => withoutUrl(item, depth + 1))
   if (!value || typeof value !== 'object') return value
   return Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'url'))
 }

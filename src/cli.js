@@ -128,12 +128,13 @@ async function readInputs(options, stdin, spinner) {
   const entries = fromArgs(options.urls)
   const chosen = options.lighthousePages.map((value) => ({ value, source: '--lighthouse-page', lighthouse: true }))
   const skipped = []
-  for (const path of options.files) entries.push(...(await fromFile(path, { stdin })))
+  // Pushed one by one: a list of a hundred thousand entries is too many arguments for push(...list).
+  for (const path of options.files) for (const entry of await fromFile(path, { stdin })) entries.push(entry)
   for (const url of options.sitemaps) {
     if (spinner) spinner.text = `Reading sitemap ${url}`
     const sitemap = await fromSitemap(url)
-    entries.push(...sitemap.entries)
-    skipped.push(...sitemap.skipped)
+    for (const entry of sitemap.entries) entries.push(entry)
+    for (const skip of sitemap.skipped) skipped.push(skip)
   }
   const resolved = resolveUrls([...entries, ...chosen], { limit: options.limit })
   return { ...resolved, skipped: [...skipped, ...resolved.skipped] }
