@@ -108,6 +108,7 @@ const NAMES = [
   'hreflang.html',
   'hreflang-fi.html',
   'bad-hreflang.html',
+  'weak-headers.html',
   'redirect-twice',
   'not-html',
   'missing-page',

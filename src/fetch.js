@@ -3,6 +3,9 @@ import pkg from '../package.json' with { type: 'json' }
 export const USER_AGENT = `pageaudit/${pkg.version} (+https://github.com/rhesusminus/pageaudit)`
 export const DEFAULT_TIMEOUT_MS = 15000
 const MAX_REDIRECTS = 10
+// The encodings Googlebot accepts. Node's fetch decodes all three but only asks for gzip and deflate itself,
+// so a server that only offers brotli would otherwise look like it does not compress.
+const ACCEPT_ENCODING = 'gzip, deflate, br'
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
 
 export class FetchError extends Error {
@@ -76,7 +79,11 @@ export async function request(
   let current = httpUrl(url, url, 'URL')
   try {
     for (;;) {
-      const res = await fetch(current, { redirect: 'manual', signal, headers: { accept, 'user-agent': USER_AGENT } })
+      const res = await fetch(current, {
+        redirect: 'manual',
+        signal,
+        headers: { accept, 'accept-encoding': ACCEPT_ENCODING, 'user-agent': USER_AGENT }
+      })
       const location = res.headers.get('location')
       if (!REDIRECT_STATUSES.has(res.status) || location === null) return answer(url, res, current, redirects, timeout)
       await res.body?.cancel()
@@ -136,18 +143,44 @@ function decode(bytes, contentType) {
   return new TextDecoder(encoding).decode(bytes)
 }
 
+// The response headers the header checks read, lowercase. A header that was not sent is left out.
+const CHECKED_HEADERS = [
+  'strict-transport-security',
+  'content-security-policy',
+  'content-security-policy-report-only',
+  'x-content-type-options',
+  'x-frame-options',
+  'content-encoding'
+]
+
+const checkedHeaders = (headers) =>
+  Object.fromEntries(CHECKED_HEADERS.filter((name) => headers.has(name)).map((name) => [name, headers.get(name)]))
+
 // The page-fetching interface the runner depends on. A headless browser can
 // replace it later as long as it returns the same shape. html is null unless
 // the response is a 200 with an HTML content type. robotsHeader is the X-Robots-Tag value or null.
+// headers holds the CHECKED_HEADERS that were sent, and bodyBytes the decompressed size of the html (null without html).
 export async function fetchPage(url, { timeout } = {}) {
   const res = await request(url, { timeout, accept: 'text/html,application/xhtml+xml' })
   const contentType = res.headers.get('content-type') ?? ''
   let html = null
+  let bodyBytes = null
   if (res.status === 200 && /html/i.test(contentType)) {
-    html = decode(await res.bytes(), contentType)
+    const bytes = await res.bytes()
+    html = decode(bytes, contentType)
+    bodyBytes = bytes.length
   } else {
     await res.discard()
   }
-  const robotsHeader = res.headers.get('x-robots-tag')
-  return { url, finalUrl: res.finalUrl, status: res.status, redirects: res.redirects, contentType, html, robotsHeader }
+  return {
+    url,
+    finalUrl: res.finalUrl,
+    status: res.status,
+    redirects: res.redirects,
+    contentType,
+    html,
+    robotsHeader: res.headers.get('x-robots-tag'),
+    headers: checkedHeaders(res.headers),
+    bodyBytes
+  }
 }

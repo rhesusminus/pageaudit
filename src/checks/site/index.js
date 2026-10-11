@@ -1,5 +1,6 @@
 import { checkCanonicalTargets } from './canonical.js'
 import { checkDuplicates } from './duplicates.js'
+import { checkResponseHeaders } from './headers.js'
 import { checkHreflangTargets } from './hreflang.js'
 
 // Checks that compare pages, run once every page is audited. Site issues list
@@ -7,5 +8,6 @@ import { checkHreflangTargets } from './hreflang.js'
 export const checkSite = (pages) => [
   ...checkDuplicates(pages),
   ...checkCanonicalTargets(pages),
-  ...checkHreflangTargets(pages)
+  ...checkHreflangTargets(pages),
+  ...checkResponseHeaders(pages)
 ]

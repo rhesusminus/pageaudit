@@ -758,3 +758,25 @@ test('cli: hreflang pages are checked on their own and against each other', asyn
   )
   assert.ok(report.rules['hreflang-missing-return'].title)
 })
+
+test('cli: response headers are judged once per origin, and the secure fixture defaults pass', async (t) => {
+  const weak = fixtureUrl('weak-headers.html')
+  const { code, report } = await runJson(t, [fixtureUrl('good.html'), weak])
+  assert.equal(code, 0)
+  assert.deepEqual(pageTypes(report.pages[1]), [])
+  assert.deepEqual(
+    report.site.map((issue) => [issue.type, issue.severity, issue.urls]),
+    [
+      ['missing-hsts', 'warning', [weak]],
+      ['missing-x-content-type-options', 'info', [weak]],
+      ['missing-clickjacking-protection', 'info', [weak]],
+      ['weak-csp', 'info', [weak]],
+      ['no-compression', 'info', [weak]]
+    ]
+  )
+  assert.equal(
+    report.site.find((issue) => issue.type === 'weak-csp').message,
+    "Content-Security-Policy allows inline scripts ('unsafe-inline' without a nonce or hash) and eval ('unsafe-eval')"
+  )
+  assert.ok(report.pages.every((page) => !('response' in page)))
+})

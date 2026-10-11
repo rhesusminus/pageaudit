@@ -4,14 +4,30 @@ const FIXTURES = new URL('../fixtures/', import.meta.url)
 export const FIXTURE_HOST = 'https://fixtures.test'
 
 const CONTENT_TYPES = { xml: 'application/xml', txt: 'text/plain; charset=utf-8', html: 'text/html; charset=utf-8' }
-// Fixture pages served with an extra response header.
-const HEADER_PAGES = { 'noindex-header.html': { 'x-robots-tag': 'noindex' } }
+// Every fixture page is served with these, so the header checks only fire where a test asks for it.
+const SECURE_HEADERS = {
+  'strict-transport-security': 'max-age=31536000',
+  'x-content-type-options': 'nosniff',
+  'x-frame-options': 'DENY'
+}
+// Fixture pages served with other response headers. An undefined value leaves out a secure default.
+const HEADER_PAGES = {
+  'noindex-header.html': { 'x-robots-tag': 'noindex' },
+  'weak-headers.html': {
+    'strict-transport-security': undefined,
+    'x-content-type-options': undefined,
+    'x-frame-options': undefined,
+    'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    'content-security-policy-report-only': "frame-ancestors 'none'"
+  }
+}
 const REDIRECTS = { 'redirect-once': '/good.html', 'redirect-twice': '/redirect-once' }
 
 // Replaces globalThis.fetch for the duration of a test. Requests to
 // https://fixtures.test/<name> are answered from test/fixtures/<name>, with a
 // content type chosen by extension. Special paths simulate other responses:
-// /noindex-header.html (a page served with an X-Robots-Tag: noindex header), /not-html (JSON content type), /timeout, /redirect-once (301 to /good.html)
+// /noindex-header.html (a page served with an X-Robots-Tag: noindex header), /weak-headers.html (no security
+// headers and a weak Content-Security-Policy), /not-html (JSON content type), /timeout, /redirect-once (301 to /good.html)
 // and /redirect-twice (301 to /redirect-once). Unknown names answer 404, and
 // other origins fail like a DNS error (ENOTFOUND).
 export function mockFixtureFetch(t) {
@@ -30,7 +46,9 @@ export function mockFixtureFetch(t) {
     if (REDIRECTS[name]) {
       return new Response(null, { status: 301, headers: { location: REDIRECTS[name] } })
     }
-    const headers = HEADER_PAGES[name] ?? {}
+    const headers = Object.entries({ ...SECURE_HEADERS, ...HEADER_PAGES[name] }).filter(
+      ([, value]) => value !== undefined
+    )
     let body
     try {
       body = await readFile(new URL(name, FIXTURES), 'utf8')
@@ -38,6 +56,6 @@ export function mockFixtureFetch(t) {
       return new Response('Not found', { status: 404, headers: { 'content-type': 'text/html' } })
     }
     const type = CONTENT_TYPES[name.split('.').pop()] ?? CONTENT_TYPES.html
-    return new Response(body, { headers: { 'content-type': type, ...headers } })
+    return new Response(body, { headers: [['content-type', type], ...headers] })
   })
 }
