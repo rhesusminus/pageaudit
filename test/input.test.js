@@ -62,7 +62,10 @@ test('sitemap: parses <urlset> locs, ignoring image locs and whitespace', () => 
       'https://fixtures.test/good.html',
       'https://fixtures.test/bad-missing.html',
       'https://fixtures.test/bad-images.html?ref=sitemap&page=1'
-    ]
+    ],
+    entries: 3,
+    emptyLocs: 0,
+    lastmods: [{ loc: 'https://fixtures.test/good.html', value: '2026-09-01' }]
   })
 })
 
@@ -233,4 +236,33 @@ test('resolve: the same URL twice in one sitemap is listed once', () => {
   const entry = { value: 'https://a.test/1', source: 'sitemap https://a.test/s.xml', sitemap: 'https://a.test/s.xml' }
   const { listed } = resolveUrls([entry, entry])
   assert.deepEqual(listed.get('https://a.test/1'), [{ sitemap: 'https://a.test/s.xml', url: 'https://a.test/1' }])
+})
+
+test('sitemap: keeps what validation needs, entries without a loc are counted but not listed', () => {
+  const sitemap = parseSitemap(
+    '<urlset><url><loc> https://a.test/1 </loc><lastmod>2026-13-01</lastmod></url><url><loc> </loc></url><url><lastmod>x</lastmod></url></urlset>'
+  )
+  assert.deepEqual(sitemap, {
+    kind: 'urlset',
+    locs: ['https://a.test/1'],
+    entries: 3,
+    emptyLocs: 2,
+    lastmods: [
+      { loc: 'https://a.test/1', value: '2026-13-01' },
+      { loc: '', value: 'x' }
+    ]
+  })
+})
+
+test('sitemap: fromSitemap returns the facts of the index and of every child, before any limit', async (t) => {
+  mockFixtureFetch(t)
+  const { files } = await fromSitemap(`${FIXTURE_HOST}/sitemap-index.xml`)
+  assert.deepEqual(
+    files.map(({ url, kind }) => [url, kind]),
+    [
+      [`${FIXTURE_HOST}/sitemap-index.xml`, 'index'],
+      [`${FIXTURE_HOST}/sitemap.xml`, 'urlset']
+    ]
+  )
+  assert.ok(files.every((f) => f.bytes > 0 && f.entries >= f.locs.length))
 })

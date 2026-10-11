@@ -2,7 +2,12 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import robotsParser from 'robots-parser'
 import { checkRobotsTxt } from '../src/checks/site/robots.js'
-import { checkSitemapEntries } from '../src/checks/site/sitemap.js'
+import {
+  checkSitemapDeclared,
+  checkSitemapEntries,
+  checkSitemapFiles,
+  checkSitemapHosts
+} from '../src/checks/site/sitemap.js'
 import { checkRobotsHeader, googleRules, mergeRobotsIssues } from '../src/checks/page/robots-header.js'
 import { fetchPage } from '../src/fetch.js'
 import { auditPage } from '../src/runner.js'
@@ -348,4 +353,93 @@ test('robots.txt check: no more than eight origins are read at once', async () =
     }
   })
   assert.equal(peak, 8)
+})
+
+const ok = (...sitemaps) => ({
+  status: 'ok',
+  parser: robotsParser('https://a.test/robots.txt', sitemaps.map((s) => `Sitemap: ${s}`).join('\n'))
+})
+const file = (fields) => ({
+  url: 'https://a.test/sitemap.xml',
+  kind: 'urlset',
+  bytes: 100,
+  entries: 0,
+  emptyLocs: 0,
+  locs: [],
+  lastmods: [],
+  ...fields
+})
+
+test('sitemap files: size, entries, bad and duplicate locs and bad dates are reported per file', () => {
+  const issues = checkSitemapFiles([
+    file({ entries: 50_001, bytes: 52_428_801 }),
+    file({
+      url: 'https://a.test/b.xml',
+      emptyLocs: 2,
+      locs: ['/relative', 'ftp://a.test/x', 'https://a.test/1', 'https://a.test/1'],
+      lastmods: [
+        { loc: 'https://a.test/1', value: '2026-03-31' },
+        { loc: 'https://a.test/1', value: '2026-02-30' },
+        { loc: 'https://a.test/1', value: '31/03/2026' },
+        { loc: 'https://a.test/1', value: '2026-03-31T10:00:00+02:00' },
+        { loc: 'https://a.test/1', value: '2026-03-31T10:00' }
+      ]
+    })
+  ])
+  const byType = Object.fromEntries(issues.map((i) => [i.type, i]))
+  assert.deepEqual(Object.keys(byType), [
+    'sitemap-too-many-urls',
+    'sitemap-too-large',
+    'sitemap-empty-loc',
+    'sitemap-loc-relative',
+    'sitemap-loc-not-http',
+    'sitemap-duplicate-loc',
+    'sitemap-invalid-lastmod'
+  ])
+  assert.deepEqual(byType['sitemap-too-many-urls'].urls, ['https://a.test/sitemap.xml'])
+  assert.deepEqual(byType['sitemap-empty-loc'].urls, ['https://a.test/b.xml'])
+  assert.equal(
+    byType['sitemap-invalid-lastmod'].context,
+    'https://a.test/b.xml: "2026-02-30", "31/03/2026", "2026-03-31T10:00"'
+  )
+  assert.equal(byType['sitemap-duplicate-loc'].context, 'https://a.test/b.xml: https://a.test/1')
+  assert.deepEqual(checkSitemapFiles([file({ entries: 50_000, bytes: 52_428_800 })]), [])
+})
+
+test('sitemap hosts: another host is only reported when its robots.txt does not name the sitemap', async () => {
+  const files = [
+    file({ locs: ['https://a.test/1', 'https://named.test/1', 'https://silent.test/1', 'https://down.test/1'] })
+  ]
+  const robots = {
+    'https://named.test': ok('https://a.test/sitemap.xml'),
+    'https://silent.test': ok('https://other.test/sitemap.xml'),
+    'https://down.test': { status: 'failed', reason: 'timeout' }
+  }
+  const issues = await checkSitemapHosts(files, { load: async (origin) => robots[origin] })
+  assert.equal(issues.length, 1)
+  assert.equal(issues[0].type, 'sitemap-off-host')
+  assert.equal(issues[0].severity, 'info')
+  assert.equal(issues[0].context, 'https://a.test/sitemap.xml lists https://silent.test, https://down.test')
+  assert.deepEqual(
+    await checkSitemapHosts([file({ locs: ['https://a.test/1'] })], { load: async () => assert.fail() }),
+    []
+  )
+})
+
+test('no-sitemap-declared: only a robots.txt that was read and has no Sitemap line is reported', async () => {
+  const pages = ['https://a.test/1', 'https://b.test/', 'https://c.test/', 'https://d.test/'].map((url) => ({
+    url,
+    finalUrl: url,
+    status: 200
+  }))
+  const robots = {
+    'https://a.test': ok(),
+    'https://b.test': ok('https://b.test/s.xml'),
+    'https://c.test': { status: 'missing' }
+  }
+  const issues = await checkSitemapDeclared(pages, { load: async (origin) => robots[origin] })
+  assert.equal(issues.length, 1)
+  assert.equal(issues[0].type, 'no-sitemap-declared')
+  assert.equal(issues[0].context, 'https://a.test/robots.txt')
+  assert.deepEqual(issues[0].urls, ['https://a.test/1'])
 })

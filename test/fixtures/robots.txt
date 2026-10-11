@@ -1,2 +1,4 @@
 User-agent: *
 Disallow: /blocked.html
+
+Sitemap: https://fixtures.test/sitemap.xml

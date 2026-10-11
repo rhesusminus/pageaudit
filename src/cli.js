@@ -3,13 +3,19 @@ import chalk from 'chalk'
 import ora from 'ora'
 import { checkRobotsTxt } from './checks/site/robots.js'
 import { checkSite } from './checks/site/index.js'
-import { checkSitemapEntries } from './checks/site/sitemap.js'
+import {
+  checkSitemapDeclared,
+  checkSitemapEntries,
+  checkSitemapFiles,
+  checkSitemapHosts
+} from './checks/site/sitemap.js'
 import { readLogo } from './html/logo.js'
 import { renderHtml } from './html/render.js'
 import { fromArgs } from './input/args.js'
 import { fromFile } from './input/file.js'
 import { resolveUrls } from './input/resolve.js'
 import { fromSitemap } from './input/sitemap.js'
+import { cachedRobotsLoader } from './robots.js'
 import { lighthouseFailed, runLighthouse, shortSummary } from './lighthouse.js'
 import { lighthouseIssues } from './lighthouse-issues.js'
 import { directoryOutputs, writeReportFile } from './output.js'
@@ -128,6 +134,7 @@ async function readInputs(options, stdin, spinner) {
   const entries = fromArgs(options.urls)
   const chosen = options.lighthousePages.map((value) => ({ value, source: '--lighthouse-page', lighthouse: true }))
   const skipped = []
+  const sitemapFiles = []
   // Pushed one by one: a list of a hundred thousand entries is too many arguments for push(...list).
   for (const path of options.files) for (const entry of await fromFile(path, { stdin })) entries.push(entry)
   for (const url of options.sitemaps) {
@@ -135,9 +142,10 @@ async function readInputs(options, stdin, spinner) {
     const sitemap = await fromSitemap(url)
     for (const entry of sitemap.entries) entries.push(entry)
     for (const skip of sitemap.skipped) skipped.push(skip)
+    for (const file of sitemap.files) sitemapFiles.push(file)
   }
   const resolved = resolveUrls([...entries, ...chosen], { limit: options.limit })
-  return { ...resolved, skipped: [...skipped, ...resolved.skipped] }
+  return { ...resolved, skipped: [...skipped, ...resolved.skipped], sitemapFiles }
 }
 
 // Resolves the URLs to audit. Returns { inputs } or { exitCode } when reading the inputs failed.
@@ -223,12 +231,19 @@ async function addLighthouse(pages, startSpinner, runner, { all, chosen, runs })
   }
 }
 
-// Reads the robots.txt files of the audited sites, with a spinner because a slow host can take a while.
-async function readRobots(pages, startSpinner) {
+// Reads the robots.txt files of the audited sites and checks them and the sitemaps against them, with a spinner
+// because a slow host can take a while. Each robots.txt is read once for all checks.
+async function checkRobotsAndSitemaps(pages, inputs, options, startSpinner) {
+  const load = cachedRobotsLoader()
   const loaded = pages.some((page) => page.status === 200 && page.finalUrl)
-  const spinner = loaded ? startSpinner('Reading robots.txt...') : null
+  const spinner = loaded || inputs.sitemapFiles.length ? startSpinner('Reading robots.txt...') : null
   try {
-    return await checkRobotsTxt(pages)
+    return [
+      ...(await checkRobotsTxt(pages, { load })),
+      ...checkSitemapFiles(inputs.sitemapFiles),
+      ...(await checkSitemapHosts(inputs.sitemapFiles, { load })),
+      ...(options.sitemaps.length ? [] : await checkSitemapDeclared(pages, { load }))
+    ]
   } finally {
     spinner?.stop()
   }
@@ -273,9 +288,13 @@ async function outputsAreFiles(options) {
   return directories.length === 0
 }
 
-// The cross-page issues: duplicates, robots.txt and sitemap entries.
-async function checkAllPages(pages, inputs, startSpinner) {
-  return [...checkSite(pages), ...(await readRobots(pages, startSpinner)), ...checkSitemapEntries(pages, inputs.listed)]
+// The cross-page issues: duplicates, robots.txt and sitemaps.
+async function checkAllPages(pages, inputs, options, startSpinner) {
+  return [
+    ...checkSite(pages),
+    ...(await checkRobotsAndSitemaps(pages, inputs, options, startSpinner)),
+    ...checkSitemapEntries(pages, inputs.listed)
+  ]
 }
 
 export async function run(argv, { stdin = process.stdin, lighthouse = runLighthouse } = {}) {
@@ -314,7 +333,7 @@ export async function run(argv, { stdin = process.stdin, lighthouse = runLightho
     chosen: inputs.marked,
     runs: options.lighthouseRuns
   })
-  const site = await checkAllPages(pages, inputs, startSpinner)
+  const site = await checkAllPages(pages, inputs, options, startSpinner)
   const report = buildReport({ pages, site, skipped: inputs.skipped })
   console.log(json ? JSON.stringify(report, null, 2) : formatReport(report, process.stdout.columns))
   if (!(await writeFiles(options, report, { logo, totalUrls: inputs.total }))) return 2
