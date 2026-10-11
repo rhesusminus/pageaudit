@@ -241,6 +241,36 @@ export const ADVICE = {
     why: 'Google only reads the first 2 MB of a page. Content and structured data after that point is not indexed.',
     fix: 'Move inline scripts, styles and images out into separate files and trim the page markup.'
   },
+  'form-input-no-label': {
+    title: 'A form field has no label',
+    why: 'Screen reader users hear only "edit text" and cannot tell what to enter. A placeholder is not a label, and clicking the label text cannot focus the field.',
+    fix: 'Add a visible <label> linked to the field, or an aria-label where no visible text fits.'
+  },
+  'link-no-name': {
+    title: 'A link has no name',
+    why: 'A link with no text, or only an icon without a description, is announced as just "link", so screen reader users cannot tell where it goes.',
+    fix: 'Give the link text, or an aria-label or an icon description that says where it goes.'
+  },
+  'link-generic-text': {
+    title: 'Links say "click here" or "read more"',
+    why: 'Screen reader users often browse a list of links on their own, where "read more" says nothing. Descriptive link text also helps search engines understand the target.',
+    fix: 'Make the link text describe the target. If the surrounding text already makes it clear, you can leave it.'
+  },
+  'link-empty-href': {
+    title: 'Links that go nowhere',
+    why: 'A link with # or javascript: as its address is usually a button in disguise. It is announced as a link but does not behave like one, and search engines cannot follow it.',
+    fix: 'Use a <button> for actions, or a real address for navigation. This can be fine for controls driven by scripts.'
+  },
+  'duplicate-id': {
+    title: 'The same id is used more than once',
+    why: 'Ids must be unique. When a label or ARIA attribute points at a duplicated id, browsers and screen readers pick the wrong element.',
+    fix: 'Give each element its own id, and update any label or ARIA reference that points to it.'
+  },
+  'missing-main-landmark': {
+    title: 'The page has no main area',
+    why: 'A <main> element lets keyboard and screen reader users skip the header and menu and jump to the content.',
+    fix: 'Wrap the main content of the page in a <main> element.'
+  },
   'mixed-content': {
     title: 'A secure page loads something insecurely',
     why: 'Browsers block or rewrite files loaded over http on an https page, so images or scripts may be missing, and the padlock can be lost.',

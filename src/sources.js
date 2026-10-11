@@ -27,5 +27,9 @@ export const SOURCES = {
   javascriptSeo: 'https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics',
   robotsTxt: 'https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt',
   sitemaps: 'https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap',
+  formLabels: 'https://www.w3.org/WAI/tutorials/forms/labels/',
+  linkPurpose: 'https://www.w3.org/WAI/WCAG22/Understanding/link-purpose-in-context.html',
+  landmarks: 'https://www.w3.org/WAI/ARIA/apg/practices/landmark-regions/',
+  htmlId: 'https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/id',
   mixedContent: 'https://web.dev/articles/what-is-mixed-content'
 }

@@ -1,8 +1,10 @@
 import { collapseWhitespace } from '../../text.js'
+import { checkA11y } from './a11y.js'
 import { checkHeadings } from './headings.js'
 import { checkHygiene } from './hygiene.js'
 import { checkImages } from './images.js'
 import { checkIndexing } from './indexing.js'
+import { checkLinks } from './links.js'
 import { canonicalLinks, checkMeta, descriptionValues, titleElement } from './meta.js'
 import { absolute, baseUrl, extractSignals } from './signals.js'
 import { checkSocial } from './social.js'
@@ -14,6 +16,8 @@ export { mergeRobotsIssues } from './robots-header.js'
 // Every check that looks at the parsed HTML of one page. `page` is { url, html }: the final URL and the raw body.
 export const checkHtml = ($, page = {}) => [
   ...checkImages($),
+  ...checkA11y($),
+  ...checkLinks($),
   ...checkMeta($),
   ...checkHeadings($),
   ...checkIndexing($),
