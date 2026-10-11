@@ -1,6 +1,6 @@
 import pkg from '../../package.json' with { type: 'json' }
 import { markup, raw } from './escape.js'
-import { averageScores, groupIssues, pageHealth, pagesWithSiteIssues, verdict } from './model.js'
+import { averageScores, groupIssues, pageHealth, pagesWithSiteIssues, siteWideIssues, verdict } from './model.js'
 import { cover, fixesSection, healthSection, methodSection, pagesSection } from './sections.js'
 import { CSS } from './styles.js'
 
@@ -30,7 +30,7 @@ export function renderHtml(
         </style>
       </head>
       <body>
-        ${cover({ report, title, client, logo, timeZone, scores, verdict: verdict(report.summary, health) })}
+        ${cover({ report, title, client, logo, timeZone, scores, verdict: verdict(report.summary, health, siteWideIssues(report)) })}
         <main class="wrap">
           ${healthSection(health, report.summary, { skipped: report.skipped, totalUrls })} ${fixesSection(groups)} ${pagesSection(pages, report.lighthouseAudits)}
           ${methodSection(report)}

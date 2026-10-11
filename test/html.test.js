@@ -3,7 +3,15 @@ import assert from 'node:assert/strict'
 import { readdir, readFile } from 'node:fs/promises'
 import { ADVICE } from '../src/advice.js'
 import { escapeHtml, markup, raw } from '../src/html/escape.js'
-import { averageScores, groupIssues, metricBand, pageHealth, pagesWithSiteIssues, verdict } from '../src/html/model.js'
+import {
+  averageScores,
+  groupIssues,
+  metricBand,
+  pageHealth,
+  pagesWithSiteIssues,
+  siteWideIssues,
+  verdict
+} from '../src/html/model.js'
 import { renderHtml } from '../src/html/render.js'
 import { buildReport } from '../src/report.js'
 
@@ -209,6 +217,16 @@ test('renderHtml: site-wide problems alone never make a page or the verdict "cle
   assert.doesNotMatch(out, /No problems found/)
   assert.equal(out.match(/Several pages share the same title/g).length, 3)
   assert.deepEqual(pageHealth(pagesWithSiteIssues({ pages, site })), { errors: 0, warnings: 2, clean: 0 })
+})
+
+test('renderHtml: a site issue on no audited page, like a sitemap file, still moves the verdict', () => {
+  const pages = [page('https://a.test/', [])]
+  const site = [{ ...issue('sitemap-too-large', 'error'), urls: ['https://a.test/s.xml'] }]
+  assert.deepEqual(siteWideIssues({ pages, site }), site)
+  assert.deepEqual(siteWideIssues({ pages, site: [{ ...site[0], urls: ['https://a.test/'] }] }), [])
+  const out = renderHtml(wrap(pages, site))
+  assert.match(out, /1 site-wide problem should be fixed first/)
+  assert.doesNotMatch(out, /No problems found on 1 page\./)
 })
 
 test('averageScores: inputs that redirect to one page count as one Lighthouse run', () => {

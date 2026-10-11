@@ -311,6 +311,56 @@ export const ADVICE = {
     why: 'Search engines have to follow the redirect to reach the page, which wastes a request for every listed address.',
     fix: 'List the final address of the page in the sitemap instead.'
   },
+  'sitemap-too-many-urls': {
+    title: 'A sitemap lists too many addresses',
+    why: 'Google accepts at most 50,000 addresses in one sitemap file. A larger file is rejected, so none of its pages are submitted this way.',
+    fix: 'Split the sitemap into several files of fewer than 50,000 addresses and list them in a sitemap index.'
+  },
+  'sitemap-too-large': {
+    title: 'A sitemap file is too large',
+    why: 'Google accepts sitemap files of at most 50 MB uncompressed. A larger file is rejected, so none of its pages are submitted this way.',
+    fix: 'Split the sitemap into several smaller files and list them in a sitemap index.'
+  },
+  'sitemap-empty-loc': {
+    title: 'A sitemap has entries without an address',
+    why: 'Each entry needs the full address of a page. Entries without one are ignored, so the page they were meant for is not submitted.',
+    fix: 'Fill in the address of each entry, or remove the empty ones. This is usually a bug in the tool that generates the sitemap.'
+  },
+  'sitemap-loc-relative': {
+    title: 'A sitemap lists addresses without the site name',
+    why: 'Sitemap addresses must be complete, starting with https:// and the site name. A path such as /about is not understood.',
+    fix: 'Write every address in full, for example https://www.example.com/about.'
+  },
+  'sitemap-loc-malformed': {
+    title: 'A sitemap lists addresses that are broken',
+    why: 'Some addresses, such as https:// with no site name, cannot be read as a web address. Search engines ignore these entries.',
+    fix: 'Correct or remove these entries. This is usually a bug in the tool that generates the sitemap.'
+  },
+  'sitemap-loc-not-http': {
+    title: 'A sitemap lists addresses that are not web pages',
+    why: 'Sitemaps can only list http and https addresses. Others, such as ftp: or mailto:, are ignored.',
+    fix: 'Remove these entries, or replace them with the https address of the page.'
+  },
+  'sitemap-duplicate-loc': {
+    title: 'A sitemap lists the same address more than once',
+    why: 'The repeats add size to the file and nothing else. They are usually a sign the sitemap is generated from more than one source.',
+    fix: 'List each address once.'
+  },
+  'sitemap-invalid-lastmod': {
+    title: 'A sitemap has dates in the wrong format',
+    why: 'Last-modified dates must be written like 2026-03-31 or 2026-03-31T10:00:00+00:00. Google ignores dates it cannot read, so it cannot tell which pages changed.',
+    fix: 'Write the dates in the W3C format, or remove them. Only keep them if they are accurate.'
+  },
+  'sitemap-off-host': {
+    title: 'A sitemap lists pages on another site',
+    why: 'A sitemap may only list pages on its own site, unless the other site has agreed to it. Without that, search engines ignore those entries.',
+    fix: 'Add a Sitemap line with the address of this file to the robots.txt of the other site, or submit it for that site in Search Console. If neither is wanted, remove the entries.'
+  },
+  'no-sitemap-declared': {
+    title: 'robots.txt does not point to a sitemap',
+    why: 'A Sitemap line in robots.txt is the standard way for search engines to find your sitemap, also those you have not submitted it to by hand.',
+    fix: 'Add a line such as Sitemap: https://www.example.com/sitemap.xml to robots.txt.'
+  },
   'lcp-slow': {
     title: 'The main content appears slowly',
     why: 'The largest element on the screen takes long to show, so visitors wait and may leave. Speed also counts as a search ranking signal. This number comes from a lab test on one machine, so it varies a little between runs.',

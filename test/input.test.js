@@ -62,7 +62,10 @@ test('sitemap: parses <urlset> locs, ignoring image locs and whitespace', () => 
       'https://fixtures.test/good.html',
       'https://fixtures.test/bad-missing.html',
       'https://fixtures.test/bad-images.html?ref=sitemap&page=1'
-    ]
+    ],
+    entries: 3,
+    emptyLocs: 0,
+    lastmods: [{ loc: 'https://fixtures.test/good.html', value: '2026-09-01' }]
   })
 })
 
@@ -233,4 +236,52 @@ test('resolve: the same URL twice in one sitemap is listed once', () => {
   const entry = { value: 'https://a.test/1', source: 'sitemap https://a.test/s.xml', sitemap: 'https://a.test/s.xml' }
   const { listed } = resolveUrls([entry, entry])
   assert.deepEqual(listed.get('https://a.test/1'), [{ sitemap: 'https://a.test/s.xml', url: 'https://a.test/1' }])
+})
+
+test('sitemap: keeps what validation needs, entries without a loc are counted but not listed', () => {
+  const sitemap = parseSitemap(
+    '<urlset><url><loc> https://a.test/1 </loc><lastmod>2026-13-01</lastmod></url><url><loc> </loc></url><url><lastmod>x</lastmod></url></urlset>'
+  )
+  assert.deepEqual(sitemap, {
+    kind: 'urlset',
+    locs: ['https://a.test/1'],
+    entries: 3,
+    emptyLocs: 2,
+    lastmods: [
+      { loc: 'https://a.test/1', value: '2026-13-01' },
+      { loc: '', value: 'x' }
+    ]
+  })
+})
+
+test('sitemap: fromSitemap returns the facts of the index and of every child, before any limit', async (t) => {
+  mockFixtureFetch(t)
+  const { files } = await fromSitemap(`${FIXTURE_HOST}/sitemap-index.xml`)
+  assert.deepEqual(
+    files.map(({ url, kind }) => [url, kind]),
+    [
+      [`${FIXTURE_HOST}/sitemap-index.xml`, 'index'],
+      [`${FIXTURE_HOST}/sitemap.xml`, 'urlset']
+    ]
+  )
+  assert.ok(files.every((f) => f.bytes > 0 && f.entries >= f.locs.length))
+})
+
+test('sitemap: a child that is itself an index still has its facts kept, once', async (t) => {
+  t.mock.method(globalThis, 'fetch', async (input) => {
+    const nested = new URL(input).pathname === '/child.xml'
+    const body = nested
+      ? '<sitemapindex><sitemap><loc/></sitemap></sitemapindex>'
+      : '<sitemapindex><sitemap><loc>https://a.test/child.xml</loc></sitemap><sitemap><loc>https://a.test/child.xml</loc></sitemap></sitemapindex>'
+    return new Response(body, { headers: { 'content-type': 'application/xml' } })
+  })
+  const { files, skipped } = await fromSitemap('https://a.test/root.xml')
+  assert.deepEqual(
+    files.map((f) => [f.url, f.emptyLocs]),
+    [
+      ['https://a.test/root.xml', 0],
+      ['https://a.test/child.xml', 1]
+    ]
+  )
+  assert.equal(skipped.length, 2)
 })

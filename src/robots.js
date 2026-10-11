@@ -34,3 +34,12 @@ export async function loadRobots(origin, { timeout } = {}) {
   if (res.status >= 500 || res.status === 429) return { status: 'unreachable', code: res.status }
   return { status: 'missing' }
 }
+
+// A loadRobots that reads each origin once, so several checks can look at the same robots.txt.
+export function cachedRobotsLoader(load = loadRobots) {
+  const cache = new Map()
+  return (origin, options) => {
+    if (!cache.has(origin)) cache.set(origin, load(origin, options))
+    return cache.get(origin)
+  }
+}
