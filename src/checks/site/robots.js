@@ -1,3 +1,4 @@
+import { mapLimited } from '../../concurrency.js'
 import { loadRobots } from '../../robots.js'
 import { SOURCES } from '../../sources.js'
 
@@ -54,16 +55,8 @@ export async function checkRobotsTxt(pages, { load = loadRobots } = {}) {
     byOrigin.set(origin, [...(byOrigin.get(origin) ?? []), page])
   }
   // The origins are read at the same time, one slow host should not hold up the rest.
-  const origins = [...byOrigin]
-  const checked = new Array(origins.length)
-  let next = 0
-  async function worker() {
-    while (next < origins.length) {
-      const i = next++
-      const [origin, group] = origins[i]
-      checked[i] = checkOrigin(origin, await load(origin), group)
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENT, origins.length) }, worker))
+  const checked = await mapLimited([...byOrigin], MAX_CONCURRENT, async ([origin, group]) =>
+    checkOrigin(origin, await load(origin), group)
+  )
   return checked.flat()
 }

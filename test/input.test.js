@@ -266,3 +266,22 @@ test('sitemap: fromSitemap returns the facts of the index and of every child, be
   )
   assert.ok(files.every((f) => f.bytes > 0 && f.entries >= f.locs.length))
 })
+
+test('sitemap: a child that is itself an index still has its facts kept, once', async (t) => {
+  t.mock.method(globalThis, 'fetch', async (input) => {
+    const nested = new URL(input).pathname === '/child.xml'
+    const body = nested
+      ? '<sitemapindex><sitemap><loc/></sitemap></sitemapindex>'
+      : '<sitemapindex><sitemap><loc>https://a.test/child.xml</loc></sitemap><sitemap><loc>https://a.test/child.xml</loc></sitemap></sitemapindex>'
+    return new Response(body, { headers: { 'content-type': 'application/xml' } })
+  })
+  const { files, skipped } = await fromSitemap('https://a.test/root.xml')
+  assert.deepEqual(
+    files.map((f) => [f.url, f.emptyLocs]),
+    [
+      ['https://a.test/root.xml', 0],
+      ['https://a.test/child.xml', 1]
+    ]
+  )
+  assert.equal(skipped.length, 2)
+})

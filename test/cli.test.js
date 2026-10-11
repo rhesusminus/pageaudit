@@ -232,6 +232,8 @@ test('cli: a huge sitemap is read and --limit still applies to it', async (t) =>
     ['https://big.test/p/0']
   )
   assert.equal(report.skipped.length, 0)
+  const tooMany = report.site.find((issue) => issue.type === 'sitemap-too-many-urls')
+  assert.deepEqual(tooMany.urls, ['https://big.test/all.xml'])
 })
 
 test('cli: --sitemap follows a sitemap index and reports skipped child sitemaps', async (t) => {
@@ -681,3 +683,60 @@ test('cli: pages that are not listed in a sitemap get no sitemap issues and allo
   assert.ok(report.site.every((issue) => !issue.type.startsWith('sitemap-')))
   assert.ok(report.site.every((issue) => issue.type !== 'blocked-by-robots'))
 })
+
+// Answers requests from a map of path to body and counts them. Other paths are 404.
+function mockSite(t, files) {
+  const requests = []
+  t.mock.method(globalThis, 'fetch', async (input) => {
+    const { pathname } = new URL(input)
+    requests.push(pathname)
+    if (!(pathname in files)) return new Response('Not found', { status: 404 })
+    const type = pathname.endsWith('.xml') ? 'application/xml' : pathname.endsWith('.txt') ? 'text/plain' : 'text/html'
+    return new Response(files[pathname], { headers: { 'content-type': type } })
+  })
+  return requests
+}
+
+const PAGE = '<html lang="en"><head><title>Page</title></head><body></body></html>'
+
+test('cli: a sitemap with no usable URLs is still validated', async (t) => {
+  mockSite(t, {
+    '/s.xml': '<urlset><url><loc/><lastmod>soon</lastmod></url><url><loc>https://</loc></url></urlset>'
+  })
+  const stdout = []
+  const stderr = []
+  t.mock.method(console, 'log', (...a) => stdout.push(a.join(' ')))
+  t.mock.method(console, 'error', (...a) => stderr.push(a.join(' ')))
+  const code = await run(['--sitemap', 'https://a.test/s.xml', '--json', '--delay', '0'])
+  assert.notEqual(code, 2)
+  const report = JSON.parse(stdout.join('\n'))
+  assert.match(stderr.join('\n'), /only the sitemap files were checked/)
+  assert.equal(report.summary.pages, 0)
+  assert.deepEqual(report.site.map((issue) => issue.type).sort(), [
+    'sitemap-empty-loc',
+    'sitemap-invalid-lastmod',
+    'sitemap-loc-malformed'
+  ])
+})
+
+test('cli: no-sitemap-declared is reported, unless --sitemap was used, and robots.txt is read once per origin', async (t) => {
+  const requests = mockSite(t, {
+    '/robots.txt': 'User-agent: *\nAllow: /',
+    '/a': PAGE,
+    '/b': PAGE,
+    '/s.xml': '<urlset><url><loc>https://a.test/a</loc></url></urlset>'
+  })
+  const plain = await runCliWithMock(t, ['https://a.test/a', 'https://a.test/b'])
+  assert.ok(plain.report.site.some((issue) => issue.type === 'no-sitemap-declared'))
+  assert.equal(requests.filter((path) => path === '/robots.txt').length, 1)
+  const withSitemap = await runCliWithMock(t, ['--sitemap', 'https://a.test/s.xml'])
+  assert.ok(withSitemap.report.site.every((issue) => issue.type !== 'no-sitemap-declared'))
+})
+
+async function runCliWithMock(t, args) {
+  const stdout = []
+  t.mock.method(console, 'log', (...a) => stdout.push(a.join(' ')))
+  t.mock.method(console, 'error', () => {})
+  const code = await run([...args, '--json', '--delay', '0'])
+  return { code, report: JSON.parse(stdout.join('\n')) }
+}

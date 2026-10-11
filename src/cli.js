@@ -162,14 +162,15 @@ async function loadInputs(options, stdin, startSpinner) {
   }
 }
 
-// Reports skipped and limited inputs. Returns false when there is nothing to audit.
-function announceInputs({ urls, skipped, total }, options) {
+// Reports skipped and limited inputs. Returns false when there is nothing to audit. Sitemap files that were
+// read are still checked when none of their entries is a page to audit.
+function announceInputs({ urls, skipped, total, sitemapFiles }, options) {
   for (const { input, source, reason } of skipped) {
     console.error(chalk.yellow(`Skipped ${input} (${source}): ${reason}`))
   }
   if (!urls.length) {
-    console.error('No URLs to audit.')
-    return false
+    console.error(sitemapFiles.length ? 'No URLs to audit, only the sitemap files were checked.' : 'No URLs to audit.')
+    return sitemapFiles.length > 0
   }
   if (options.limit && total > options.limit) {
     // Pages picked for Lighthouse are kept past the limit.

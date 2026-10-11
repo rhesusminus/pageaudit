@@ -36,12 +36,13 @@ async function readSitemap(url, timeout) {
   // A .xml.gz file served as-is, not as Content-Encoding (which fetch already decodes).
   if (bytes[0] === 0x1f && bytes[1] === 0x8b) bytes = gunzipSync(bytes)
   // The sitemap protocol requires UTF-8. The limit of 50 MB is on the uncompressed file.
-  return { ...parseSitemap(new TextDecoder().decode(bytes)), url, bytes: bytes.length }
+  return { ...parseSitemap(new TextDecoder().decode(bytes)), url, finalUrl: res.finalUrl, bytes: bytes.length }
 }
 
 // The facts of one sitemap file that its validation needs, kept before URLs are deduplicated or limited.
-const fileFacts = ({ url, kind, bytes, entries, emptyLocs, locs, lastmods }) => ({
+const fileFacts = ({ url, finalUrl, kind, bytes, entries, emptyLocs, locs, lastmods }) => ({
   url,
+  finalUrl,
   kind,
   bytes,
   entries,
@@ -65,6 +66,7 @@ export async function fromSitemap(url, { timeout } = {}) {
     return { entries: entries(sitemap.locs, url), skipped: [], files: [fileFacts(sitemap)] }
 
   const result = { entries: [], skipped: [], files: [fileFacts(sitemap)] }
+  const recorded = new Set([url])
   for (const child of sitemap.locs) {
     const skip = (why) => result.skipped.push({ input: child, source: `sitemap index ${url}`, reason: why })
     let nested
@@ -74,11 +76,11 @@ export async function fromSitemap(url, { timeout } = {}) {
       skip(`could not read sitemap: ${reason(err)}`, { cause: err })
       continue
     }
+    // An index that lists itself, or a file listed twice, is one file.
+    if (!recorded.has(nested.url)) result.files.push(fileFacts(nested))
+    recorded.add(nested.url)
     if (nested.kind === 'index') skip('nested sitemap index (only one level is followed)')
-    else {
-      result.files.push(fileFacts(nested))
-      for (const entry of entries(nested.locs, child)) result.entries.push(entry)
-    }
+    else for (const entry of entries(nested.locs, child)) result.entries.push(entry)
   }
   return result
 }

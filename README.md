@@ -226,6 +226,7 @@ These run after every page is audited and compare the pages that returned HTML. 
 | `sitemap-too-large`: a sitemap file is over 50 MB uncompressed                                                          | error    | seo           |
 | `sitemap-empty-loc`: a sitemap entry has an empty or missing `<loc>`                                                    | warning  | seo           |
 | `sitemap-loc-relative`: a sitemap lists a relative address                                                              | warning  | seo           |
+| `sitemap-loc-malformed`: a sitemap lists an address that cannot be parsed as a URL (`https://`)                         | warning  | seo           |
 | `sitemap-loc-not-http`: a sitemap lists an address that is not http or https                                            | warning  | seo           |
 | `sitemap-duplicate-loc`: a sitemap lists the same `<loc>` more than once                                                | info     | seo           |
 | `sitemap-invalid-lastmod`: a `<lastmod>` is not a W3C date (`2026-03-31`, or with a time and zone)                      | warning  | seo           |

@@ -301,6 +301,11 @@ export const ADVICE = {
     why: 'Sitemap addresses must be complete, starting with https:// and the site name. A path such as /about is not understood.',
     fix: 'Write every address in full, for example https://www.example.com/about.'
   },
+  'sitemap-loc-malformed': {
+    title: 'A sitemap lists addresses that are broken',
+    why: 'Some addresses, such as https:// with no site name, cannot be read as a web address. Search engines ignore these entries.',
+    fix: 'Correct or remove these entries. This is usually a bug in the tool that generates the sitemap.'
+  },
   'sitemap-loc-not-http': {
     title: 'A sitemap lists addresses that are not web pages',
     why: 'Sitemaps can only list http and https addresses. Others, such as ftp: or mailto:, are ignored.',

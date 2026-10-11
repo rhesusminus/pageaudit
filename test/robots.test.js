@@ -376,7 +376,7 @@ test('sitemap files: size, entries, bad and duplicate locs and bad dates are rep
     file({
       url: 'https://a.test/b.xml',
       emptyLocs: 2,
-      locs: ['/relative', 'ftp://a.test/x', 'https://a.test/1', 'https://a.test/1'],
+      locs: ['/relative', 'ftp://a.test/x', 'https://a.test/1', 'https://a.test/1', 'http://', 'https://[broken'],
       lastmods: [
         { loc: 'https://a.test/1', value: '2026-03-31' },
         { loc: 'https://a.test/1', value: '2026-02-30' },
@@ -392,6 +392,7 @@ test('sitemap files: size, entries, bad and duplicate locs and bad dates are rep
     'sitemap-too-large',
     'sitemap-empty-loc',
     'sitemap-loc-relative',
+    'sitemap-loc-malformed',
     'sitemap-loc-not-http',
     'sitemap-duplicate-loc',
     'sitemap-invalid-lastmod'
@@ -442,4 +443,14 @@ test('no-sitemap-declared: only a robots.txt that was read and has no Sitemap li
   assert.equal(issues[0].type, 'no-sitemap-declared')
   assert.equal(issues[0].context, 'https://a.test/robots.txt')
   assert.deepEqual(issues[0].urls, ['https://a.test/1'])
+})
+
+test('sitemap hosts: equivalent spellings of the sitemap address match, and a redirected sitemap belongs to its final host', async () => {
+  const named = ok('https://A.TEST/sitemap.xml')
+  const files = [file({ locs: ['https://b.test/1'] })]
+  assert.deepEqual(await checkSitemapHosts(files, { load: async () => named }), [])
+  const moved = [
+    file({ url: 'https://old.test/s.xml', finalUrl: 'https://new.test/s.xml', locs: ['https://new.test/1'] })
+  ]
+  assert.deepEqual(await checkSitemapHosts(moved, { load: async () => assert.fail() }), [])
 })

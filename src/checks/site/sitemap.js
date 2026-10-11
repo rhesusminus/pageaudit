@@ -1,3 +1,4 @@
+import { mapLimited } from '../../concurrency.js'
 import { pageKey } from '../../input/resolve.js'
 import { loadRobots } from '../../robots.js'
 import { SOURCES } from '../../sources.js'
@@ -74,19 +75,19 @@ const MAX_HOSTS = 20
 const MAX_CONCURRENT = 8
 
 // W3C datetime as the sitemap protocol allows it: YYYY, YYYY-MM, YYYY-MM-DD, or a date with a time and zone.
-const LASTMOD = /^\d{4}(-\d{2}(-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2}))?)?)?$/
+const LASTMOD =
+  /^(\d{4})(?:-(\d{2})(?:-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-](\d{2}):(\d{2})))?)?)?$/
 
 function validLastmod(value) {
-  if (!LASTMOD.test(value)) return false
-  const [, month, day, hour, minute, second, zoneHour, zoneMinute] =
-    /^\d{4}(?:-(\d{2}))?(?:-(\d{2}))?(?:T(\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(?:Z|[+-](\d{2}):(\d{2})))?$/.exec(value)
-  if (month && (month < 1 || month > 12)) return false
-  if (day) {
-    const days = new Date(Date.UTC(Number(value.slice(0, 4)), Number(month), 0)).getUTCDate()
-    if (day < 1 || day > days) return false
-  }
-  if (hour && (hour > 23 || minute > 59 || (second && second > 59))) return false
-  return !(zoneHour && (zoneHour > 23 || zoneMinute > 59))
+  const match = LASTMOD.exec(value)
+  if (!match) return false
+  const [year, month, day, hour, minute, second, zoneHour, zoneMinute] = match
+    .slice(1)
+    .map((part) => part && Number(part))
+  if (month !== undefined && (month < 1 || month > 12)) return false
+  if (day !== undefined && (day < 1 || day > new Date(Date.UTC(year, month, 0)).getUTCDate())) return false
+  if (hour !== undefined && (hour > 23 || minute > 59 || second > 59)) return false
+  return !(zoneHour !== undefined && (zoneHour > 23 || zoneMinute > 59))
 }
 
 const parse = (loc) => {
@@ -99,21 +100,25 @@ const parse = (loc) => {
 
 const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i
 
-// What is wrong with the <loc> and <lastmod> values of one sitemap file, in file order.
-function inspect({ locs, lastmods }) {
+// What is wrong with the <loc> values of one sitemap file, and the origins it lists. A loc that has a scheme
+// but cannot be parsed (`http://`) is malformed.
+function inspectLocs(locs) {
   const seen = new Set()
-  const found = { duplicates: new Set(), notHttp: [], relative: [], hosts: new Set() }
+  const found = { duplicates: new Set(), notHttp: [], relative: [], malformed: [], origins: new Set() }
   for (const loc of locs) {
     if (seen.has(loc)) found.duplicates.add(loc)
     seen.add(loc)
     const url = parse(loc)
-    if (url && (url.protocol === 'http:' || url.protocol === 'https:')) found.hosts.add(url.origin)
-    else if (HAS_SCHEME.test(loc) && url) found.notHttp.push(loc)
-    else if (!HAS_SCHEME.test(loc)) found.relative.push(loc)
+    if (url && (url.protocol === 'http:' || url.protocol === 'https:')) found.origins.add(url.origin)
+    else if (url) found.notHttp.push(loc)
+    else (HAS_SCHEME.test(loc) ? found.malformed : found.relative).push(loc)
   }
-  found.badLastmods = lastmods.filter(({ value }) => !validLastmod(value))
   return found
 }
+
+const badLastmods = ({ lastmods }) => lastmods.filter(({ value }) => !validLastmod(value))
+
+const inspect = (file) => ({ ...inspectLocs(file.locs), badLastmods: badLastmods(file) })
 
 const quote = (values, total = values.length) => {
   const shown = values.slice(0, EXAMPLES).join(', ')
@@ -161,6 +166,12 @@ const FILE_RULES = [
     detail: (file, found) => (found.relative.length ? `${file.url}: ${quote(found.relative)}` : null)
   },
   {
+    type: 'sitemap-loc-malformed',
+    severity: 'warning',
+    message: 'A sitemap lists addresses that are not valid URLs',
+    detail: (file, found) => (found.malformed.length ? `${file.url}: ${quote(found.malformed)}` : null)
+  },
+  {
     type: 'sitemap-loc-not-http',
     severity: 'warning',
     message: 'A sitemap lists addresses that are not http or https URLs',
@@ -200,32 +211,21 @@ export function checkSitemapFiles(files = []) {
   )
 }
 
-// Runs fn over the items, a few at a time.
-async function mapLimited(items, fn) {
-  const out = new Array(items.length)
-  let next = 0
-  async function worker() {
-    while (next < items.length) {
-      const i = next++
-      out[i] = await fn(items[i])
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENT, items.length) }, worker))
-  return out
-}
-
 // A sitemap may list URLs on another host only when that host says so, by naming the sitemap in its
 // robots.txt (or through Search Console, which cannot be read from here). So this is only an info: it lists
 // the hosts whose robots.txt does not name the sitemap. Only the first hosts of a file are looked at.
 export async function checkSitemapHosts(files = [], { load = loadRobots } = {}) {
   const matches = []
   for (const file of files.filter((f) => f.kind === 'urlset')) {
-    const own = parse(file.url)?.origin
-    const hosts = [...inspect(file).hosts].filter((origin) => origin !== own).slice(0, MAX_HOSTS)
+    // A sitemap that redirected belongs to the host it ended up on.
+    const own = parse(file.finalUrl ?? file.url)?.origin
+    const addresses = new Set([file.url, file.finalUrl].filter(Boolean).map((url) => parse(url)?.href))
+    const hosts = [...inspectLocs(file.locs).origins].filter((origin) => origin !== own).slice(0, MAX_HOSTS)
     const unproven = (
-      await mapLimited(hosts, async (origin) => {
+      await mapLimited(hosts, MAX_CONCURRENT, async (origin) => {
         const robots = await load(origin)
-        const named = robots?.status === 'ok' && robots.parser.getSitemaps().includes(file.url)
+        const named =
+          robots?.status === 'ok' && robots.parser.getSitemaps().some((url) => addresses.has(parse(url)?.href))
         return named ? null : origin
       })
     ).filter(Boolean)
@@ -251,7 +251,7 @@ export async function checkSitemapDeclared(pages, { load = loadRobots } = {}) {
     )
   ]
   const missing = (
-    await mapLimited(origins, async (origin) => {
+    await mapLimited(origins, MAX_CONCURRENT, async (origin) => {
       const robots = await load(origin)
       return robots?.status === 'ok' && robots.parser.getSitemaps().length === 0 ? origin : null
     })
