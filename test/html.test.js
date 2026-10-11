@@ -43,7 +43,8 @@ const facts = {
   imageSamples: [{ src: 'https://a.test/x.png', alt: null, context: 'Next to the logo' }],
   openGraph: { title: null, description: null, image: null, type: null, url: null },
   twitterCard: null,
-  jsonLdTypes: ['Organization']
+  jsonLdTypes: ['Organization'],
+  hreflang: [{ lang: 'fi', href: 'https://a.test/fi' }]
 }
 const lighthouse = {
   scores: { performance: 95, accessibility: 60, 'best-practices': 30, seo: null },
@@ -371,6 +372,7 @@ test('renderHtml: "More about this page" lists the facts that are not shown at f
   assert.match(out, /Hello there/)
   assert.match(out, /Next to the logo/)
   assert.match(out, /Organization/)
+  assert.match(out, /fi: https:\/\/a.test\/fi/)
   assert.match(out, /Other page/)
   const failed = page('https://a.test/', [issue('fetch-failed', 'error')], {
     status: null,

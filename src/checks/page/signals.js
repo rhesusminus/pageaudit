@@ -61,6 +61,18 @@ function headings($) {
     .map((el) => ({ level: Number(el.tagName[1]), text: clean($(el).text()) ?? '', excerpt: excerpts.get(el) ?? null }))
 }
 
+// Alternate-language links in <head>, the only place Google reads them.
+export const hreflangLinks = ($) => $('head link[rel~="alternate" i][hreflang]').toArray()
+
+// Every declared alternate, hrefs resolved like a browser would. An address that cannot be resolved stays as written.
+// Kept whole so the site checks see every return link; the report caps the list.
+function hreflang($, baseUrl) {
+  return hreflangLinks($).map((el) => {
+    const href = ($(el).attr('href') ?? '').trim()
+    return { lang: ($(el).attr('hreflang') ?? '').trim(), href: absolute(href, baseUrl) ?? href }
+  })
+}
+
 export const host = (url) => new URL(url).hostname.toLowerCase().replace(/^www\./, '')
 
 const MAX_LINK_SAMPLES = 25
@@ -153,6 +165,7 @@ export function extractSignals($, baseUrl, pageUrl) {
     imageSamples: imageSamples($, baseUrl),
     openGraph: openGraph($),
     twitterCard: metaContent($, TWITTER_CARD),
-    jsonLdTypes: jsonLdTypes($)
+    jsonLdTypes: jsonLdTypes($),
+    hreflang: hreflang($, baseUrl)
   }
 }

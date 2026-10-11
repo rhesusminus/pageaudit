@@ -5,6 +5,7 @@ import { parse } from '../src/parse.js'
 import { checkImages } from '../src/checks/page/images.js'
 import { checkMeta } from '../src/checks/page/meta.js'
 import { checkHeadings } from '../src/checks/page/headings.js'
+import { checkHreflang, validHreflang } from '../src/checks/page/hreflang.js'
 import { checkHygiene } from '../src/checks/page/hygiene.js'
 import { checkIndexing } from '../src/checks/page/indexing.js'
 import { checkSocial } from '../src/checks/page/social.js'
@@ -898,4 +899,129 @@ test('facts: imageSamples read the words next to the image, also in a huge wrapp
 
 test('facts: an empty main area falls back to the body text', async () => {
   assert.equal((await factsOf('<body><main id="app"></main><p>Real text</p></body>')).mainText, 'Real text')
+})
+
+const PAGE_URL = 'https://a.test/en'
+const alternates = (links) =>
+  checkHreflang(
+    parse(
+      `<head>${links.map(([lang, href]) => `<link rel="alternate" hreflang="${lang}" href="${href}">`).join('')}</head>`
+    ),
+    { url: PAGE_URL }
+  )
+
+test('hreflang: valid language, script and region codes are accepted', () => {
+  for (const code of [
+    'fi',
+    'FI',
+    'fi-FI',
+    'FI-fi',
+    'en',
+    'EN-gb',
+    'sv-FI',
+    'zh-Hant-TW',
+    'fil',
+    'es-419',
+    'x-default'
+  ]) {
+    assert.ok(validHreflang(code), code)
+  }
+})
+
+test('hreflang: unknown codes, three-letter forms of two-letter ones, reserved regions and wrong separators are rejected', () => {
+  for (const code of ['', 'xx', 'fin', 'eng', 'fi_FI', 'fi-FIN', 'en-UK', 'en-EU', 'en-XX', 'zh-Abcd', 'en-GB-x']) {
+    assert.ok(!validHreflang(code), code)
+  }
+})
+
+test('hreflang: a complete, valid set has no issues', () => {
+  const links = [
+    ['en', PAGE_URL],
+    ['fi', 'https://a.test/fi'],
+    ['x-default', PAGE_URL]
+  ]
+  assert.deepEqual(alternates(links), [])
+})
+
+test('hreflang: pages without alternates are not asked to have any', () => {
+  assert.deepEqual(checkHreflang(parse('<head><title>T</title></head>'), { url: PAGE_URL }), [])
+})
+
+test('hreflang: invalid codes and relative or empty URLs are warnings with evidence', () => {
+  const issues = alternates([
+    ['en', PAGE_URL],
+    ['x-default', PAGE_URL],
+    ['en-UK', 'https://a.test/gb'],
+    ['fi', '/fi'],
+    ['sv', '']
+  ])
+  assert.deepEqual(types(issues), ['invalid-hreflang', 'relative-hreflang', 'relative-hreflang'])
+  assert.ok(issues.every((issue) => issue.severity === 'warning' && issue.selector && issue.html))
+  assert.equal(issues[0].actual, 'en-UK')
+  assert.equal(issues[2].message, 'Hreflang link has no href')
+})
+
+test('hreflang: a repeated language is info with one URL and a warning with two', () => {
+  const same = alternates([
+    ['en', PAGE_URL],
+    ['EN', PAGE_URL],
+    ['x-default', PAGE_URL]
+  ])
+  assert.deepEqual(
+    same.map((i) => [i.type, i.severity]),
+    [['duplicate-hreflang', 'info']]
+  )
+  const resolved = alternates([
+    ['en', PAGE_URL],
+    ['fr', '/fr/'],
+    ['fr', 'https://a.test/fr/'],
+    ['x-default', PAGE_URL]
+  ])
+  assert.deepEqual(
+    resolved.filter((i) => i.type === 'duplicate-hreflang').map((i) => i.severity),
+    ['info']
+  )
+  const conflicting = alternates([
+    ['en', PAGE_URL],
+    ['en', 'https://a.test/other'],
+    ['x-default', PAGE_URL]
+  ])
+  assert.deepEqual(
+    conflicting.map((i) => [i.type, i.severity]),
+    [['duplicate-hreflang', 'warning']]
+  )
+})
+
+test('hreflang: the page must list itself, directly, relatively or through its canonical', () => {
+  const others = [
+    ['fi', 'https://a.test/fi'],
+    ['x-default', 'https://a.test/fi']
+  ]
+  assert.deepEqual(types(alternates(others)), ['missing-self-hreflang'])
+  assert.deepEqual(types(alternates([...others, ['en', '/en/']])), ['relative-hreflang'])
+  const canonical = parse(
+    '<head><link rel="canonical" href="https://a.test/home"><link rel="alternate" hreflang="en" href="https://a.test/home">' +
+      '<link rel="alternate" hreflang="x-default" href="https://a.test/home"></head>'
+  )
+  assert.deepEqual(checkHreflang(canonical, { url: 'https://a.test/home?utm=1' }), [])
+})
+
+test('hreflang: a missing x-default is info only', () => {
+  const issues = alternates([['en', PAGE_URL]])
+  assert.deepEqual(
+    issues.map((i) => [i.type, i.severity]),
+    [['missing-x-default', 'info']]
+  )
+})
+
+test('fixture bad-hreflang.html: invalid code, relative URL, conflicting duplicate, no self link, no x-default', () => {
+  const $ = fixture('bad-hreflang.html')
+  assert.deepEqual(types(checkHreflang($, { url: 'https://fixtures.test/bad-hreflang.html' })).sort(), [
+    'duplicate-hreflang',
+    'invalid-hreflang',
+    'missing-self-hreflang',
+    'missing-x-default',
+    'relative-hreflang'
+  ])
+  assert.deepEqual(checkHreflang(fixture('hreflang.html'), { url: 'https://fixtures.test/hreflang.html' }), [])
 })

@@ -1,12 +1,17 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { checkHreflangTargets } from '../src/checks/site/hreflang.js'
 import { checkSite } from '../src/checks/site/index.js'
 import { runAudit } from '../src/runner.js'
 
-// Builds a page from head/body parts. canonical is written as given (may be relative).
-const html = ({ title, description, h1s = [], canonical }) =>
+// Builds a page from head/body parts. canonical is written as given (may be relative), alternates are { lang: href }.
+const html = ({ title, description, h1s = [], canonical, alternates = {}, robots }) =>
   `<html><head>${title === undefined ? '' : `<title>${title}</title>`}` +
   `${description === undefined ? '' : `<meta name="description" content="${description}">`}` +
+  `${robots === undefined ? '' : `<meta name="robots" content="${robots}">`}` +
+  Object.entries(alternates)
+    .map(([lang, href]) => `<link rel="alternate" hreflang="${lang}" href="${href}">`)
+    .join('') +
   `${canonical === undefined ? '' : `<link rel="canonical" href="${canonical}">`}</head>` +
   `<body>${h1s.map((h) => `<h1>${h}</h1>`).join('')}</body></html>`
 
@@ -143,4 +148,96 @@ test('site: a relative canonical is resolved against <base href>', async () => {
   })
   const [other] = await runAudit(['https://a.test/x'], { fetchPage: relativeBase, delay: 0 })
   assert.equal(other.facts.canonical, 'https://a.test/dir/p')
+})
+
+const EN = 'https://a.test/en'
+const FI = 'https://a.test/fi'
+const SV = 'https://a.test/sv'
+const hreflangIssues = (pages) => brief(checkSite(pages).filter(({ type }) => type.startsWith('hreflang-')))
+
+test('site: hreflang alternates that list each other are clean', async () => {
+  const alternates = { en: EN, fi: FI }
+  const pages = await audit({ [EN]: { title: 'A', alternates }, [FI]: { title: 'B', alternates } })
+  assert.deepEqual(hreflangIssues(pages), [])
+})
+
+test('site: a hreflang alternate that does not link back is reported once per direction', async () => {
+  const pages = await audit({
+    [EN]: { title: 'A', alternates: { en: EN, fi: FI, sv: SV } },
+    [FI]: { title: 'B', alternates: { fi: FI } },
+    [SV]: { title: 'C', alternates: { sv: SV, fi: FI } }
+  })
+  const issues = checkSite(pages).filter(({ type }) => type === 'hreflang-missing-return')
+  assert.deepEqual(brief(issues), [
+    ['hreflang-missing-return', [EN, FI]],
+    ['hreflang-missing-return', [EN, SV]],
+    ['hreflang-missing-return', [SV, FI]]
+  ])
+  assert.equal(issues[0].context, `${FI} has no hreflang link to ${EN}`)
+  assert.equal(issues[0].severity, 'warning')
+})
+
+test('site: hreflang targets that were not audited, failed or are not HTML are not judged', async () => {
+  const pages = await audit({
+    [EN]: { title: 'A', alternates: { en: EN, fi: FI, sv: SV, de: 'https://a.test/de' } },
+    [FI]: { status: 404 },
+    [SV]: { status: 500 }
+  })
+  assert.deepEqual(hreflangIssues(pages), [])
+})
+
+test('site: a hreflang return link to a redirected input still counts', async () => {
+  const pages = await audit({
+    'http://a.test/en': { title: 'A', finalUrl: EN, alternates: { en: EN, fi: FI } },
+    [FI]: { title: 'B', alternates: { fi: FI, en: 'http://a.test/en' } }
+  })
+  assert.deepEqual(hreflangIssues(pages), [])
+})
+
+test('site: hreflang alternates that are noindex or canonicalised elsewhere are reported with every page naming them', async () => {
+  const alternates = { en: EN, fi: FI, sv: SV }
+  const pages = await audit({
+    [EN]: { title: 'A', alternates },
+    [FI]: { title: 'B', alternates, robots: 'noindex' },
+    [SV]: { title: 'C', alternates, canonical: EN }
+  })
+  assert.deepEqual(hreflangIssues(pages), [
+    ['hreflang-target-noindex', [FI, EN, SV]],
+    ['hreflang-target-canonicalised', [SV, EN, FI]]
+  ])
+})
+
+test('site: a hreflang return link past the report cap still counts', async () => {
+  const others = Object.fromEntries(Array.from({ length: 100 }, (_, i) => [`fi-${i}`, `https://b.test/${i}`]))
+  const pages = await audit({
+    [EN]: { title: 'A', alternates: { en: EN, fi: FI } },
+    [FI]: { title: 'B', alternates: { fi: FI, ...others, en: EN } }
+  })
+  assert.deepEqual(hreflangIssues(pages), [])
+})
+
+test('site: inputs that end at the same page give one hreflang issue naming them all', async () => {
+  const pages = await audit({
+    'http://a.test/en': { title: 'A', finalUrl: EN, alternates: { en: EN, fi: FI } },
+    [EN]: { title: 'A', alternates: { en: EN, fi: FI } },
+    [FI]: { title: 'B', alternates: { fi: FI }, robots: 'noindex' }
+  })
+  assert.deepEqual(hreflangIssues(pages), [
+    ['hreflang-missing-return', ['http://a.test/en', EN, FI]],
+    ['hreflang-target-noindex', [FI, 'http://a.test/en', EN]]
+  ])
+})
+
+test('site: a hreflang target named by a page that 200,000 inputs redirect to is still one issue', () => {
+  const facts = (hreflang, canonical = null) => ({ hreflang, canonical })
+  const en = Array.from({ length: 200_000 }, (_, i) => ({
+    url: `${EN}?from=${i}`,
+    finalUrl: EN,
+    issues: [],
+    facts: facts([{ lang: 'fi', href: FI }])
+  }))
+  const fi = { url: FI, finalUrl: FI, issues: [{ type: 'noindex' }], facts: facts([{ lang: 'fi', href: FI }]) }
+  const issues = checkHreflangTargets([...en, fi])
+  const noindex = issues.find(({ type }) => type === 'hreflang-target-noindex')
+  assert.equal(noindex.urls.length, 200_001)
 })

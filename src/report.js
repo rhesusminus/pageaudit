@@ -34,15 +34,18 @@ const wrap = (text, width) => wrapAnsi(text, width - CELL_PADDING, { hard: true,
 
 const MAX_FACT_TEXT = 300
 const MAX_H1S = 10
+const MAX_HREFLANG = 100
+const MAX_URL = 2000
 
-// The facts as written to the report. Titles, descriptions and headings can be any
+// The facts as written to the report. Titles, descriptions, headings and hreflang lists can be any
 // length on a real site, so they are capped here, after the site checks compared them in full.
 const reportFacts = (facts) =>
   facts && {
     ...facts,
     title: facts.title && limit(facts.title, MAX_FACT_TEXT),
     description: facts.description && limit(facts.description, MAX_FACT_TEXT),
-    h1s: facts.h1s.slice(0, MAX_H1S).map((h1) => limit(h1, MAX_FACT_TEXT))
+    h1s: facts.h1s.slice(0, MAX_H1S).map((h1) => limit(h1, MAX_FACT_TEXT)),
+    hreflang: facts.hreflang.slice(0, MAX_HREFLANG).map(({ lang, href }) => ({ lang, href: limit(href, MAX_URL) }))
   }
 
 const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`

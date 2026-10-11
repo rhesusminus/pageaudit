@@ -272,7 +272,21 @@
           }
         },
         "twitterCard": { "$ref": "#/$defs/nullableString" },
-        "jsonLdTypes": { "type": "array", "items": { "type": "string" }, "maxItems": 20 }
+        "jsonLdTypes": { "type": "array", "items": { "type": "string" }, "maxItems": 20 },
+        "hreflang": {
+          "description": "The first 100 <link rel=\"alternate\" hreflang> declarations in <head>, hrefs resolved to absolute URLs where possible. HTTP header and sitemap hreflang are not read. Added within schemaVersion 1, so older reports may lack it.",
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["lang", "href"],
+            "properties": {
+              "lang": { "type": "string" },
+              "href": { "type": "string" }
+            }
+          }
+        }
       }
     },
     "score": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },

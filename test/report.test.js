@@ -108,7 +108,7 @@ const page = (url, severities, fields = {}) => ({
   status: 200,
   redirects: [],
   issues: severities.map((severity) => ({ url, ...issue(severity, 'seo', `A ${severity}`, '<x>') })),
-  facts: { title: 'T', description: null, h1s: [] },
+  facts: { title: 'T', description: null, h1s: [], hreflang: [] },
   ...fields
 })
 
@@ -297,7 +297,8 @@ test('buildReport: caps free-text facts in the report but leaves the audited fac
   const facts = {
     title: 'T'.repeat(400),
     description: 'D'.repeat(400),
-    h1s: Array.from({ length: 30 }, () => 'H'.repeat(400))
+    h1s: Array.from({ length: 30 }, () => 'H'.repeat(400)),
+    hreflang: Array.from({ length: 150 }, () => ({ lang: 'fi', href: `https://a.test/${'p'.repeat(3000)}` }))
   }
   const audited = { url: 'https://a.test/', finalUrl: 'https://a.test/', status: 200, redirects: [], issues: [], facts }
   const [out] = buildReport({ pages: [audited], site: [] }).pages
@@ -306,8 +307,11 @@ test('buildReport: caps free-text facts in the report but leaves the audited fac
   assert.equal(Array.from(out.facts.description).length, 300)
   assert.equal(out.facts.h1s.length, 10)
   assert.ok(out.facts.h1s.every((h1) => Array.from(h1).length === 300))
+  assert.equal(out.facts.hreflang.length, 100)
+  assert.ok(out.facts.hreflang.every(({ lang, href }) => lang === 'fi' && Array.from(href).length === 2000))
   assert.equal(facts.title.length, 400)
   assert.equal(facts.h1s.length, 30)
+  assert.equal(facts.hreflang.length, 150)
 })
 
 test('buildReport: a page without facts stays null', () => {
