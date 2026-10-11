@@ -8,7 +8,7 @@ const TITLE_MAX = 60
 const DESCRIPTION_MAX = 160
 const DESCRIPTION_MIN = 70
 
-const ABSOLUTE_URL = /^[a-z][a-z0-9+.-]*:\/\//i
+export const ABSOLUTE_URL = /^[a-z][a-z0-9+.-]*:\/\//i
 
 // The document title, also when a body-only element in <head> pushed it into <body>, but never an SVG <title>.
 export const titleElement = ($) =>

@@ -64,7 +64,8 @@ const GOOD_FACTS = {
     url: null
   },
   twitterCard: 'summary_large_image',
-  jsonLdTypes: []
+  jsonLdTypes: [],
+  hreflang: []
 }
 
 test('cli: good.html has no issues, exposes its facts and exits 0', async (t) => {
@@ -740,3 +741,20 @@ async function runCliWithMock(t, args) {
   const code = await run([...args, '--json', '--delay', '0'])
   return { code, report: JSON.parse(stdout.join('\n')) }
 }
+
+test('cli: hreflang pages are checked on their own and against each other', async (t) => {
+  const en = fixtureUrl('hreflang.html')
+  const fi = fixtureUrl('hreflang-fi.html')
+  const { report } = await runJson(t, [en, fi])
+  assert.deepEqual(pageTypes(report.pages[0]), [])
+  assert.deepEqual(pageTypes(report.pages[1]), ['missing-x-default', 'noindex'])
+  assert.deepEqual(report.pages[1].facts.hreflang, [{ lang: 'fi', href: fi }])
+  assert.deepEqual(
+    report.site.filter((issue) => issue.type.startsWith('hreflang-')).map((issue) => [issue.type, issue.urls]),
+    [
+      ['hreflang-missing-return', [en, fi]],
+      ['hreflang-target-noindex', [fi, en]]
+    ]
+  )
+  assert.ok(report.rules['hreflang-missing-return'].title)
+})

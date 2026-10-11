@@ -67,3 +67,23 @@ test('signals: Open Graph URLs are not cut at the text limit, text is', () => {
   assert.equal(openGraph.image, url)
   assert.equal(Array.from(openGraph.title).length, 120)
 })
+
+test('signals: hreflang links in <head> are resolved against <base> and kept whole for the site checks', () => {
+  const links =
+    '<link rel="alternate" hreflang="en" href="/en/">' +
+    '<link rel="ALTERNATE" hreflang=" fi " href=" https://a.test/fi ">' +
+    '<link rel="alternate" href="/no-lang/">' +
+    '<link rel="alternate" hreflang="sv" href="http://[bad">'
+  const { hreflang } = extractSignals(
+    parse(`<head>${links}</head><body><link rel="alternate" hreflang="de" href="/de/"></body>`),
+    BASE,
+    PAGE
+  )
+  assert.deepEqual(hreflang, [
+    { lang: 'en', href: 'https://fixtures.test/en/' },
+    { lang: 'fi', href: 'https://a.test/fi' },
+    { lang: 'sv', href: 'http://[bad' }
+  ])
+  const many = '<link rel="alternate" hreflang="en" href="/x">'.repeat(150)
+  assert.equal(extractSignals(parse(`<head>${many}</head>`), BASE, PAGE).hreflang.length, 150)
+})

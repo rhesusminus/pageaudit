@@ -91,6 +91,46 @@ export const ADVICE = {
     why: 'This is often intentional, for example for filtered lists. It means search engines will list the other address instead of this one.',
     fix: 'Check that this is what you want. If this page should be listed itself, point its canonical link at itself.'
   },
+  'invalid-hreflang': {
+    title: 'A language version uses a code search engines do not understand',
+    why: 'Search engines ignore a language link whose code is not a real language, or region, code. A common mistake is en-UK instead of en-GB.',
+    fix: 'Use a two-letter language code such as en, optionally followed by a two-letter country code such as en-GB, or x-default.'
+  },
+  'relative-hreflang': {
+    title: 'A language version link is not a full URL',
+    why: 'Google needs the complete address of every language version and may skip links that are relative or empty.',
+    fix: 'Use the complete address, starting with https://, in every hreflang link.'
+  },
+  'duplicate-hreflang': {
+    title: 'The same language is listed more than once',
+    why: 'When one language points to two addresses, search engines cannot tell which one to show, and may ignore both.',
+    fix: 'List each language once, with the one address that serves it.'
+  },
+  'missing-self-hreflang': {
+    title: 'The language links leave out this page',
+    why: 'Each language version should list every version, itself included. Without that, search engines may not trust the set.',
+    fix: 'Add a hreflang link that points to this page, with its own language code.'
+  },
+  'missing-x-default': {
+    title: 'The language links have no default version',
+    why: 'This is optional. A default version tells search engines which page to show visitors whose language you do not offer.',
+    fix: 'If one page suits everyone else, such as a language picker or your main language, add a hreflang link with x-default pointing to it.'
+  },
+  'hreflang-missing-return': {
+    title: 'A language version does not link back',
+    why: 'Search engines only trust a language link when both pages name each other. A one-way link is ignored.',
+    fix: 'Add the missing hreflang link to the other page, so every language version lists all the others.'
+  },
+  'hreflang-target-noindex': {
+    title: 'A language version is hidden from search',
+    why: 'The page is linked as a language version, but it asks search engines not to list it, so it will not be shown to anyone.',
+    fix: 'Remove the noindex from that page, or remove it from the language links.'
+  },
+  'hreflang-target-canonicalised': {
+    title: 'A language version points its canonical elsewhere',
+    why: 'The page is linked as a language version, but its canonical address names another page, which sends search engines mixed signals.',
+    fix: 'Give every language version a canonical link pointing to itself, and use hreflang links between them.'
+  },
   'missing-h1': {
     title: 'The page has no main heading',
     why: 'A main heading tells visitors, and people using screen readers, what the page is about at a glance.',

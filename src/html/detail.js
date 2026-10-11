@@ -171,6 +171,11 @@ function moreRows(facts) {
     ['Twitter card', orMissing(facts.twitterCard)],
     // No check asks for structured data, so its absence is not styled as a problem.
     ['Structured data', facts.jsonLdTypes.length ? facts.jsonLdTypes.join(', ') : 'None found'],
+    // Most sites have one language, so no hreflang links is not a problem either.
+    [
+      'Language versions',
+      facts.hreflang.length ? facts.hreflang.map(({ lang, href }) => `${lang}: ${href}`).join(' / ') : 'None found'
+    ],
     ['Headings', headingOutline(facts.headings)],
     ['Images without alt text', missingAlt(facts)],
     ['Links', linkList(facts)]

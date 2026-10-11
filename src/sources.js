@@ -2,6 +2,7 @@
 export const SOURCES = {
   title: 'https://developers.google.com/search/docs/appearance/title-link',
   snippet: 'https://developers.google.com/search/docs/appearance/snippet',
+  hreflang: 'https://developers.google.com/search/docs/specialty/international/localized-versions',
   canonical: 'https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls',
   redirects: 'https://developers.google.com/search/docs/crawling-indexing/301-redirects',
   httpStatus: 'https://developers.google.com/search/docs/crawling-indexing/http-network-errors',

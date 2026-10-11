@@ -1,6 +1,7 @@
 import { collapseWhitespace } from '../../text.js'
 import { checkA11y } from './a11y.js'
 import { checkHeadings } from './headings.js'
+import { checkHreflang } from './hreflang.js'
 import { checkHygiene } from './hygiene.js'
 import { checkImages } from './images.js'
 import { checkIndexing } from './indexing.js'
@@ -23,6 +24,7 @@ export const checkHtml = ($, page = {}) => [
   ...checkIndexing($),
   ...checkSocial($),
   ...checkStructuredData($),
+  ...checkHreflang($, page),
   ...checkHygiene($, page)
 ]
 
