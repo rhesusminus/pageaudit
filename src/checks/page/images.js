@@ -1,6 +1,7 @@
 import { SOURCES } from '../../sources.js'
 import { withEvidence } from '../evidence.js'
 import { snippet } from '../snippet.js'
+import { accessibleName, visibleImages } from './accname.js'
 
 const GENERIC_NAME = /^(img|image|pic|picture|photo|dsc|dscn|untitled|screenshot)[-_ ]?\d*$/i
 
@@ -18,9 +19,8 @@ function fileName(src) {
 function isOnlyLinkContent($, el) {
   const link = $(el).closest('a, button')
   if (!link.length) return false
-  if (link.attr('aria-label') || link.attr('aria-labelledby') || link.attr('title')) return false
-  if (link.text().trim()) return false
-  const images = link.find('img').toArray()
+  if (accessibleName($, link.get(0), { images: false })) return false
+  const images = visibleImages($, link.get(0))
   return images[0] === el && images.every((img) => ($(img).attr('alt') ?? '').trim() === '')
 }
 

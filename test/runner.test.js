@@ -9,7 +9,7 @@ const GOOD = `<html lang="en"><head><title>Good page title here</title>
 <meta property="og:title" content="Good"><meta property="og:description" content="Good page.">
 <meta property="og:image" content="https://a.test/og.png"><meta name="twitter:card" content="summary">
 <meta name="description" content="A description that is long enough to not be flagged as a short one, really.">
-<link rel="canonical" href="https://a.test/good"></head><body><h1>Hello</h1></body></html>`
+<link rel="canonical" href="https://a.test/good"></head><body><main><h1>Hello</h1></main></body></html>`
 
 const page = (url, fields = {}) => ({
   url,
