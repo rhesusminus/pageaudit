@@ -208,6 +208,32 @@ test('cli: --urls-file - reads the list from stdin', async (t) => {
   assert.equal(report.summary.pages, 2)
 })
 
+test('cli: a huge sitemap is read and --limit still applies to it', async (t) => {
+  const urls = Array.from({ length: 150_000 }, (_, i) => `<url><loc>https://big.test/p/${i}</loc></url>`).join('')
+  const xml = (body) => new Response(body, { headers: { 'content-type': 'application/xml' } })
+  t.mock.method(globalThis, 'fetch', async (input) => {
+    const { pathname } = new URL(input)
+    if (pathname === '/index.xml')
+      return xml('<sitemapindex><sitemap><loc>https://big.test/all.xml</loc></sitemap></sitemapindex>')
+    if (pathname === '/all.xml') return xml(`<urlset>${urls}</urlset>`)
+    if (pathname === '/robots.txt') return new Response('', { status: 404 })
+    return new Response('<html lang="en"><head><title>Page</title></head><body></body></html>', {
+      headers: { 'content-type': 'text/html' }
+    })
+  })
+  const stdout = []
+  t.mock.method(console, 'log', (...a) => stdout.push(a.join(' ')))
+  t.mock.method(console, 'error', () => {})
+  const code = await run(['--sitemap', 'https://big.test/index.xml', '--limit', '1', '--delay', '0', '--json'])
+  assert.notEqual(code, 2)
+  const report = JSON.parse(stdout.join('\n'))
+  assert.deepEqual(
+    report.pages.map((page) => page.url),
+    ['https://big.test/p/0']
+  )
+  assert.equal(report.skipped.length, 0)
+})
+
 test('cli: --sitemap follows a sitemap index and reports skipped child sitemaps', async (t) => {
   const { report } = await runJson(t, ['--sitemap', fixtureUrl('sitemap-index.xml')])
   assert.deepEqual(

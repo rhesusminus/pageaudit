@@ -56,7 +56,7 @@ export async function fromSitemap(url, { timeout } = {}) {
       continue
     }
     if (nested.kind === 'index') skip('nested sitemap index (only one level is followed)')
-    else result.entries.push(...entries(nested.locs, child))
+    else for (const entry of entries(nested.locs, child)) result.entries.push(entry)
   }
   return result
 }

@@ -71,11 +71,11 @@ test('loadRobots: a 200 is parsed, other 4xx mean no file, 5xx and 429 are unrea
   }
 })
 
-test('loadRobots: a network failure returns null', async (t) => {
+test('loadRobots: a network failure is a failed read with its reason', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => {
-    throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ENOTFOUND' } })
+    throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNRESET' } })
   })
-  assert.equal(await loadRobots('https://x.test'), null)
+  assert.deepEqual(await loadRobots('https://x.test'), { status: 'failed', reason: 'ECONNRESET' })
 })
 
 test('loadRobots: only the first 500 KiB are read', async (t) => {
@@ -125,20 +125,28 @@ test('robots.txt check: the final URL is tested and the input URL is reported', 
   assert.deepEqual(issue.urls, ['https://a.test/old'])
 })
 
-test('robots.txt check: unreachable is info, missing and network failures give nothing, each origin is read once', async () => {
+test('robots.txt check: unreachable and failed reads are info, a missing file gives nothing, each origin is read once', async () => {
   const asked = []
-  const files = { 'https://a.test': { status: 'unreachable', code: 503 }, 'https://b.test': { status: 'missing' } }
+  const files = {
+    'https://a.test': { status: 'unreachable', code: 503 },
+    'https://b.test': { status: 'missing' },
+    'https://c.test': { status: 'failed', reason: 'timed out after 15s' }
+  }
   const issues = await checkRobotsTxt(
     [page('https://a.test/1'), page('https://a.test/2'), page('https://b.test/'), page('https://c.test/')],
     {
-      load: async (origin) => (asked.push(origin), files[origin] ?? null)
+      load: async (origin) => (asked.push(origin), files[origin])
     }
   )
   assert.deepEqual(asked, ['https://a.test', 'https://b.test', 'https://c.test'])
   assert.deepEqual(
     issues.map(({ type, urls, severity }) => [type, urls, severity]),
-    [['robots-txt-unreachable', ['https://a.test/1', 'https://a.test/2'], 'info']]
+    [
+      ['robots-txt-unreachable', ['https://a.test/1', 'https://a.test/2'], 'info'],
+      ['robots-txt-failed', ['https://c.test/'], 'info']
+    ]
   )
+  assert.match(issues[1].message, /timed out after 15s/)
 })
 
 test('robots.txt check: pages that did not load are not tested', async () => {
@@ -296,7 +304,7 @@ test('robots.txt check: origins are read at the same time and the issues keep th
   )
 })
 
-test('loadRobots: more than five redirects count as no file, a body that cannot be read returns null', async (t) => {
+test('loadRobots: more than five redirects count as no file, a body that cannot be read is a failed read', async (t) => {
   let hops = 0
   t.mock.method(
     globalThis,
@@ -309,7 +317,7 @@ test('loadRobots: more than five redirects count as no file, a body that cannot 
     const body = new ReadableStream({ pull: (controller) => controller.error(new Error('reset')) })
     return new Response(body, { status: 200 })
   })
-  assert.equal(await loadRobots('https://x.test'), null)
+  assert.deepEqual(await loadRobots('https://x.test'), { status: 'failed', reason: 'reset' })
 })
 
 test('noindex from a long header and the meta tag keep both sources in the context', () => {

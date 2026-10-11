@@ -261,6 +261,11 @@ export const ADVICE = {
     why: 'The server answered with an error when asked for robots.txt. Google pauses crawling a site while it cannot read the file, and gives up on it after a while.',
     fix: 'Make the server return the robots.txt file, or a plain "not found" if the site has none. Ask your host if the error keeps coming back.'
   },
+  'robots-txt-failed': {
+    title: 'The robots.txt file could not be fetched',
+    why: 'The request for robots.txt failed, for example by timing out, while the pages themselves loaded. This audit could not tell whether the file blocks any of them, and Google may have trouble reading it too.',
+    fix: 'Check that the server answers requests for robots.txt reliably, then run the audit again. Ask your host if it keeps failing.'
+  },
   'sitemap-url-noindex': {
     title: 'The sitemap lists a page that asks not to be indexed',
     why: 'A sitemap says "please index these pages", while the pages themselves say "do not index me". Search engines get contradicting signals and may distrust the sitemap.',

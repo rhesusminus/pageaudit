@@ -8,6 +8,17 @@ const MAX_CONCURRENT = 8
 const issue = (fields) => ({ category: 'seo', source: SOURCES.robotsTxt, ...fields })
 
 function checkOrigin(origin, robots, pages) {
+  if (robots?.status === 'failed') {
+    return [
+      issue({
+        type: 'robots-txt-failed',
+        severity: 'info',
+        message: `robots.txt could not be fetched (${robots.reason}), so the pages were not checked against it`,
+        context: `${origin}/robots.txt`,
+        urls: pages.map((page) => page.url)
+      })
+    ]
+  }
   if (robots?.status === 'unreachable') {
     return [
       issue({

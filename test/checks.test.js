@@ -465,6 +465,18 @@ test('structured data: relative URLs are flagged in strings, arrays and image ob
   assert.deepEqual(checkStructuredData(ld({ ...CONTEXT, '@type': 'Organization', url: 'https://a.test/' })), [])
 })
 
+test('structured data: values nested far deeper than real markup are cut off, not recursed into', () => {
+  const nest = (leaf, wrap, depth) => Array.from({ length: depth }).reduce((value) => wrap(value), leaf)
+  const arrays = nest('/logo.png', (value) => [value], 5000)
+  const objects = nest('/logo.png', (value) => ({ url: value }), 5000)
+  for (const image of [arrays, objects]) {
+    assert.doesNotThrow(() => checkStructuredData(ld({ ...CONTEXT, '@type': 'Thing', image })))
+  }
+  // Within the limit the relative URL is still found.
+  const shallow = checkStructuredData(ld({ ...CONTEXT, '@type': 'Thing', image: [{ url: '/logo.png' }] }))
+  assert.deepEqual(types(shallow), ['json-ld-relative-url'])
+})
+
 test('structured data: types without a Google rich result are info', () => {
   for (const type of ['HowTo', 'FAQPage', 'ClaimReview']) {
     const issues = checkStructuredData(ld({ ...CONTEXT, '@type': type }))
