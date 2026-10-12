@@ -1,5 +1,12 @@
-import { setTimeout as sleep } from 'node:timers/promises'
-import { checkFetchError, checkHtml, checkResponse, extractFacts, mergeRobotsIssues } from './checks/page/index.js'
+import {
+  checkFetchError,
+  checkHtml,
+  checkResponse,
+  extractFacts,
+  internalLinks,
+  mergeRobotsIssues
+} from './checks/page/index.js'
+import { hostThrottle } from './concurrency.js'
 import { DEFAULT_TIMEOUT_MS, fetchPage as defaultFetchPage } from './fetch.js'
 import { issueId, uniqueIds } from './issue-id.js'
 import { parse } from './parse.js'
@@ -13,17 +20,18 @@ const pickEvidence = (fields) =>
 export const DEFAULT_CONCURRENCY = 3
 export const DEFAULT_DELAY_MS = 200
 
-const NO_HTML = { issues: [], facts: null, response: null }
+const NO_HTML = { issues: [], facts: null, response: null, links: null }
 
-// The checks, facts and response details of a page that returned HTML. `response` holds its headers and size for
-// the site checks and is not part of the report. It is null when the fetcher did not say which headers were sent,
-// so an unknown header is never reported as missing.
+// The checks, facts and response details of a page that returned HTML. `response` and `links` are for the site
+// checks and are not part of the report: `response` holds the headers and size, null when the fetcher did not say
+// which headers were sent, so an unknown header is never reported as missing. `links` lists the internal link targets.
 function auditHtml({ finalUrl, html, headers, bodyBytes }) {
   const $ = parse(html)
   return {
     issues: checkHtml($, { url: finalUrl, html }),
     facts: extractFacts($, finalUrl),
-    response: headers ? { headers, bodyBytes } : null
+    response: headers ? { headers, bodyBytes } : null,
+    links: internalLinks($, finalUrl)
   }
 }
 
@@ -56,13 +64,14 @@ export async function auditPage(url, { fetchPage = defaultFetchPage, timeout = D
       redirects: [],
       issues: withUrl(checkFetchError(err)),
       facts: null,
-      response: null
+      response: null,
+      links: null
     }
   }
   const { finalUrl, status, redirects, html } = fetched
-  const { issues: htmlIssues, facts, response } = status === 200 && html !== null ? auditHtml(fetched) : NO_HTML
+  const { issues: htmlIssues, facts, response, links } = status === 200 && html !== null ? auditHtml(fetched) : NO_HTML
   const issues = [...checkResponse(fetched), ...htmlIssues]
-  return { url, finalUrl, status, redirects, issues: withUrl(mergeRobotsIssues(issues)), facts, response }
+  return { url, finalUrl, status, redirects, issues: withUrl(mergeRobotsIssues(issues)), facts, response, links }
 }
 
 // Audits every URL with at most `concurrency` requests in flight, starting
@@ -72,17 +81,9 @@ export async function runAudit(
   { fetchPage, timeout, concurrency = DEFAULT_CONCURRENCY, delay = DEFAULT_DELAY_MS, onProgress = () => {} } = {}
 ) {
   const pages = new Array(urls.length)
-  const nextStart = new Map()
+  const waitForHost = hostThrottle(delay)
   let next = 0
   let done = 0
-
-  async function waitForHost(url) {
-    const host = new URL(url).host
-    const now = Date.now()
-    const start = Math.max(now, nextStart.get(host) ?? 0)
-    nextStart.set(host, start + delay)
-    if (start > now) await sleep(start - now)
-  }
 
   async function worker() {
     while (next < urls.length) {

@@ -109,6 +109,7 @@ const NAMES = [
   'hreflang-fi.html',
   'bad-hreflang.html',
   'weak-headers.html',
+  'links.html',
   'redirect-twice',
   'not-html',
   'missing-page',
@@ -135,6 +136,7 @@ async function fullReport(t, extra = [], behave = (n) => 0.4 + (n % 2) / 10) {
     url('good.html'),
     '--lighthouse-runs',
     '2',
+    '--check-links',
     '--json',
     '--delay',
     '0',
@@ -154,6 +156,11 @@ test('schema: a report with every kind of page, issue and Lighthouse level match
   assert.ok(report.pages.some((p) => p.lighthouse && !p.lighthouse.audits[0]?.items))
   assert.ok(report.pages.some((p) => p.facts === null))
   assert.ok(report.site.length > 0 && report.skipped.length > 0)
+  const siteTypes = new Set(report.site.map((issue) => issue.type))
+  // No orphan-page: the /timeout page's links are unknown, so it is rightly not looked for. Its shape is the same.
+  for (const type of ['broken-link', 'link-target-unreachable', 'link-to-redirect']) {
+    assert.ok(siteTypes.has(type), type)
+  }
   assert.ok(report.pages.flatMap((p) => p.issues).some((i) => i.selector && i.html && i.parentHtml))
   assert.ok(report.pages.flatMap((p) => p.issues).some((i) => i.actual !== undefined && i.expected))
   assert.ok(report.lighthouseAudits)

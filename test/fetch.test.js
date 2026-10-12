@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { fetchPage, USER_AGENT } from '../src/fetch.js'
+import { fetchPage, request, USER_AGENT } from '../src/fetch.js'
 
 const fetchHtml = async (url) => (await fetchPage(url)).html
 
@@ -169,6 +169,49 @@ test('fetch: follows redirects and records every hop', async (t) => {
     { url: 'http://x.test/a', status: 301, location: 'https://x.test/a' },
     { url: 'https://x.test/a', status: 302, location: 'https://x.test/b' }
   ])
+})
+
+test('request: beforeHop is awaited before every request of a redirect chain', async (t) => {
+  const fetched = []
+  t.mock.method(globalThis, 'fetch', async (input) => {
+    fetched.push(String(input))
+    return String(input).endsWith('/a') ? redirect('https://x.test/b')() : html()()
+  })
+  const hops = []
+  const beforeHop = (url) => new Promise((resolve) => hops.push({ url, resolve }))
+  const pending = request('https://x.test/a', { beforeHop })
+  const nextTick = () => new Promise((resolve) => setImmediate(resolve))
+  await nextTick()
+  assert.deepEqual([hops.map((hop) => hop.url), fetched], [['https://x.test/a'], []])
+  hops[0].resolve()
+  await nextTick()
+  assert.deepEqual(
+    [hops.map((hop) => hop.url), fetched],
+    [['https://x.test/a', 'https://x.test/b'], ['https://x.test/a']]
+  )
+  hops[1].resolve()
+  await (await pending).discard()
+  assert.deepEqual(fetched, ['https://x.test/a', 'https://x.test/b'])
+})
+
+test('request: waiting in beforeHop does not count toward the timeout', async (t) => {
+  t.mock.method(globalThis, 'fetch', async (input, init) => {
+    if (init.signal.aborted) throw init.signal.reason
+    return html()()
+  })
+  const beforeHop = () => new Promise((resolve) => setTimeout(resolve, 60))
+  const res = await request('https://x.test/a', { timeout: 30, beforeHop })
+  assert.equal(res.status, 200)
+})
+
+test('request: the time of every hop counts toward one timeout', async (t) => {
+  // Each hop takes 40 ms against a 60 ms budget: the first fits, the second runs out with 20 ms left.
+  t.mock.method(globalThis, 'fetch', async (input, init) => {
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    if (init.signal.aborted) throw init.signal.reason
+    return String(input).endsWith('/a') ? redirect('https://x.test/b')() : html()()
+  })
+  await assert.rejects(request('https://x.test/a', { timeout: 60 }), /timed out after 0.06s/)
 })
 
 test('fetch: a redirect loop stops after 10 hops', async (t) => {

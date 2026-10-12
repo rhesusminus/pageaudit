@@ -32,7 +32,8 @@ test('auditPage: a good page has no issues and exposes facts for the site checks
     redirects: [],
     issues: [],
     // The mock does not say which headers were sent, so none are judged.
-    response: null
+    response: null,
+    links: []
   })
   assert.equal(facts.title, 'Good page title here')
   assert.deepEqual(facts.h1s, ['Hello'])
@@ -54,6 +55,14 @@ test('auditPage: an HTML page keeps its checked headers and size for the site ch
   assert.equal((await auditPage('https://a.test/file', { fetchPage: notHtml })).response, null)
 })
 
+test('auditPage: an HTML page keeps its internal link targets for the link checks', async () => {
+  const html = '<a href="/a">A</a><a href="/a#top">A again</a><a href="https://other.test/">Out</a>'
+  const result = await auditPage('https://a.test/x', { fetchPage: async (url) => page(url, { html }) })
+  assert.deepEqual(result.links, ['https://a.test/a'])
+  const notHtml = await auditPage('https://a.test/file', { fetchPage: async (url) => page(url, { html: null }) })
+  assert.equal(notHtml.links, null)
+})
+
 test('auditPage: every issue carries the page URL', async () => {
   const result = await auditPage('https://a.test/x', {
     fetchPage: async (url) => page(url, { html: '<img src="a.jpg">' })
@@ -73,6 +82,7 @@ test('auditPage: a network error becomes a fetch-failed error', async () => {
   assert.equal(result.issues[0].message, 'Could not fetch the page: ENOTFOUND')
   assert.equal(result.status, null)
   assert.equal(result.facts, null)
+  assert.equal(result.links, null)
 })
 
 test('auditPage: a non-200 status is an error and skips the HTML checks', async () => {

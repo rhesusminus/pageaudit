@@ -1,4 +1,5 @@
-import { collapseWhitespace, limit } from '../../text.js'
+import { withoutFragment } from '../../input/resolve.js'
+import { collapseWhitespace, limit, MAX_URL } from '../../text.js'
 import { headingExcerpts, imageSamples, mainText } from './content.js'
 
 const MAX_HEADINGS = 40
@@ -18,8 +19,6 @@ export const ogSelector = (name) => `meta[property="og:${name}" i], meta[name="o
 export const TWITTER_CARD = 'meta[name="twitter:card" i], meta[property="twitter:card" i]'
 
 const MAX_TEXT = 120
-// URLs get a much higher cap: a URL cut short is not a URL any more.
-const MAX_URL = 2000
 
 const clean = (text, max = MAX_TEXT) => limit(collapseWhitespace(text ?? ''), max) || null
 // The first non-empty content, so an empty tag in front of a filled one does not hide it.
@@ -77,8 +76,9 @@ export const host = (url) => new URL(url).hostname.toLowerCase().replace(/^www\.
 
 const MAX_LINK_SAMPLES = 25
 
-// Every link to another page, resolved against <base> and classified against the page's own site. Fragment-only links, mailto:, tel: and the like are not pages.
-function pageLinks($, baseUrl, pageUrl) {
+// Every link to another page, resolved against <base> and classified against the page's own site. Fragment-only links,
+// mailto:, tel: and the like are not pages. The href is kept whole, a URL cut short would point somewhere else.
+function resolvedLinks($, baseUrl, pageUrl) {
   const here = host(pageUrl)
   return $('a[href]')
     .toArray()
@@ -86,16 +86,26 @@ function pageLinks($, baseUrl, pageUrl) {
       const raw = ($(el).attr('href') ?? '').trim()
       const href = absolute(raw, baseUrl)
       if (!href || !/^https?:/.test(href) || raw.startsWith('#')) return []
-      const text = clean($(el).text()) ?? clean($(el).find('img[alt]').first().attr('alt')) ?? ''
-      return [
-        {
-          href: limit(href, MAX_URL),
-          text,
-          internal: host(href) === here,
-          nofollow: /\bnofollow\b/i.test($(el).attr('rel') ?? '')
-        }
-      ]
+      return [{ el, href, internal: host(href) === here }]
     })
+}
+
+// The links of a page as the facts describe them, with their text and whether they are nofollow.
+const pageLinks = ($, baseUrl, pageUrl) =>
+  resolvedLinks($, baseUrl, pageUrl).map(({ el, href, internal }) => ({
+    href,
+    text: clean($(el).text()) ?? clean($(el).find('img[alt]').first().attr('alt')) ?? '',
+    internal,
+    nofollow: /\bnofollow\b/i.test($(el).attr('rel') ?? '')
+  }))
+
+// The distinct internal link targets of a page, for the link checks. The fragment is dropped, it is not sent to the
+// server. Two spellings of one page, such as /x and /x/, stay apart: one of them may redirect.
+export function internalLinks($, pageUrl) {
+  const targets = resolvedLinks($, baseUrl($, pageUrl), pageUrl)
+    .filter((link) => link.internal)
+    .map((link) => withoutFragment(link.href))
+  return [...new Set(targets)]
 }
 
 function linkCounts(all) {
@@ -160,7 +170,7 @@ export function extractSignals($, baseUrl, pageUrl) {
     wordCount: wordCount($),
     mainText: mainText($),
     links: linkCounts(pageLinkList),
-    linkSamples: pageLinkList.slice(0, MAX_LINK_SAMPLES),
+    linkSamples: pageLinkList.slice(0, MAX_LINK_SAMPLES).map((link) => ({ ...link, href: limit(link.href, MAX_URL) })),
     images: images($),
     imageSamples: imageSamples($, baseUrl),
     openGraph: openGraph($),

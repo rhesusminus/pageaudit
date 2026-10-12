@@ -341,6 +341,26 @@ export const ADVICE = {
     why: 'Compressed HTML is usually several times smaller, so the page starts loading sooner, especially on mobile connections.',
     fix: 'Turn on gzip or brotli compression for HTML in your server or hosting settings. Most hosts have a switch for it.'
   },
+  'broken-link': {
+    title: 'Links lead to pages that do not exist',
+    why: 'Visitors who follow the link land on an error page instead of what they wanted, and Google wastes its visit on the site following a dead end.',
+    fix: 'Point the link at the right page, or remove it. If the page moved, also redirect the old address to the new one.'
+  },
+  'link-target-unreachable': {
+    title: 'A linked page did not load',
+    why: 'The server answered with an error or did not answer in time. If it keeps happening, visitors and Google cannot reach the page through the link.',
+    fix: 'Open the linked page and check that it loads. If it fails, ask your host or developer to look at the server errors.'
+  },
+  'link-to-redirect': {
+    title: 'Links point to an old address that redirects',
+    why: 'The link still works, but every click and every Google visit takes an extra step through the redirect before reaching the page.',
+    fix: 'Change the link to point straight at the final address shown in the report.'
+  },
+  'orphan-page': {
+    title: 'Pages that no other page links to',
+    why: 'Visitors cannot reach these pages by clicking through the site, and Google finds them only through the sitemap, with no links telling it what the pages are about or how they relate to the rest of the site.',
+    fix: 'Link to each page from a related page or the menu. If a page is no longer needed, remove it from the sitemap.'
+  },
   'client-side-rendered': {
     title: "The page is built in the visitor's browser",
     why: 'The page code has almost no text, so the content appears only after scripts run. Some search engines and tools see an empty page, and this audit only reads the code, so its results for this page may be incomplete.',

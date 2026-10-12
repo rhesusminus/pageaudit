@@ -28,7 +28,7 @@ const REDIRECTS = { 'redirect-once': '/good.html', 'redirect-twice': '/redirect-
 // content type chosen by extension. Special paths simulate other responses:
 // /noindex-header.html (a page served with an X-Robots-Tag: noindex header), /weak-headers.html (no security
 // headers and a weak Content-Security-Policy), /not-html (JSON content type), /timeout, /redirect-once (301 to /good.html)
-// and /redirect-twice (301 to /redirect-once). Unknown names answer 404, and
+// and /redirect-twice (301 to /redirect-once), /server-error (500). Unknown names answer 404, and
 // other origins fail like a DNS error (ENOTFOUND).
 export function mockFixtureFetch(t) {
   return t.mock.method(globalThis, 'fetch', async (input) => {
@@ -39,6 +39,9 @@ export function mockFixtureFetch(t) {
     const name = url.pathname.slice(1)
     if (name === 'timeout') {
       throw Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' })
+    }
+    if (name === 'server-error') {
+      return new Response('Internal error', { status: 500, headers: { 'content-type': 'text/html' } })
     }
     if (name === 'not-html') {
       return new Response('{}', { headers: { 'content-type': 'application/json' } })

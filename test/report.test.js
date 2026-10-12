@@ -148,6 +148,13 @@ test('buildReport: totals pages and severities, including site issues, and keeps
   assert.equal(report.skipped.length, 1)
 })
 
+test('buildReport: the response details and link targets kept for the site checks stay out of the report', () => {
+  const audited = pages.map((p) => ({ ...p, response: { headers: {}, bodyBytes: 10 }, links: ['https://a.test/x'] }))
+  for (const reported of buildReport({ pages: audited, site }).pages) {
+    assert.deepEqual(Object.keys(reported), ['url', 'finalUrl', 'status', 'redirects', 'issues', 'facts'])
+  }
+})
+
 test('buildReport: rules explain each issue type in the report once', () => {
   const { rules } = buildReport({ pages, site })
   const used = new Set([...pages.flatMap((page) => page.issues), ...site].map((issue) => issue.type))
