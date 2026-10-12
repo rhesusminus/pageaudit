@@ -780,3 +780,80 @@ test('cli: response headers are judged once per origin, and the secure fixture d
   )
   assert.ok(report.pages.every((page) => !('response' in page)))
 })
+
+test('cli: --check-links reports broken, unreachable and redirecting internal links, without it no link is requested', async (t) => {
+  const links = fixtureUrl('links.html')
+  const plain = await runJson(t, [fixtureUrl('good.html'), links])
+  assert.ok(plain.report.site.every((issue) => !/link|orphan/.test(issue.type)))
+  t.mock.restoreAll()
+  const fetchMock = mockFixtureFetch(t)
+  const stdout = []
+  t.mock.method(console, 'log', (...a) => stdout.push(a.join(' ')))
+  t.mock.method(console, 'error', () => {})
+  const code = await run([fixtureUrl('good.html'), links, '--check-links', '--json', '--delay', '0'])
+  const report = JSON.parse(stdout.join('\n'))
+  assert.equal(code, 0)
+  const long = `${FIXTURE_HOST}/${'long-'.repeat(420)}end`
+  assert.deepEqual(
+    report.site.filter((issue) => /link/.test(issue.type)).map((issue) => [issue.type, issue.urls]),
+    [
+      ['broken-link', [links]],
+      ['link-to-redirect', [links]],
+      ['link-target-unreachable', [links]],
+      ['link-target-unreachable', [links]],
+      ['broken-link', [links]]
+    ]
+  )
+  assert.match(
+    report.site.find((issue) => issue.type === 'link-to-redirect').context,
+    /redirect-once -> .*good\.html \(301\)/
+  )
+  // The link to the audited good.html is not requested again: its two requests are the audit and the end of
+  // /redirect-once. The external link is not requested, and the long address is requested whole.
+  const requested = fetchMock.mock.calls.map((call) => String(call.arguments[0]))
+  assert.equal(requested.filter((url) => url === fixtureUrl('good.html')).length, 2)
+  assert.ok(requested.includes(long))
+  assert.ok(!requested.some((url) => url.includes('external.test')))
+})
+
+test('cli: --check-links reports orphan pages only when a whole sitemap was audited', async (t) => {
+  const page = (body) => `<html lang="en"><head><title>Page</title></head><body>${body}</body></html>`
+  mockSite(t, {
+    '/robots.txt': 'User-agent: *\nAllow: /',
+    '/s.xml':
+      '<urlset><url><loc>https://a.test/</loc></url><url><loc>https://a.test/a</loc></url><url><loc>https://a.test/b</loc></url></urlset>',
+    '/': page('<a href="/a">A</a>'),
+    '/a': page('<a href="/">Home</a>'),
+    '/b': page('<a href="/a">A</a>'),
+    '/index.xml':
+      '<sitemapindex><sitemap><loc>https://a.test/s.xml</loc></sitemap><sitemap><loc>https://a.test/gone.xml</loc></sitemap></sitemapindex>'
+  })
+  const orphans = (report) => report.site.filter((issue) => issue.type === 'orphan-page').map((issue) => issue.urls)
+  const whole = await runCliWithMock(t, ['--sitemap', 'https://a.test/s.xml', '--check-links'])
+  assert.deepEqual(orphans(whole.report), [['https://a.test/b']])
+  const cut = await runCliWithMock(t, ['--sitemap', 'https://a.test/s.xml', '--check-links', '--limit', '2'])
+  assert.deepEqual(orphans(cut.report), [])
+  const listed = await runCliWithMock(t, ['https://a.test/', 'https://a.test/b', '--check-links'])
+  assert.deepEqual(orphans(listed.report), [])
+  // The index lists a sitemap that cannot be read, so pages linking to /b may be missing from the audit.
+  const incomplete = await runCliWithMock(t, ['--sitemap', 'https://a.test/index.xml', '--check-links'])
+  assert.equal(incomplete.report.summary.pages, 3)
+  assert.deepEqual(orphans(incomplete.report), [])
+})
+
+test('cli: --check-links does not report orphan pages when a sitemap page could not be read', async (t) => {
+  const page = (body) => `<html lang="en"><head><title>Page</title></head><body>${body}</body></html>`
+  mockSite(t, {
+    '/robots.txt': 'User-agent: *\nAllow: /',
+    '/s.xml': '<urlset><url><loc>https://a.test/a</loc></url><url><loc>https://a.test/b</loc></url></urlset>',
+    '/a': page('<a href="/b">B</a>')
+  })
+  // /b answers 404 here, so swap in a server error for it: its links, maybe one to /a, are unknown.
+  const fetch = globalThis.fetch
+  t.mock.method(globalThis, 'fetch', async (input, init) =>
+    new URL(input).pathname === '/b' ? new Response('down', { status: 503 }) : fetch(input, init)
+  )
+  const { report } = await runCliWithMock(t, ['--sitemap', 'https://a.test/s.xml', '--check-links'])
+  assert.equal(report.summary.pages, 2)
+  assert.ok(report.site.every((issue) => issue.type !== 'orphan-page'))
+})

@@ -5,6 +5,7 @@ export const SOURCES = {
   hreflang: 'https://developers.google.com/search/docs/specialty/international/localized-versions',
   canonical: 'https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls',
   redirects: 'https://developers.google.com/search/docs/crawling-indexing/301-redirects',
+  links: 'https://developers.google.com/search/docs/crawling-indexing/links-crawlable',
   httpStatus: 'https://developers.google.com/search/docs/crawling-indexing/http-network-errors',
   fileTypes: 'https://developers.google.com/search/docs/crawling-indexing/indexable-file-types',
   googleImages: 'https://developers.google.com/search/docs/appearance/google-images',

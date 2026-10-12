@@ -13,6 +13,7 @@ import { checkStructuredData } from './structured-data.js'
 
 export { checkFetchError, checkResponse } from './response.js'
 export { mergeRobotsIssues } from './robots-header.js'
+export { internalLinks } from './signals.js'
 
 // Every check that looks at the parsed HTML of one page. `page` is { url, html }: the final URL and the raw body.
 export const checkHtml = ($, page = {}) => [

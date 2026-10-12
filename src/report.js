@@ -3,7 +3,7 @@ import Table from 'cli-table3'
 import wrapAnsi from 'wrap-ansi'
 import { adviceFor } from './advice.js'
 import { issueId, uniqueIds } from './issue-id.js'
-import { limit } from './text.js'
+import { limit, MAX_URL } from './text.js'
 
 const SEVERITY_ORDER = { error: 0, warning: 1, info: 2 }
 const COLORS = { error: chalk.red, warning: chalk.yellow, info: chalk.cyan }
@@ -35,7 +35,6 @@ const wrap = (text, width) => wrapAnsi(text, width - CELL_PADDING, { hard: true,
 const MAX_FACT_TEXT = 300
 const MAX_H1S = 10
 const MAX_HREFLANG = 100
-const MAX_URL = 2000
 
 // The facts as written to the report. Titles, descriptions, headings and hreflang lists can be any
 // length on a real site, so they are capped here, after the site checks compared them in full.

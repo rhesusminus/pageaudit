@@ -70,20 +70,27 @@ function redirectTarget(url, location, current) {
 // GET that follows redirects by hand so every hop is recorded. One timeout covers
 // the whole chain and the body. Network failures throw a FetchError, HTTP error
 // statuses do not. `maxRedirects` is the number of hops followed before giving up.
+// `beforeHop(url)` is awaited before every request of the chain, for pacing requests per host. Time spent waiting
+// for it does not count toward the timeout, a long --delay must not make a quick server look slow.
 export async function request(
   url,
-  { timeout = DEFAULT_TIMEOUT_MS, accept = '*/*', maxRedirects = MAX_REDIRECTS } = {}
+  { timeout = DEFAULT_TIMEOUT_MS, accept = '*/*', maxRedirects = MAX_REDIRECTS, beforeHop } = {}
 ) {
-  const signal = AbortSignal.timeout(timeout)
   const redirects = []
   let current = httpUrl(url, url, 'URL')
+  let spent = 0
   try {
     for (;;) {
+      await beforeHop?.(current.href)
+      const started = Date.now()
+      // The rest of the budget, which also covers reading the body of the last hop.
+      const signal = AbortSignal.timeout(Math.max(timeout - spent, 0))
       const res = await fetch(current, {
         redirect: 'manual',
         signal,
         headers: { accept, 'accept-encoding': ACCEPT_ENCODING, 'user-agent': USER_AGENT }
       })
+      spent += Date.now() - started
       const location = res.headers.get('location')
       if (!REDIRECT_STATUSES.has(res.status) || location === null) return answer(url, res, current, redirects, timeout)
       await res.body?.cancel()

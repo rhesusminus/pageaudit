@@ -1,6 +1,7 @@
 import { parseArgs } from 'node:util'
 import chalk from 'chalk'
 import ora from 'ora'
+import { checkLinks } from './checks/site/links.js'
 import { checkRobotsTxt } from './checks/site/robots.js'
 import { checkSite } from './checks/site/index.js'
 import {
@@ -17,6 +18,7 @@ import { resolveUrls } from './input/resolve.js'
 import { fromSitemap } from './input/sitemap.js'
 import { cachedRobotsLoader } from './robots.js'
 import { lighthouseFailed, runLighthouse, shortSummary } from './lighthouse.js'
+import { checkLinkTargets, linksComplete, MAX_LINK_CHECKS } from './links.js'
 import { lighthouseIssues } from './lighthouse-issues.js'
 import { directoryOutputs, writeReportFile } from './output.js'
 import { buildReport, formatReport } from './report.js'
@@ -46,6 +48,8 @@ Options:
                        get a short summary.
   --lighthouse-runs <n>
                        run Lighthouse n times per page (1 to ${MAX_LIGHTHOUSE_RUNS}, default 1) and keep the median run, since single runs vary
+  --check-links        also check where the internal links of the audited pages lead: broken links, redirects,
+                       and with a whole --sitemap audited, pages no other page links to
   --fail-on <level>    exit 1 on any "error" (default) or on any "warning" or error
   --out <path>         also write the JSON report to a file, for example to hand to Claude
   --html <path>        also write a report for customers as one self-contained HTML file
@@ -66,6 +70,7 @@ const OPTIONS = {
   lighthouse: { type: 'boolean' },
   'lighthouse-page': { type: 'string', multiple: true },
   'lighthouse-runs': { type: 'string' },
+  'check-links': { type: 'boolean' },
   out: { type: 'string' },
   html: { type: 'string' },
   title: { type: 'string' },
@@ -121,6 +126,7 @@ function parseOptions(argv) {
     lighthouse: values.lighthouse,
     lighthousePages: values['lighthouse-page'] ?? [],
     lighthouseRuns: integer('lighthouse-runs', values['lighthouse-runs'], 1, MAX_LIGHTHOUSE_RUNS),
+    checkLinks: values['check-links'],
     out: values.out,
     html: values.html,
     branding: { title: values.title, client: values.client, logo: values.logo },
@@ -135,6 +141,8 @@ async function readInputs(options, stdin, spinner) {
   const chosen = options.lighthousePages.map((value) => ({ value, source: '--lighthouse-page', lighthouse: true }))
   const skipped = []
   const sitemapFiles = []
+  // False when a sitemap index listed a file that could not be read or was not followed, so pages may be missing.
+  let sitemapsComplete = true
   // Pushed one by one: a list of a hundred thousand entries is too many arguments for push(...list).
   for (const path of options.files) for (const entry of await fromFile(path, { stdin })) entries.push(entry)
   for (const url of options.sitemaps) {
@@ -143,9 +151,10 @@ async function readInputs(options, stdin, spinner) {
     for (const entry of sitemap.entries) entries.push(entry)
     for (const skip of sitemap.skipped) skipped.push(skip)
     for (const file of sitemap.files) sitemapFiles.push(file)
+    sitemapsComplete &&= sitemap.skipped.length === 0
   }
   const resolved = resolveUrls([...entries, ...chosen], { limit: options.limit })
-  return { ...resolved, skipped: [...skipped, ...resolved.skipped], sitemapFiles }
+  return { ...resolved, skipped: [...skipped, ...resolved.skipped], sitemapFiles, sitemapsComplete }
 }
 
 // Resolves the URLs to audit. Returns { inputs } or { exitCode } when reading the inputs failed.
@@ -289,12 +298,41 @@ async function outputsAreFiles(options) {
   return directories.length === 0
 }
 
-// The cross-page issues: duplicates, robots.txt and sitemaps.
+// Orphan pages can only be told apart when the audit followed every link of a whole sitemap: with a --limit cut, a
+// sitemap file that was not read or a link whose destination is unknown, linked pages would look orphaned.
+const findsOrphans = (options, inputs, links) =>
+  options.sitemaps.length > 0 && inputs.sitemapsComplete && inputs.urls.length === inputs.total && linksComplete(links)
+
+// Requests every internal link target the audit has not seen yet, then checks the links.
+async function checkInternalLinks(pages, inputs, options, startSpinner) {
+  const progress = (done, total) => `Checking links ${done}/${total}...`
+  const spinner = startSpinner('Checking links...')
+  const { outcomes, unchecked } = await checkLinkTargets(pages, {
+    concurrency: options.concurrency,
+    delay: options.delay,
+    onProgress: (done, total) => {
+      if (spinner) spinner.text = progress(done, total)
+    }
+  })
+  spinner?.stop()
+  if (unchecked) {
+    console.error(
+      `Checked ${MAX_LINK_CHECKS} link targets, ${unchecked} linked from fewer pages were not checked, so orphan pages were not looked for.`
+    )
+  }
+  return checkLinks(pages, outcomes, {
+    orphans: findsOrphans(options, inputs, { outcomes, unchecked }),
+    listed: inputs.listed
+  })
+}
+
+// The cross-page issues: duplicates, robots.txt, sitemaps and, with --check-links, internal links.
 async function checkAllPages(pages, inputs, options, startSpinner) {
   return [
     ...checkSite(pages),
     ...(await checkRobotsAndSitemaps(pages, inputs, options, startSpinner)),
-    ...checkSitemapEntries(pages, inputs.listed)
+    ...checkSitemapEntries(pages, inputs.listed),
+    ...(options.checkLinks ? await checkInternalLinks(pages, inputs, options, startSpinner) : [])
   ]
 }
 

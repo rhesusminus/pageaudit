@@ -59,6 +59,13 @@ export function resolveUrls(entries, { limit = Infinity } = {}) {
   return { urls: kept, skipped, total: urls.length, listed, marked: markedUrls }
 }
 
+// The address that is requested for a URL: the fragment is never sent to the server.
+export function withoutFragment(url) {
+  const parsed = new URL(url)
+  parsed.hash = ''
+  return parsed.href
+}
+
 // The deduplication key of a URL, or the URL itself when it cannot be normalized.
 export function pageKey(url) {
   try {
