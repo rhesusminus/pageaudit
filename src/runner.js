@@ -13,6 +13,20 @@ const pickEvidence = (fields) =>
 export const DEFAULT_CONCURRENCY = 3
 export const DEFAULT_DELAY_MS = 200
 
+const NO_HTML = { issues: [], facts: null, response: null }
+
+// The checks, facts and response details of a page that returned HTML. `response` holds its headers and size for
+// the site checks and is not part of the report. It is null when the fetcher did not say which headers were sent,
+// so an unknown header is never reported as missing.
+function auditHtml({ finalUrl, html, headers, bodyBytes }) {
+  const $ = parse(html)
+  return {
+    issues: checkHtml($, { url: finalUrl, html }),
+    facts: extractFacts($, finalUrl),
+    response: headers ? { headers, bodyBytes } : null
+  }
+}
+
 // Fetches and checks one page. A page that cannot be fetched becomes an issue on
 // that page instead of an exception, so one bad page never stops the run.
 export async function auditPage(url, { fetchPage = defaultFetchPage, timeout = DEFAULT_TIMEOUT_MS } = {}) {
@@ -35,17 +49,20 @@ export async function auditPage(url, { fetchPage = defaultFetchPage, timeout = D
   try {
     fetched = await fetchPage(url, { timeout })
   } catch (err) {
-    return { url, finalUrl: null, status: null, redirects: [], issues: withUrl(checkFetchError(err)), facts: null }
+    return {
+      url,
+      finalUrl: null,
+      status: null,
+      redirects: [],
+      issues: withUrl(checkFetchError(err)),
+      facts: null,
+      response: null
+    }
   }
   const { finalUrl, status, redirects, html } = fetched
-  const issues = checkResponse(fetched)
-  let facts = null
-  if (status === 200 && html !== null) {
-    const $ = parse(html)
-    issues.push(...checkHtml($, { url: finalUrl, html }))
-    facts = extractFacts($, finalUrl)
-  }
-  return { url, finalUrl, status, redirects, issues: withUrl(mergeRobotsIssues(issues)), facts }
+  const { issues: htmlIssues, facts, response } = status === 200 && html !== null ? auditHtml(fetched) : NO_HTML
+  const issues = [...checkResponse(fetched), ...htmlIssues]
+  return { url, finalUrl, status, redirects, issues: withUrl(mergeRobotsIssues(issues)), facts, response }
 }
 
 // Audits every URL with at most `concurrency` requests in flight, starting

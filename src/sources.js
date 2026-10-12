@@ -32,5 +32,7 @@ export const SOURCES = {
   linkPurpose: 'https://www.w3.org/WAI/WCAG22/Understanding/link-purpose-in-context.html',
   landmarks: 'https://www.w3.org/WAI/ARIA/apg/practices/landmark-regions/',
   htmlId: 'https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/id',
-  mixedContent: 'https://web.dev/articles/what-is-mixed-content'
+  mixedContent: 'https://web.dev/articles/what-is-mixed-content',
+  securityHeaders: 'https://web.dev/articles/security-headers',
+  textCompression: 'https://developer.chrome.com/docs/lighthouse/performance/uses-text-compression'
 }

@@ -30,12 +30,28 @@ test('auditPage: a good page has no issues and exposes facts for the site checks
     finalUrl: 'https://a.test/good',
     status: 200,
     redirects: [],
-    issues: []
+    issues: [],
+    // The mock does not say which headers were sent, so none are judged.
+    response: null
   })
   assert.equal(facts.title, 'Good page title here')
   assert.deepEqual(facts.h1s, ['Hello'])
   assert.equal(facts.canonical, 'https://a.test/good')
   assert.ok(facts.wordCount > 0)
+})
+
+test('auditPage: an HTML page keeps its checked headers and size for the site checks', async () => {
+  const headers = { 'x-frame-options': 'DENY' }
+  const fetchPage = async (url) => ({ ...page(url), headers, bodyBytes: 1234 })
+  assert.deepEqual((await auditPage('https://a.test/good', { fetchPage })).response, { headers, bodyBytes: 1234 })
+  const notHtml = async (url) => ({
+    ...page(url),
+    html: null,
+    contentType: 'application/pdf',
+    headers,
+    bodyBytes: null
+  })
+  assert.equal((await auditPage('https://a.test/file', { fetchPage: notHtml })).response, null)
 })
 
 test('auditPage: every issue carries the page URL', async () => {

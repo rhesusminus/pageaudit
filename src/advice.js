@@ -316,6 +316,31 @@ export const ADVICE = {
     why: 'Browsers block or rewrite files loaded over http on an https page, so images or scripts may be missing, and the padlock can be lost.',
     fix: 'Change the address of the file to https.'
   },
+  'missing-hsts': {
+    title: 'Browsers are not told to always use the secure address',
+    why: 'Without the Strict-Transport-Security header, a visitor who types the address or follows an old http link makes the first request without encryption, where it can be intercepted.',
+    fix: 'Ask your host or developer to send Strict-Transport-Security: max-age=31536000 on every https response, once the whole site works over https.'
+  },
+  'missing-x-content-type-options': {
+    title: 'Browsers may guess the type of your files',
+    why: 'Without X-Content-Type-Options: nosniff, a browser can treat an uploaded file as a script or page, which attackers can abuse.',
+    fix: 'Ask your host or developer to send X-Content-Type-Options: nosniff on every response.'
+  },
+  'missing-clickjacking-protection': {
+    title: 'Other sites can show your pages inside theirs',
+    why: 'A page that can be framed by any site can be overlaid with fake buttons, tricking visitors into clicking things they did not mean to.',
+    fix: "Send X-Frame-Options: SAMEORIGIN, or a Content-Security-Policy with frame-ancestors 'self', unless the page is meant to be embedded elsewhere."
+  },
+  'weak-csp': {
+    title: 'The content security policy lets risky scripts run',
+    why: 'A Content-Security-Policy limits what scripts can run if an attacker manages to inject code. One that allows inline scripts or eval stops little of that.',
+    fix: "Move to a strict policy with a nonce or hash for each script, as web.dev describes, and remove 'unsafe-inline' and 'unsafe-eval' where you can."
+  },
+  'no-compression': {
+    title: 'Pages are sent uncompressed',
+    why: 'Compressed HTML is usually several times smaller, so the page starts loading sooner, especially on mobile connections.',
+    fix: 'Turn on gzip or brotli compression for HTML in your server or hosting settings. Most hosts have a switch for it.'
+  },
   'client-side-rendered': {
     title: "The page is built in the visitor's browser",
     why: 'The page code has almost no text, so the content appears only after scripts run. Some search engines and tools see an empty page, and this audit only reads the code, so its results for this page may be incomplete.',

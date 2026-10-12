@@ -126,6 +126,34 @@ test('fetch: sends the pageaudit User-Agent and does not let fetch follow redire
   assert.equal(requests[0].init.redirect, 'manual')
 })
 
+test('fetch: asks for the encodings Googlebot accepts', async (t) => {
+  const requests = serve(t, { 'https://x.test/': html() })
+  await fetchPage('https://x.test/')
+  assert.equal(requests[0].init.headers['accept-encoding'], 'gzip, deflate, br')
+})
+
+test('fetch: returns the checked headers that were sent and the body size in bytes', async (t) => {
+  const headers = {
+    'content-type': 'text/html; charset=utf-8',
+    'strict-transport-security': 'max-age=31536000',
+    'content-security-policy': "default-src 'self'",
+    'x-frame-options': 'DENY',
+    'content-encoding': 'gzip',
+    'x-powered-by': 'PHP'
+  }
+  serve(t, { 'https://x.test/': () => new Response('<p>Hyvää päivää</p>', { headers }) })
+  const page = await fetchPage('https://x.test/')
+  assert.deepEqual(page.headers, {
+    'strict-transport-security': 'max-age=31536000',
+    'content-security-policy': "default-src 'self'",
+    'x-frame-options': 'DENY',
+    'content-encoding': 'gzip'
+  })
+  // 19 characters, 24 bytes: each of the five ä is two bytes in UTF-8.
+  assert.equal(page.html.length, 19)
+  assert.equal(page.bodyBytes, 24)
+})
+
 test('fetch: follows redirects and records every hop', async (t) => {
   serve(t, {
     'http://x.test/a': redirect('https://x.test/a'),
@@ -165,7 +193,9 @@ test('fetch: error statuses and non-HTML responses return no html', async (t) =>
     redirects: [],
     contentType: 'text/html',
     html: null,
-    robotsHeader: null
+    robotsHeader: null,
+    headers: {},
+    bodyBytes: null
   })
   const data = await fetchPage('https://x.test/data')
   assert.equal(data.status, 200)
