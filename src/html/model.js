@@ -1,7 +1,5 @@
 import { METRIC_BANDS } from '../lighthouse-limits.js'
-import { countSeverities } from '../report.js'
-
-const SEVERITY_ORDER = { error: 0, warning: 1, info: 2 }
+import { compareSeverity, countSeverities, worseSeverity } from '../severity.js'
 
 export { METRIC_BANDS }
 
@@ -11,8 +9,6 @@ export function metricBand(key, value) {
   if (value <= good) return 'good'
   return value > poor ? 'poor' : 'average'
 }
-
-const worst = (a, b) => (SEVERITY_ORDER[a] <= SEVERITY_ORDER[b] ? a : b)
 
 // One entry per issue type across the whole report, so a problem that shows up on forty
 // pages is one line to fix, not forty. Page issues and site-wide issues share the list.
@@ -25,7 +21,7 @@ export function groupIssues(report) {
       message: issue.message,
       hits: []
     }
-    group.severity = worst(group.severity, issue.severity)
+    group.severity = worseSeverity(group.severity, issue.severity)
     const { context, message, selector, html, parentHtml, actual, expected } = issue
     group.hits.push({ urls, context, message, selector, html, parentHtml, actual, expected })
     groups.set(issue.type, group)
@@ -35,10 +31,7 @@ export function groupIssues(report) {
   return [...groups.values()]
     .map((group) => ({ ...group, urls: [...new Set(group.hits.flatMap((hit) => hit.urls))] }))
     .sort(
-      (a, b) =>
-        SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] ||
-        b.urls.length - a.urls.length ||
-        a.type.localeCompare(b.type)
+      (a, b) => compareSeverity(a.severity, b.severity) || b.urls.length - a.urls.length || a.type.localeCompare(b.type)
     )
 }
 

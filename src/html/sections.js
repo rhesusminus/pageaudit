@@ -1,4 +1,4 @@
-import { countSeverities, worstFirst } from '../report.js'
+import { countSeverities, worstFirst } from '../severity.js'
 import { adviceFor } from '../advice.js'
 import { auditRow, evidence, hasEvidence, lcpElement, lighthouseNote, moreFacts, redirectList } from './detail.js'
 import { markup, raw } from './escape.js'

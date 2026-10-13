@@ -22,7 +22,8 @@ import { hostThrottle } from './concurrency.js'
 import { checkLinkTargets, linksComplete, MAX_LINK_CHECKS } from './links.js'
 import { lighthouseIssues } from './lighthouse-issues.js'
 import { directoryOutputs, writeReportFile } from './output.js'
-import { buildReport, formatReport } from './report.js'
+import { buildReport } from './report.js'
+import { formatReport } from './terminal.js'
 import { checksFailed, DEFAULT_CONCURRENCY, DEFAULT_DELAY_MS, runAudit } from './runner.js'
 
 const MAX_LIGHTHOUSE_RUNS = 9
