@@ -382,6 +382,7 @@ src/
       sitemap.js        checkSitemapEntries(): pages a sitemap lists that send mixed signals
       index.js          checkSite()
     snippet.js          truncate()/snippet(): caps issue contexts at 120 characters
+  severity.js           countSeverities(), worstFirst() and severity ordering, shared by every report
   sources.js            documentation URLs referenced by each issue's `source` field
   report.js             buildReport() for JSON (with SCHEMA_VERSION), formatReport() for the terminal
 schema/
@@ -394,6 +395,7 @@ test/
   checks.test.js        unit tests for each page check
   fetch.test.js         fetchPage: redirects, User-Agent, encoding sniffing, errors
   report.test.js        summary, tables and wrapping
+  severity.test.js      severity counting and ordering
   html.test.js          HTML report: sections, escaping, self-containment, advice coverage
   signals.test.js       content and metadata signals of a page
   headers.test.js       response header checks and the Content-Security-Policy parser

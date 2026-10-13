@@ -3,9 +3,9 @@ import Table from 'cli-table3'
 import wrapAnsi from 'wrap-ansi'
 import { adviceFor } from './advice.js'
 import { issueId, uniqueIds } from './issue-id.js'
+import { compareSeverity, countSeverities, worstFirst } from './severity.js'
 import { limit, MAX_URL } from './text.js'
 
-const SEVERITY_ORDER = { error: 0, warning: 1, info: 2 }
 const COLORS = { error: chalk.red, warning: chalk.yellow, info: chalk.cyan }
 const CELL_PADDING = 2
 const MIN_WIDTH = 80
@@ -48,16 +48,6 @@ const reportFacts = (facts) =>
   }
 
 const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`
-
-export function countSeverities(issues) {
-  const counts = { errors: 0, warnings: 0, infos: 0 }
-  for (const { severity } of issues) {
-    if (severity === 'error') counts.errors++
-    else if (severity === 'warning') counts.warnings++
-    else counts.infos++
-  }
-  return counts
-}
 
 // What each issue type found in the report means, so the JSON is self-explanatory:
 // { title, why, fix } per type, once instead of on every issue.
@@ -129,17 +119,7 @@ export function buildReport({ pages, site, skipped = [], now = new Date() }) {
   }
 }
 
-// Worst pages first: most errors, then warnings, then infos. Ties keep input order.
-export function worstFirst(pages) {
-  return pages
-    .map((page) => ({ ...page, counts: countSeverities(page.issues) }))
-    .sort(
-      (a, b) =>
-        b.counts.errors - a.counts.errors || b.counts.warnings - a.counts.warnings || b.counts.infos - a.counts.infos
-    )
-}
-
-const bySeverity = (issues) => issues.toSorted((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity])
+const bySeverity = (issues) => issues.toSorted((a, b) => compareSeverity(a.severity, b.severity))
 
 const count = (n, color) => (n ? color(String(n)) : chalk.dim('0'))
 
