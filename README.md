@@ -384,7 +384,8 @@ src/
     snippet.js          truncate()/snippet(): caps issue contexts at 120 characters
   severity.js           countSeverities(), worstFirst() and severity ordering, shared by every report
   sources.js            documentation URLs referenced by each issue's `source` field
-  report.js             buildReport() for JSON (with SCHEMA_VERSION), formatReport() for the terminal
+  report.js             buildReport(): the JSON report (with SCHEMA_VERSION)
+  terminal.js           formatReport(): the report as tables for the terminal
 schema/
   report.schema.json    JSON Schema of the JSON report
 test/
@@ -394,7 +395,8 @@ test/
   site.test.js          site checks over runner results
   checks.test.js        unit tests for each page check
   fetch.test.js         fetchPage: redirects, User-Agent, encoding sniffing, errors
-  report.test.js        summary, tables and wrapping
+  report.test.js        the JSON report: summary, rules, ids and capped facts
+  terminal.test.js      terminal tables and wrapping
   severity.test.js      severity counting and ordering
   html.test.js          HTML report: sections, escaping, self-containment, advice coverage
   signals.test.js       content and metadata signals of a page
@@ -403,6 +405,7 @@ test/
   cli.test.js           run() end to end with --json against the fixtures
   fixtures/             HTML pages, sitemap.xml, sitemap-index.xml and urls.txt
   helpers/fixture-fetch.js   mocked fetch that serves the fixtures
+  helpers/report-pages.js    audited pages and site issues for the report and terminal tests
 docs/seo-harness-plan.md     the original v1 plan
 docs/pageaudit-v2-plan.md    the v2 (multi-page) plan
 ```
