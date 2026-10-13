@@ -142,6 +142,25 @@ test('hostThrottle: requests to one host start at least the delay apart, other h
   assert.equal(started, true)
 })
 
+test('hostThrottle: waiters that are all overdue still start the delay apart', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] })
+  const wait = hostThrottle(40)
+  const started = []
+  const waiters = [1, 2, 3].map((n) => wait(`https://a.test/${n}`).then(() => started.push([n, Date.now()])))
+  // The event loop is busy for 200 ms, as when a large page is checked, so every timer is late.
+  const flush = () => new Promise((resolve) => setImmediate(resolve))
+  await flush()
+  t.mock.timers.tick(200)
+  await flush()
+  assert.deepEqual(started, [
+    [1, 0],
+    [2, 200]
+  ])
+  t.mock.timers.tick(40)
+  await Promise.all(waiters)
+  assert.deepEqual(started.at(-1), [3, 240])
+})
+
 test('checkLinks: broken, unreachable and redirecting targets, one issue each with the pages linking to them', () => {
   const targets = [
     'https://a.test/404',
