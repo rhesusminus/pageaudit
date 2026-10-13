@@ -118,9 +118,11 @@ async function followIndex(index, result, options) {
 // URLs listed in a sitemap, and `files` with the facts of every sitemap file that was read. A sitemap index is
 // followed one level deep: child sitemaps that fail or are themselves indexes are skipped, not fatal. A file that is
 // too large is skipped too, also the sitemap itself, but its facts are kept so it is still reported. Throws when the
-// sitemap itself cannot be read. `beforeHop` paces the requests, see request().
-export async function fromSitemap(url, { timeout, beforeHop } = {}) {
-  const options = { cache: new Map(), timeout, beforeHop }
+// sitemap itself cannot be read. `beforeHop` paces the requests, see request(). `cache` holds the files read so far,
+// see readOnce(): a run that shares one requests each file once, also one given twice or given and also listed by an
+// index, and keeps its facts once.
+export async function fromSitemap(url, { timeout, beforeHop, cache = new Map() } = {}) {
+  const options = { cache, timeout, beforeHop }
   let root
   try {
     root = await readOnce(url, options)

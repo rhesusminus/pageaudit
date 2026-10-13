@@ -144,11 +144,13 @@ async function readInputs(options, stdin, { spinner, pace }) {
   const sitemapFiles = []
   // False when a sitemap index listed a file that could not be read or was not followed, so pages may be missing.
   let sitemapsComplete = true
+  const cache = new Map()
   // Pushed one by one: a list of a hundred thousand entries is too many arguments for push(...list).
   for (const path of options.files) for (const entry of await fromFile(path, { stdin })) entries.push(entry)
-  for (const url of options.sitemaps) {
+  // A sitemap given twice is followed once, so its skipped files are not reported twice.
+  for (const url of new Set(options.sitemaps)) {
     if (spinner) spinner.text = `Reading sitemap ${url}`
-    const sitemap = await fromSitemap(url, { beforeHop: pace })
+    const sitemap = await fromSitemap(url, { beforeHop: pace, cache })
     for (const entry of sitemap.entries) entries.push(entry)
     for (const skip of sitemap.skipped) skipped.push(skip)
     for (const file of sitemap.files) sitemapFiles.push(file)

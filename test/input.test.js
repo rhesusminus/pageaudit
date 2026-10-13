@@ -102,6 +102,48 @@ test('sitemap: follows an index one level deep and skips failing or nested child
   ])
 })
 
+test('sitemap: a sitemap read before in the run is not requested again and its facts are kept once', async (t) => {
+  const requests = serveSitemaps(t, { '/urls.xml': '<urlset><url><loc>https://a.test/1</loc></url></urlset>' })
+  const cache = new Map()
+  const first = await fromSitemap('https://a.test/urls.xml', { cache })
+  const again = await fromSitemap('https://a.test/urls.xml', { cache })
+  assert.deepEqual([values(first.entries), first.files.length], [['https://a.test/1'], 1])
+  assert.deepEqual([values(again.entries), again.files.length], [['https://a.test/1'], 0])
+  assert.deepEqual(requests, ['https://a.test/urls.xml'])
+})
+
+// An index that lists a urlset and a nested index, which lists a second urlset.
+const NESTED_SITE = {
+  '/root.xml':
+    '<sitemapindex><sitemap><loc>https://a.test/1.xml</loc></sitemap><sitemap><loc>https://a.test/nested.xml</loc></sitemap></sitemapindex>',
+  '/nested.xml': '<sitemapindex><sitemap><loc>https://a.test/2.xml</loc></sitemap></sitemapindex>',
+  '/1.xml': '<urlset><url><loc>https://a.test/1</loc></url></urlset>',
+  '/2.xml': '<urlset><url><loc>https://a.test/2</loc></url></urlset>'
+}
+
+test('sitemap: a nested index given as a sitemap of its own is followed, whichever is read first', async (t) => {
+  for (const order of [
+    ['https://a.test/root.xml', 'https://a.test/nested.xml'],
+    ['https://a.test/nested.xml', 'https://a.test/root.xml']
+  ]) {
+    const requests = serveSitemaps(t, NESTED_SITE)
+    const cache = new Map()
+    const results = []
+    for (const url of order) results.push(await fromSitemap(url, { cache }))
+    const all = (key) => results.flatMap((result) => result[key])
+    const files = ['1.xml', '2.xml', 'nested.xml', 'root.xml'].map((name) => `https://a.test/${name}`)
+    assert.deepEqual(values(all('entries')).sort(), ['https://a.test/1', 'https://a.test/2'], order[0])
+    assert.deepEqual(
+      all('files')
+        .map((file) => file.url)
+        .sort(),
+      files,
+      order[0]
+    )
+    assert.deepEqual(requests.toSorted(), files, order[0])
+  }
+})
+
 test('sitemap: beforeHop is awaited before the index and every child sitemap', async (t) => {
   mockFixtureFetch(t)
   const hops = []
