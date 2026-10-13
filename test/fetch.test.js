@@ -81,6 +81,41 @@ test('fetch: a timeout while reading the body gets the friendly message', async 
   await assert.rejects(fetchHtml('https://x.test/'), /Could not fetch https:\/\/x\.test\/: timed out after 15s/)
 })
 
+// A body that sends `chunks` and then fails, like a connection that drops.
+const droppedAfter = (...chunks) =>
+  new ReadableStream({
+    pull(controller) {
+      const chunk = chunks.shift()
+      if (chunk === undefined)
+        controller.error(Object.assign(new TypeError('terminated'), { cause: { code: 'ECONNRESET' } }))
+      else controller.enqueue(new TextEncoder().encode(chunk))
+    }
+  })
+
+const text = ({ bytes, truncated }) => ({ text: new TextDecoder().decode(bytes), truncated })
+
+test('request: read stops at the limit, so a failure after it does not spoil what was read', async (t) => {
+  respond(t, droppedAfter('abc', 'def'), 'text/plain')
+  assert.deepEqual(text(await (await request('https://x.test/')).read(5)), { text: 'abcde', truncated: true })
+  respond(t, droppedAfter('abc', 'def'), 'text/plain')
+  await assert.rejects((await request('https://x.test/')).read(6), /Could not fetch https:\/\/x\.test\/: ECONNRESET/)
+})
+
+test('request: read can pick its limit from the first chunk of the body', async (t) => {
+  const limit = (head) => (head[0] === 0x61 ? 4 : 2)
+  respond(t, droppedAfter('abc', 'def'), 'text/plain')
+  assert.deepEqual(text(await (await request('https://x.test/')).read(limit)), { text: 'abcd', truncated: true })
+  respond(t, droppedAfter('xyz', 'def'), 'text/plain')
+  assert.deepEqual(text(await (await request('https://x.test/')).read(limit)), { text: 'xy', truncated: true })
+})
+
+test('request: a body of exactly the limit is read whole', async (t) => {
+  respond(t, 'abcdef', 'text/plain')
+  assert.deepEqual(text(await (await request('https://x.test/')).read(6)), { text: 'abcdef', truncated: false })
+  respond(t, null, 'text/plain')
+  assert.deepEqual(text(await (await request('https://x.test/')).read(6)), { text: '', truncated: false })
+})
+
 test('fetch: a cause with a message but no code is surfaced', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => {
     throw new TypeError('fetch failed', { cause: new Error('bad port') })
@@ -152,6 +187,17 @@ test('fetch: returns the checked headers that were sent and the body size in byt
   // 19 characters, 24 bytes: each of the five ä is two bytes in UTF-8.
   assert.equal(page.html.length, 19)
   assert.equal(page.bodyBytes, 24)
+})
+
+test('fetchPage: reads the first 2 MB of HTML and says when there was more', async (t) => {
+  const limit = 2 * 1024 * 1024
+  const html = (bytes) => '<p>'.padEnd(bytes, 'a')
+  respond(t, html(limit + 1), 'text/html')
+  const cut = await fetchPage('https://x.test/')
+  assert.deepEqual([cut.html.length, cut.bodyBytes, cut.truncated], [limit, limit, true])
+  respond(t, html(limit), 'text/html')
+  const whole = await fetchPage('https://x.test/')
+  assert.deepEqual([whole.html.length, whole.bodyBytes, whole.truncated], [limit, limit, false])
 })
 
 test('fetch: follows redirects and records every hop', async (t) => {
@@ -243,6 +289,7 @@ test('fetch: error statuses and non-HTML responses return no html', async (t) =>
     redirects: [],
     contentType: 'text/html',
     html: null,
+    truncated: false,
     robotsHeader: null,
     headers: {},
     bodyBytes: null

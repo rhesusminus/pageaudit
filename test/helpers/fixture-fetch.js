@@ -23,17 +23,18 @@ const HEADER_PAGES = {
 }
 const REDIRECTS = { 'redirect-once': '/good.html', 'redirect-twice': '/redirect-once' }
 // Fixture pages built here because they are too large to keep as files. deep-nesting.html nests elements deeper than
-// the checks can walk.
+// the checks can walk, too-large.html has its only <h1> after the first 2 MB.
 const NESTING = 10000
 const GENERATED = {
-  'deep-nesting.html': `<html lang="en"><head><title>Deep</title></head><body><a href="/x">${'<span>'.repeat(NESTING)}x${'</span>'.repeat(NESTING)}</a></body></html>`
+  'deep-nesting.html': `<html lang="en"><head><title>Deep</title></head><body><a href="/x">${'<span>'.repeat(NESTING)}x${'</span>'.repeat(NESTING)}</a></body></html>`,
+  'too-large.html': `<html lang="en"><head><title>Large</title></head><body><main><p>${'word '.repeat(450_000)}</p><h1>Late</h1></main></body></html>`
 }
 
 // Replaces globalThis.fetch for the duration of a test. Requests to
 // https://fixtures.test/<name> are answered from test/fixtures/<name>, with a
 // content type chosen by extension. Special paths simulate other responses:
 // /noindex-header.html (a page served with an X-Robots-Tag: noindex header), /weak-headers.html (no security
-// headers and a weak Content-Security-Policy), /deep-nesting.html (elements nested too deeply to check), /not-html (JSON content type), /timeout, /redirect-once (301 to /good.html)
+// headers and a weak Content-Security-Policy), /deep-nesting.html (elements nested too deeply to check), /too-large.html (an <h1> after the first 2 MB), /not-html (JSON content type), /timeout, /redirect-once (301 to /good.html)
 // and /redirect-twice (301 to /redirect-once), /server-error (500). Unknown names answer 404, and
 // other origins fail like a DNS error (ENOTFOUND).
 export function mockFixtureFetch(t) {

@@ -101,6 +101,21 @@ test('loadRobots: only the first 500 KiB are read', async (t) => {
   assert.equal(parser.isDisallowed('https://x.test/a', 'Googlebot'), false)
 })
 
+test('loadRobots: a connection that drops after the first 500 KiB does not fail the read', async (t) => {
+  const rules = 'User-agent: *\nDisallow: /private/\n'
+  const chunks = [rules.padEnd(500 * 1024 + 1, '#')]
+  const body = new ReadableStream({
+    pull(controller) {
+      if (chunks.length) controller.enqueue(new TextEncoder().encode(chunks.shift()))
+      else controller.error(Object.assign(new TypeError('terminated'), { cause: { code: 'ECONNRESET' } }))
+    }
+  })
+  respond(t, 200, body)
+  const robots = await loadRobots('https://x.test')
+  assert.equal(robots.status, 'ok')
+  assert.equal(robots.parser.isDisallowed('https://x.test/private/a', 'Googlebot'), true)
+})
+
 const page = (url, fields = {}) => ({
   url,
   finalUrl: url,
@@ -374,7 +389,7 @@ const ok = (...sitemaps) => ({
 const file = (fields) => ({
   url: 'https://a.test/sitemap.xml',
   kind: 'urlset',
-  bytes: 100,
+  tooLarge: false,
   entries: 0,
   emptyLocs: 0,
   locs: [],
@@ -384,7 +399,7 @@ const file = (fields) => ({
 
 test('sitemap files: size, entries, bad and duplicate locs and bad dates are reported per file', () => {
   const issues = checkSitemapFiles([
-    file({ entries: 50_001, bytes: 52_428_801 }),
+    file({ entries: 50_001, tooLarge: true }),
     file({
       url: 'https://a.test/b.xml',
       emptyLocs: 2,
@@ -410,13 +425,14 @@ test('sitemap files: size, entries, bad and duplicate locs and bad dates are rep
     'sitemap-invalid-lastmod'
   ])
   assert.deepEqual(byType['sitemap-too-many-urls'].urls, ['https://a.test/sitemap.xml'])
+  assert.equal(byType['sitemap-too-large'].context, 'https://a.test/sitemap.xml')
   assert.deepEqual(byType['sitemap-empty-loc'].urls, ['https://a.test/b.xml'])
   assert.equal(
     byType['sitemap-invalid-lastmod'].context,
     'https://a.test/b.xml: "2026-02-30", "31/03/2026", "2026-03-31T10:00"'
   )
   assert.equal(byType['sitemap-duplicate-loc'].context, 'https://a.test/b.xml: https://a.test/1')
-  assert.deepEqual(checkSitemapFiles([file({ entries: 50_000, bytes: 52_428_800 })]), [])
+  assert.deepEqual(checkSitemapFiles([file({ entries: 50_000 })]), [])
 })
 
 test('sitemap hosts: another host is only reported when its robots.txt does not name the sitemap', async () => {

@@ -1,3 +1,4 @@
+import { HTML_MAX_BYTES } from '../../fetch.js'
 import { SOURCES } from '../../sources.js'
 import { charCount, collapseWhitespace } from '../../text.js'
 import { evidence } from '../evidence.js'
@@ -6,8 +7,6 @@ import { absolute, baseUrl, wordCount } from './signals.js'
 
 // Heuristic: Google gives no limit, but shorter URLs are easier to read and share.
 const URL_MAX = 100
-// Googlebot only reads the first 2 MB of an HTML file.
-const HTML_MAX_BYTES = 2 * 1024 * 1024
 // Fewer visible words than this on a page with an empty app root means the content is built in the browser.
 const SHELL_MAX_WORDS = 20
 const APP_ROOT = '#root, #app, #__next, #__nuxt, #svelte'
@@ -54,18 +53,17 @@ function checkUrl(url) {
   return issues
 }
 
-// The decoded text is measured as UTF-8, which is exact for UTF-8 pages and close for other encodings.
-function checkSize(html) {
-  const bytes = Buffer.byteLength(html ?? '')
-  if (bytes <= HTML_MAX_BYTES) return []
+// The fetcher reads as much HTML as Googlebot does, so a page that had more was cut there and its size is unknown.
+function checkSize(truncated) {
+  if (!truncated) return []
+  const mb = HTML_MAX_BYTES / 1024 / 1024
   return [
     seoIssue({
       type: 'html-too-large',
       severity: 'warning',
       source: SOURCES.googlebot,
-      message: `HTML is ${(bytes / 1024 / 1024).toFixed(1)} MB, Googlebot only reads the first 2 MB so anything after that is not indexed`,
-      context: `${bytes} bytes`,
-      actual: bytes,
+      message: `HTML is over ${mb} MB, Googlebot only reads the first ${mb} MB so anything after that is not indexed (or checked here)`,
+      context: `more than ${HTML_MAX_BYTES} bytes`,
       expected: `at most ${HTML_MAX_BYTES} bytes`
     })
   ]
@@ -141,6 +139,6 @@ function checkRenderedInBrowser($) {
   ]
 }
 
-export function checkHygiene($, { url, html } = {}) {
-  return [...checkUrl(url ?? ''), ...checkSize(html), ...checkMixedContent($, url), ...checkRenderedInBrowser($)]
+export function checkHygiene($, { url, truncated } = {}) {
+  return [...checkUrl(url ?? ''), ...checkSize(truncated), ...checkMixedContent($, url), ...checkRenderedInBrowser($)]
 }

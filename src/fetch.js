@@ -2,6 +2,8 @@ import pkg from '../package.json' with { type: 'json' }
 
 export const USER_AGENT = `pageaudit/${pkg.version} (+https://github.com/rhesusminus/pageaudit)`
 export const DEFAULT_TIMEOUT_MS = 15000
+// Googlebot only reads the first 2 MB of an HTML file, so a page is checked the way it sees it and no more is read.
+export const HTML_MAX_BYTES = 2 * 1024 * 1024
 const MAX_REDIRECTS = 10
 // The encodings Googlebot accepts. Node's fetch decodes all three but only asks for gzip and deflate itself,
 // so a server that only offers brotli would otherwise look like it does not compress.
@@ -39,6 +41,25 @@ function httpUrl(url, value, what) {
   return parsed
 }
 
+// The first `maxBytes` of a body, and whether there was more. Reading stops there, so the rest is never held in
+// memory and a failure after the limit cannot spoil what came before it. `maxBytes` can also be a function that
+// picks the limit from the first chunk of the body, for a limit that depends on what the body is.
+async function readLimited(body, maxBytes) {
+  const chunks = []
+  let size = 0
+  let limit = typeof maxBytes === 'function' ? Infinity : maxBytes
+  const reader = body.getReader()
+  while (size <= limit) {
+    const { done, value } = await reader.read()
+    if (done) return { bytes: Buffer.concat(chunks, size), truncated: false }
+    if (chunks.length === 0 && typeof maxBytes === 'function') limit = maxBytes(value)
+    chunks.push(value)
+    size += value.length
+  }
+  await reader.cancel().catch(() => {})
+  return { bytes: Buffer.concat(chunks, limit), truncated: true }
+}
+
 // The final answer of a request: where it ended up and how to read the body.
 function answer(url, res, current, redirects, timeout) {
   return {
@@ -46,9 +67,10 @@ function answer(url, res, current, redirects, timeout) {
     status: res.status,
     redirects,
     headers: res.headers,
-    async bytes() {
+    // { bytes, truncated }: at most `maxBytes` of the body, see readLimited().
+    async read(maxBytes) {
       try {
-        return new Uint8Array(await res.arrayBuffer())
+        return res.body ? await readLimited(res.body, maxBytes) : { bytes: new Uint8Array(), truncated: false }
       } catch (err) {
         throw fetchError(url, err, timeout)
       }
@@ -166,17 +188,20 @@ const checkedHeaders = (headers) =>
 // The page-fetching interface the runner depends on. A headless browser can
 // replace it later as long as it returns the same shape and awaits `beforeHop(url)` before every request, which is
 // how the per-host delay reaches redirect hops. html is null unless
-// the response is a 200 with an HTML content type. robotsHeader is the X-Robots-Tag value or null.
+// the response is a 200 with an HTML content type, and holds at most the first HTML_MAX_BYTES of it: truncated is
+// true when there was more. robotsHeader is the X-Robots-Tag value or null.
 // headers holds the CHECKED_HEADERS that were sent, and bodyBytes the decompressed size of the html (null without html).
 export async function fetchPage(url, { timeout, beforeHop } = {}) {
   const res = await request(url, { timeout, beforeHop, accept: 'text/html,application/xhtml+xml' })
   const contentType = res.headers.get('content-type') ?? ''
   let html = null
   let bodyBytes = null
+  let truncated = false
   if (res.status === 200 && /html/i.test(contentType)) {
-    const bytes = await res.bytes()
-    html = decode(bytes, contentType)
-    bodyBytes = bytes.length
+    const body = await res.read(HTML_MAX_BYTES)
+    html = decode(body.bytes, contentType)
+    bodyBytes = body.bytes.length
+    truncated = body.truncated
   } else {
     await res.discard()
   }
@@ -187,6 +212,7 @@ export async function fetchPage(url, { timeout, beforeHop } = {}) {
     redirects: res.redirects,
     contentType,
     html,
+    truncated,
     robotsHeader: res.headers.get('x-robots-tag'),
     headers: checkedHeaders(res.headers),
     bodyBytes

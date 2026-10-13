@@ -169,6 +169,13 @@ test('cli: a page the checks cannot process is an issue and the other pages are 
   assert.match(await readFile(path, 'utf8'), /The page could not be checked/)
 })
 
+test('cli: a page over 2 MB is checked the way Googlebot reads it, only the first 2 MB', async (t) => {
+  const { report } = await runJson(t, [fixtureUrl('too-large.html')])
+  const types = pageTypes(report.pages[0])
+  assert.ok(types.includes('html-too-large'), types)
+  assert.ok(types.includes('missing-h1'), types)
+})
+
 test('cli: a non-HTML page alone is not an error', async (t) => {
   const { code, report } = await runJson(t, [fixtureUrl('not-html')])
   assert.equal(code, 0)
@@ -899,6 +906,23 @@ test('cli: --check-links does not report orphan pages when a sitemap page could 
   const { report } = await runCliWithMock(t, ['--sitemap', 'https://a.test/s.xml', '--check-links'])
   assert.deepEqual(
     report.pages.map((p) => pageTypes(p).includes('check-failed')),
+    [true, false]
+  )
+  assert.ok(report.site.every((issue) => issue.type !== 'orphan-page'))
+})
+
+test('cli: --check-links does not report orphan pages when a sitemap page was cut at 2 MB', async (t) => {
+  const page = (body) => `<html lang="en"><head><title>Page</title></head><body>${body}</body></html>`
+  mockSite(t, {
+    '/robots.txt': 'User-agent: *\nAllow: /',
+    '/s.xml': '<urlset><url><loc>https://a.test/a</loc></url><url><loc>https://a.test/b</loc></url></urlset>',
+    // The only link to /b comes after the first 2 MB of /a, so it is never read.
+    '/a': page(`<p>${'word '.repeat(450_000)}</p><a href="/b">B</a>`),
+    '/b': page('<a href="/a">A</a>')
+  })
+  const { report } = await runCliWithMock(t, ['--sitemap', 'https://a.test/s.xml', '--check-links'])
+  assert.deepEqual(
+    report.pages.map((p) => pageTypes(p).includes('html-too-large')),
     [true, false]
   )
   assert.ok(report.site.every((issue) => issue.type !== 'orphan-page'))

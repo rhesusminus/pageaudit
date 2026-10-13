@@ -502,7 +502,7 @@ test('structured data: BreadcrumbList needs itemListElement', () => {
   assert.deepEqual(checkStructuredData(ld({ ...CONTEXT, '@type': 'BreadcrumbList', itemListElement: [] })), [])
 })
 
-const hygiene = (html, page = {}) => checkHygiene(parse(html), { url: 'https://a.test/page', html, ...page })
+const hygiene = (html, page = {}) => checkHygiene(parse(html), { url: 'https://a.test/page', ...page })
 const WORDS = 'word '.repeat(30)
 
 test('hygiene: long, underscore and uppercase URLs are infos', () => {
@@ -512,11 +512,12 @@ test('hygiene: long, underscore and uppercase URLs are infos', () => {
   assert.deepEqual(types(hygiene(WORDS, { url: 'https://a.test/caf%C3%A9%' })), [])
 })
 
-test('hygiene: HTML over 2 MB is a warning, exactly 2 MB is fine', () => {
-  const limit = 2 * 1024 * 1024
-  const html = (bytes) => '<p>' + 'a'.repeat(bytes - 7) + '</p>'
-  assert.deepEqual(types(hygiene(html(limit + 1))), ['html-too-large'])
-  assert.deepEqual(hygiene(html(limit)), [])
+test('hygiene: HTML that was cut at 2 MB is a warning', () => {
+  const [issue] = hygiene(WORDS, { truncated: true })
+  assert.equal(issue.type, 'html-too-large')
+  assert.equal(issue.context, 'more than 2097152 bytes')
+  assert.match(issue.message, /^HTML is over 2 MB, Googlebot only reads the first 2 MB/)
+  assert.deepEqual(hygiene(WORDS, { truncated: false }), [])
 })
 
 test('hygiene: http resources on an https page are mixed content, on an http page they are not', () => {

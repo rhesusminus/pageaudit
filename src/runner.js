@@ -24,10 +24,10 @@ export const DEFAULT_DELAY_MS = 200
 const NO_HTML = { issues: [], facts: null, response: null, links: null }
 
 // The checks and facts of a page that returned HTML, and `links`, the internal link targets for the site checks.
-function auditHtml({ finalUrl, html }) {
+function auditHtml({ finalUrl, html, truncated }) {
   const $ = parse(html)
   return {
-    issues: checkHtml($, { url: finalUrl, html }),
+    issues: checkHtml($, { url: finalUrl, truncated }),
     facts: extractFacts($, finalUrl),
     links: internalLinks($, finalUrl)
   }
@@ -50,6 +50,10 @@ function htmlResults(fetched) {
 
 // True for a page that returned HTML the checks could not process, so its facts and links are unknown, not absent.
 export const checksFailed = (page) => page.issues.some((issue) => issue.type === 'check-failed')
+
+// True for a page whose links are not all known: its checks failed, or its HTML was cut at the 2 MB Googlebot reads,
+// so links after the cut were never seen.
+export const linksUnread = (page) => checksFailed(page) || page.issues.some((issue) => issue.type === 'html-too-large')
 
 // Fetches and checks one page. A page that cannot be fetched or checked becomes an issue on
 // that page instead of an exception, so one bad page never stops the run.

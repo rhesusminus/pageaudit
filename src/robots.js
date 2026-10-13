@@ -24,7 +24,7 @@ export async function loadRobots(origin, { timeout, beforeHop } = {}) {
   }
   if (res.status === 200) {
     try {
-      const text = new TextDecoder().decode((await res.bytes()).subarray(0, MAX_BYTES))
+      const text = new TextDecoder().decode((await res.read(MAX_BYTES)).bytes)
       return { status: 'ok', parser: robotsParser(url, text) }
     } catch (err) {
       return { status: 'failed', reason: err.reason ?? err.message }

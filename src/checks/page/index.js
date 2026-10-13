@@ -15,7 +15,8 @@ export { checkFetchError, checkHtmlError, checkResponse } from './response.js'
 export { mergeRobotsIssues } from './robots-header.js'
 export { internalLinks } from './signals.js'
 
-// Every check that looks at the parsed HTML of one page. `page` is { url, html }: the final URL and the raw body.
+// Every check that looks at the parsed HTML of one page. `page` is { url, truncated }: the final URL, and whether the
+// HTML was cut at the size Googlebot reads, see fetchPage().
 export const checkHtml = ($, page = {}) => [
   ...checkImages($),
   ...checkA11y($),
