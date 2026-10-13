@@ -220,6 +220,21 @@ test('renderHtml: site-wide problems alone never make a page or the verdict "cle
   assert.deepEqual(pageHealth(pagesWithSiteIssues({ pages, site })), { errors: 0, warnings: 2, clean: 0 })
 })
 
+test('pagesWithSiteIssues: each page gets the site issues listing it once, in report order', () => {
+  const pages = [page('https://a.test/', [issue('missing-h1', 'warning')]), page('https://a.test/b', [])]
+  const title = {
+    ...issue('duplicate-title', 'warning'),
+    urls: ['https://a.test/b', 'https://a.test/', 'https://a.test/b']
+  }
+  const robots = { ...issue('blocked-by-robots', 'warning'), urls: ['https://a.test/b'] }
+  const [home, other] = pagesWithSiteIssues({ pages, site: [title, robots] })
+  assert.deepEqual(
+    home.issues.map((i) => i.type),
+    ['missing-h1', 'duplicate-title']
+  )
+  assert.deepEqual(other.issues, [title, robots])
+})
+
 test('renderHtml: a site issue on no audited page, like a sitemap file, still moves the verdict', () => {
   const pages = [page('https://a.test/', [])]
   const site = [{ ...issue('sitemap-too-large', 'error'), urls: ['https://a.test/s.xml'] }]
