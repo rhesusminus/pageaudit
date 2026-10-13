@@ -16,14 +16,22 @@ export async function mapLimited(items, limit, fn) {
 }
 
 // Spaces out requests per host: wait(url) resolves when a request to that URL's host may start, at least `delay` ms
-// after the previous start on that host.
+// after the previous start on that host. Waiters on a host are let through one at a time, each measured from when
+// the one before it actually started. Timers fire late while the event loop is busy, for example checking a large
+// page, and booking start times ahead would then let every overdue request start at once.
 export function hostThrottle(delay) {
-  const nextStart = new Map()
-  return async function wait(url) {
-    const host = new URL(url).host
-    const now = Date.now()
-    const start = Math.max(now, nextStart.get(host) ?? 0)
-    nextStart.set(host, start + delay)
-    if (start > now) await timers.setTimeout(start - now)
+  const hosts = new Map()
+  return function wait(url) {
+    const key = new URL(url).host
+    const host = hosts.get(key) ?? { started: -Infinity, queue: Promise.resolve() }
+    hosts.set(key, host)
+    host.queue = host.queue.then(async () => {
+      // Checked again after every wait, a timer may also fire a moment early.
+      for (let left = host.started + delay - Date.now(); left > 0; left = host.started + delay - Date.now()) {
+        await timers.setTimeout(left)
+      }
+      host.started = Date.now()
+    })
+    return host.queue
   }
 }

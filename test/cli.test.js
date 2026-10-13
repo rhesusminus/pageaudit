@@ -903,3 +903,36 @@ test('cli: --check-links does not report orphan pages when a sitemap page could 
   )
   assert.ok(report.site.every((issue) => issue.type !== 'orphan-page'))
 })
+
+test('cli: --delay spaces every request to a host: sitemaps, pages, redirect hops, robots.txt and links', async (t) => {
+  const page = (body) => `<html lang="en"><head><title>Page</title></head><body>${body}</body></html>`
+  const files = {
+    '/s.xml': '<urlset><url><loc>https://a.test/a</loc></url><url><loc>https://a.test/old</loc></url></urlset>',
+    '/a': page('<a href="/b">B</a><a href="/moved">Moved</a>'),
+    '/b': page(''),
+    '/new': page(''),
+    '/robots.txt': 'User-agent: *\nAllow: /\nSitemap: https://a.test/s.xml'
+  }
+  const redirects = { '/old': '/new', '/moved': '/b' }
+  const starts = []
+  t.mock.method(globalThis, 'fetch', async (input) => {
+    const { pathname } = new URL(input)
+    starts.push({ pathname, at: performance.now() })
+    if (redirects[pathname]) return new Response(null, { status: 301, headers: { location: redirects[pathname] } })
+    const type = pathname.endsWith('.xml') ? 'application/xml' : pathname.endsWith('.txt') ? 'text/plain' : 'text/html'
+    return new Response(files[pathname], { headers: { 'content-type': type } })
+  })
+  t.mock.method(console, 'log', () => {})
+  t.mock.method(console, 'error', () => {})
+  await run(['--sitemap', 'https://a.test/s.xml', '--check-links', '--delay', '40', '--json'])
+  assert.deepEqual(
+    starts.map((s) => s.pathname),
+    ['/s.xml', '/a', '/old', '/new', '/robots.txt', '/b', '/moved', '/b']
+  )
+  // A little under 40 ms of slack: timers can fire a millisecond early against performance.now().
+  const gaps = starts.slice(1).map((s, i) => Math.round(s.at - starts[i].at))
+  assert.ok(
+    gaps.every((gap) => gap >= 38),
+    `gaps ${gaps.join(', ')}`
+  )
+})

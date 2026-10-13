@@ -98,6 +98,16 @@ test('sitemap: follows an index one level deep and skips failing or nested child
   ])
 })
 
+test('sitemap: beforeHop is awaited before the index and every child sitemap', async (t) => {
+  mockFixtureFetch(t)
+  const hops = []
+  await fromSitemap(`${FIXTURE_HOST}/sitemap-index.xml`, { beforeHop: async (url) => hops.push(url) })
+  assert.deepEqual(
+    hops,
+    ['sitemap-index.xml', 'sitemap.xml', 'sitemap-index.xml', 'missing-sitemap.xml'].map((n) => `${FIXTURE_HOST}/${n}`)
+  )
+})
+
 test('sitemap: reads a gzipped sitemap file', async (t) => {
   const xml = readFileSync(fixturePath('sitemap.xml'))
   t.mock.method(

@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { hostThrottle } from '../src/concurrency.js'
 import { FetchError } from '../src/fetch.js'
 import { checkHtmlError } from '../src/checks/page/index.js'
 import { auditPage, runAudit } from '../src/runner.js'
@@ -22,6 +23,8 @@ const page = (url, fields = {}) => ({
   ...fields
 })
 const types = (result) => result.issues.map((i) => i.type)
+// Starts every request at once, so tests do not wait for the per-host delay.
+const noPace = async () => {}
 
 test('auditPage: a good page has no issues and exposes facts for the site checks', async () => {
   const result = await auditPage('https://a.test/good', { fetchPage: async (url) => page(url) })
@@ -158,16 +161,18 @@ test('auditPage: one redirect is info, a chain is a warning', async () => {
   assert.equal(chain.issues[0].context, 'http://a.test/ -> https://a.test/ -> https://a.test/b')
 })
 
-test('auditPage: passes the timeout to fetchPage', async () => {
+test('auditPage: passes the timeout and the pacing to fetchPage', async () => {
   let options
+  const beforeHop = async () => {}
   await auditPage('https://a.test/', {
     timeout: 1234,
+    beforeHop,
     fetchPage: async (url, opts) => {
       options = opts
       return page(url)
     }
   })
-  assert.deepEqual(options, { timeout: 1234 })
+  assert.deepEqual(options, { timeout: 1234, beforeHop })
 })
 
 test('runAudit: keeps input order and never exceeds the concurrency limit', async () => {
@@ -181,7 +186,7 @@ test('runAudit: keeps input order and never exceeds the concurrency limit', asyn
     inFlight--
     return page(url)
   }
-  const pages = await runAudit(urls, { fetchPage, concurrency: 3, delay: 0 })
+  const pages = await runAudit(urls, { fetchPage, concurrency: 3, pace: noPace })
   assert.deepEqual(
     pages.map((p) => p.url),
     urls
@@ -191,13 +196,15 @@ test('runAudit: keeps input order and never exceeds the concurrency limit', asyn
 
 test('runAudit: spaces requests to the same host but not across hosts', async () => {
   const starts = []
-  const fetchPage = async (url) => {
+  // Like the real fetchPage, the pacing is awaited before the request.
+  const fetchPage = async (url, { beforeHop }) => {
+    await beforeHop(url)
     starts.push({ host: new URL(url).host, at: performance.now() })
     return page(url)
   }
   const urls = ['https://a.test/1', 'https://b.test/1', 'https://a.test/2', 'https://a.test/3']
   const began = performance.now()
-  await runAudit(urls, { fetchPage, concurrency: 4, delay: 50 })
+  await runAudit(urls, { fetchPage, concurrency: 4, pace: hostThrottle(50) })
   const aStarts = starts.filter((s) => s.host === 'a.test').map((s) => s.at)
   for (let i = 1; i < aStarts.length; i++)
     assert.ok(aStarts[i] - aStarts[i - 1] >= 45, `a.test gap ${aStarts[i] - aStarts[i - 1]}`)
@@ -211,7 +218,11 @@ test('runAudit: a failing page does not stop the others and progress counts ever
     return page(url)
   }
   const urls = ['https://a.test/1', 'https://a.test/bad', 'https://a.test/3']
-  const pages = await runAudit(urls, { fetchPage, delay: 0, onProgress: (done, total) => progress.push([done, total]) })
+  const pages = await runAudit(urls, {
+    fetchPage,
+    pace: noPace,
+    onProgress: (done, total) => progress.push([done, total])
+  })
   assert.deepEqual(pages.map(types), [[], ['fetch-failed'], []])
   assert.deepEqual(progress, [
     [1, 3],
@@ -223,7 +234,7 @@ test('runAudit: a failing page does not stop the others and progress counts ever
 test('runAudit: a page whose checks fail does not stop the others', async () => {
   const fetchPage = async (url) => page(url, url.includes('deep') ? { html: nested(10000) } : {})
   const urls = ['https://a.test/1', 'https://a.test/deep', 'https://a.test/3']
-  const pages = await runAudit(urls, { fetchPage, delay: 0 })
+  const pages = await runAudit(urls, { fetchPage, pace: noPace })
   assert.deepEqual(pages.map(types), [[], ['check-failed'], []])
 })
 
@@ -236,7 +247,7 @@ test('runAudit: runs the real fetch and checks over the fixture pages', async (t
   const urls = ['good.html', 'bad-missing.html', 'redirect-twice', 'nope.html', 'not-html', 'timeout'].map(
     (n) => `${FIXTURE_HOST}/${n}`
   )
-  const pages = await runAudit(urls, { delay: 0 })
+  const pages = await runAudit(urls, { pace: noPace })
   assert.deepEqual(pages.map(types), [
     [],
     ['missing-title', 'missing-description', 'missing-canonical', 'missing-h1'],

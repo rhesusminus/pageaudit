@@ -76,6 +76,18 @@ test('loadRobots: a 200 is parsed, other 4xx mean no file, 5xx and 429 are unrea
   }
 })
 
+test('loadRobots: beforeHop is awaited before every request, redirect hops included', async (t) => {
+  t.mock.method(globalThis, 'fetch', async (input) =>
+    String(input) === 'http://x.test/robots.txt'
+      ? new Response(null, { status: 301, headers: { location: 'https://x.test/robots.txt' } })
+      : new Response('User-agent: *\nAllow: /', { headers: { 'content-type': 'text/plain' } })
+  )
+  const hops = []
+  const robots = await loadRobots('http://x.test', { beforeHop: async (url) => hops.push(url) })
+  assert.equal(robots.status, 'ok')
+  assert.deepEqual(hops, ['http://x.test/robots.txt', 'https://x.test/robots.txt'])
+})
+
 test('loadRobots: a network failure is a failed read with its reason', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => {
     throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNRESET' } })

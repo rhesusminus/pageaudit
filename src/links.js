@@ -48,14 +48,15 @@ async function fetchOutcome(url, { request, timeout, beforeHop }) {
 }
 
 // Finds out where every internal link target leads: { status, finalUrl, redirects } or { failed: reason }, by URL.
-// Requests use the same concurrency and per-host delay as the audit, the delay also before each redirect hop.
+// Requests use the same concurrency as the audit, and `pace(url)`, the per-host spacing the whole run shares, is
+// awaited before each of them, redirect hops included.
 // `unchecked` counts the targets past `max`, and `unread` the audited pages whose own links could not be read.
 export async function checkLinkTargets(
   pages,
   {
     request = defaultRequest,
     concurrency = DEFAULT_CONCURRENCY,
-    delay = DEFAULT_DELAY_MS,
+    pace = hostThrottle(DEFAULT_DELAY_MS),
     timeout = DEFAULT_TIMEOUT_MS,
     max = MAX_LINK_CHECKS,
     onProgress = () => {}
@@ -64,10 +65,9 @@ export async function checkLinkTargets(
   const outcomes = auditedOutcomes(pages)
   const unknown = linkTargets(pages).filter(({ url }) => !outcomes.has(url))
   const checked = unknown.slice(0, max)
-  const beforeHop = hostThrottle(delay)
   let done = 0
   const results = await mapLimited(checked, concurrency, async ({ url }) => {
-    const outcome = await fetchOutcome(url, { request, timeout, beforeHop })
+    const outcome = await fetchOutcome(url, { request, timeout, beforeHop: pace })
     onProgress(++done, checked.length)
     return outcome
   })

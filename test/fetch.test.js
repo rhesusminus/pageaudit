@@ -194,6 +194,13 @@ test('request: beforeHop is awaited before every request of a redirect chain', a
   assert.deepEqual(fetched, ['https://x.test/a', 'https://x.test/b'])
 })
 
+test('fetchPage: beforeHop is awaited before every request, redirect hops included', async (t) => {
+  serve(t, { 'https://x.test/a': redirect('https://x.test/b'), 'https://x.test/b': html() })
+  const hops = []
+  await fetchPage('https://x.test/a', { beforeHop: async (url) => hops.push(url) })
+  assert.deepEqual(hops, ['https://x.test/a', 'https://x.test/b'])
+})
+
 test('request: waiting in beforeHop does not count toward the timeout', async (t) => {
   t.mock.method(globalThis, 'fetch', async (input, init) => {
     if (init.signal.aborted) throw init.signal.reason

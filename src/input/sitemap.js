@@ -26,8 +26,8 @@ export function parseSitemap(xml) {
 // FetchError carries the bare reason, other errors only a message.
 const reason = (err) => err.reason ?? err.message
 
-async function readSitemap(url, timeout) {
-  const res = await request(url, { timeout, accept: 'application/xml, text/xml;q=0.9, */*;q=0.8' })
+async function readSitemap(url, { timeout, beforeHop }) {
+  const res = await request(url, { timeout, beforeHop, accept: 'application/xml, text/xml;q=0.9, */*;q=0.8' })
   if (res.status !== 200) {
     await res.discard()
     throw new Error(`HTTP ${res.status}`)
@@ -53,11 +53,11 @@ const fileFacts = ({ url, finalUrl, kind, bytes, entries, emptyLocs, locs, lastm
 
 // URLs listed in a sitemap, and `files` with the facts of every sitemap file that was read. A sitemap index is followed one level deep: child
 // sitemaps that fail or are themselves indexes are skipped, not fatal. Throws
-// when the sitemap itself cannot be read.
-export async function fromSitemap(url, { timeout } = {}) {
+// when the sitemap itself cannot be read. `beforeHop` paces the requests, see request().
+export async function fromSitemap(url, { timeout, beforeHop } = {}) {
   let sitemap
   try {
-    sitemap = await readSitemap(url, timeout)
+    sitemap = await readSitemap(url, { timeout, beforeHop })
   } catch (err) {
     throw new Error(`Could not read sitemap ${url}: ${reason(err)}`, { cause: err })
   }
@@ -71,7 +71,7 @@ export async function fromSitemap(url, { timeout } = {}) {
     const skip = (why) => result.skipped.push({ input: child, source: `sitemap index ${url}`, reason: why })
     let nested
     try {
-      nested = await readSitemap(child, timeout)
+      nested = await readSitemap(child, { timeout, beforeHop })
     } catch (err) {
       skip(`could not read sitemap: ${reason(err)}`, { cause: err })
       continue
