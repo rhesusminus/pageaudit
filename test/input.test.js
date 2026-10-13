@@ -274,7 +274,79 @@ test('sitemap: fromSitemap returns the facts of the index and of every child, be
       [`${FIXTURE_HOST}/sitemap.xml`, 'urlset']
     ]
   )
-  assert.ok(files.every((f) => f.bytes > 0 && f.entries >= f.locs.length))
+  assert.ok(files.every((f) => !f.tooLarge && f.entries >= f.locs.length))
+})
+
+// A urlset that lists https://a.test/1, padded to `size` bytes.
+const paddedUrlset = (size) => '<urlset><url><loc>https://a.test/1</loc></url></urlset>'.padEnd(size, ' ')
+const SITEMAP_LIMIT = 50 * 1024 * 1024
+const TOO_LARGE = 'sitemap is larger than 50 MB uncompressed, Google does not accept it'
+
+test('sitemap: a child over 50 MB uncompressed, gzipped or not, is skipped but its facts are kept', async (t) => {
+  const bodies = {
+    '/root.xml': `<sitemapindex>${['big.xml.gz', 'big.xml', 'fits.xml.gz'].map((name) => `<sitemap><loc>https://a.test/${name}</loc></sitemap>`).join('')}</sitemapindex>`,
+    '/big.xml.gz': gzipSync(paddedUrlset(SITEMAP_LIMIT + 1)),
+    '/big.xml': paddedUrlset(SITEMAP_LIMIT + 1),
+    '/fits.xml.gz': gzipSync(paddedUrlset(SITEMAP_LIMIT))
+  }
+  t.mock.method(globalThis, 'fetch', async (input) => new Response(bodies[new URL(input).pathname]))
+  const { entries, skipped, files } = await fromSitemap('https://a.test/root.xml')
+  assert.deepEqual(values(entries), ['https://a.test/1'])
+  assert.deepEqual(
+    skipped.map(({ input, reason }) => [input, reason]),
+    [
+      ['https://a.test/big.xml.gz', TOO_LARGE],
+      ['https://a.test/big.xml', TOO_LARGE]
+    ]
+  )
+  assert.deepEqual(
+    files.map(({ url, tooLarge, locs }) => [url, tooLarge, locs.length]),
+    [
+      ['https://a.test/root.xml', false, 3],
+      ['https://a.test/big.xml.gz', true, 0],
+      ['https://a.test/big.xml', true, 0],
+      ['https://a.test/fits.xml.gz', false, 1]
+    ]
+  )
+})
+
+test('sitemap: a gzipped file that grew past 50 MB when packed, but is 50 MB unpacked, is read', async (t) => {
+  const packed = gzipSync(paddedUrlset(SITEMAP_LIMIT), { level: 0 })
+  assert.ok(packed.length > SITEMAP_LIMIT)
+  t.mock.method(globalThis, 'fetch', async () => new Response(packed))
+  const { entries, skipped } = await fromSitemap('https://a.test/sitemap.xml.gz')
+  assert.deepEqual([values(entries), skipped], [['https://a.test/1'], []])
+})
+
+test('sitemap: a plain file whose connection drops just past 50 MB is still reported as too large', async (t) => {
+  const chunks = [paddedUrlset(SITEMAP_LIMIT + 1)]
+  const body = new ReadableStream({
+    pull(controller) {
+      if (chunks.length) controller.enqueue(new TextEncoder().encode(chunks.shift()))
+      else controller.error(Object.assign(new TypeError('terminated'), { cause: { code: 'ECONNRESET' } }))
+    }
+  })
+  t.mock.method(globalThis, 'fetch', async () => new Response(body))
+  const { skipped, files } = await fromSitemap('https://a.test/big.xml')
+  assert.deepEqual(
+    skipped.map(({ reason }) => reason),
+    [TOO_LARGE]
+  )
+  assert.deepEqual(
+    files.map(({ tooLarge }) => tooLarge),
+    [true]
+  )
+})
+
+test('sitemap: a --sitemap over 50 MB uncompressed is skipped but its facts are kept', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => new Response(gzipSync(paddedUrlset(SITEMAP_LIMIT + 1))))
+  const { entries, skipped, files } = await fromSitemap('https://a.test/big.xml.gz')
+  assert.deepEqual(entries, [])
+  assert.deepEqual(skipped, [{ input: 'https://a.test/big.xml.gz', source: '--sitemap', reason: TOO_LARGE }])
+  assert.deepEqual(
+    files.map(({ url, tooLarge }) => [url, tooLarge]),
+    [['https://a.test/big.xml.gz', true]]
+  )
 })
 
 test('sitemap: a child that is itself an index still has its facts kept, once', async (t) => {

@@ -40,19 +40,22 @@ function httpUrl(url, value, what) {
 }
 
 // The first `maxBytes` of a body, and whether there was more. Reading stops there, so the rest is never held in
-// memory and a failure after the limit cannot spoil what came before it.
+// memory and a failure after the limit cannot spoil what came before it. `maxBytes` can also be a function that
+// picks the limit from the first chunk of the body, for a limit that depends on what the body is.
 async function readLimited(body, maxBytes) {
   const chunks = []
   let size = 0
+  let limit = typeof maxBytes === 'function' ? Infinity : maxBytes
   const reader = body.getReader()
-  while (size <= maxBytes) {
+  while (size <= limit) {
     const { done, value } = await reader.read()
     if (done) return { bytes: Buffer.concat(chunks, size), truncated: false }
+    if (chunks.length === 0 && typeof maxBytes === 'function') limit = maxBytes(value)
     chunks.push(value)
     size += value.length
   }
   await reader.cancel().catch(() => {})
-  return { bytes: Buffer.concat(chunks, maxBytes), truncated: true }
+  return { bytes: Buffer.concat(chunks, limit), truncated: true }
 }
 
 // The final answer of a request: where it ended up and how to read the body.

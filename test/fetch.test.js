@@ -101,6 +101,14 @@ test('request: read stops at the limit, so a failure after it does not spoil wha
   await assert.rejects((await request('https://x.test/')).read(6), /Could not fetch https:\/\/x\.test\/: ECONNRESET/)
 })
 
+test('request: read can pick its limit from the first chunk of the body', async (t) => {
+  const limit = (head) => (head[0] === 0x61 ? 4 : 2)
+  respond(t, droppedAfter('abc', 'def'), 'text/plain')
+  assert.deepEqual(text(await (await request('https://x.test/')).read(limit)), { text: 'abcd', truncated: true })
+  respond(t, droppedAfter('xyz', 'def'), 'text/plain')
+  assert.deepEqual(text(await (await request('https://x.test/')).read(limit)), { text: 'xy', truncated: true })
+})
+
 test('request: a body of exactly the limit is read whole', async (t) => {
   respond(t, 'abcdef', 'text/plain')
   assert.deepEqual(text(await (await request('https://x.test/')).read(6)), { text: 'abcdef', truncated: false })

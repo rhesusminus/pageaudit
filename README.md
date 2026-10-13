@@ -29,7 +29,7 @@ The `pageaudit` bin is declared in `package.json`, so `npm link` makes it availa
 Arguments, `--urls-file` and `--sitemap` can be combined, and the last two can be repeated. All URLs are merged in that order and deduplicated: the host is compared case-insensitively, fragments (`#...`) are dropped, query strings are kept and a trailing slash on the path is ignored, so `/x` and `/x/` are the same page. The first spelling seen is the one fetched.
 
 - Inputs that are not `http` or `https` URLs are skipped with the reason and where they came from (for example `urls.txt:8`). One bad URL never aborts the run, but a URL file that cannot be read or a sitemap that cannot be fetched exits 2.
-- A sitemap index is followed one level deep. Child sitemaps that fail, or that are themselves indexes, are skipped with the reason. Gzipped sitemap files (`.xml.gz`) are supported.
+- A sitemap index is followed one level deep. Child sitemaps that fail, or that are themselves indexes, are skipped with the reason. Gzipped sitemap files (`.xml.gz`) are supported. A sitemap file larger than 50 MB uncompressed is skipped too, as Google rejects it whole: reading stops at 50 MB and the file is reported as `sitemap-too-large`.
 - `--limit <n>` audits only the first `n` URLs after deduplication.
 
 Link-following crawling is not supported.

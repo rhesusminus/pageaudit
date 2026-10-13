@@ -65,9 +65,8 @@ export function checkSitemapEntries(pages, listed = new Map()) {
   ]
 }
 
-// Google rejects a sitemap file that lists more than 50,000 URLs or is larger than 50 MB uncompressed.
+// Google rejects a sitemap file that lists more than 50,000 URLs. Files over its 50 MB limit are found while reading.
 export const MAX_ENTRIES = 50_000
-export const MAX_BYTES = 52_428_800
 
 // How many example values an issue quotes, so a sitemap full of one mistake stays readable.
 const EXAMPLES = 3
@@ -136,7 +135,6 @@ const fileIssue = (rule, matches) =>
       ]
     : []
 
-const mb = (bytes) => `${(bytes / 1024 / 1024).toFixed(1)} MB`
 const count = (n) => n.toLocaleString('en-US')
 
 // One rule per issue type: `detail` returns what to say about a file, or nothing when the file is fine.
@@ -151,7 +149,7 @@ const FILE_RULES = [
     type: 'sitemap-too-large',
     severity: 'error',
     message: 'A sitemap is larger than 50 MB uncompressed, Google does not accept it',
-    detail: (file) => (file.bytes > MAX_BYTES ? `${file.url} is ${mb(file.bytes)}` : null)
+    detail: (file) => (file.tooLarge ? file.url : null)
   },
   {
     type: 'sitemap-empty-loc',
