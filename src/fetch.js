@@ -164,11 +164,12 @@ const checkedHeaders = (headers) =>
   Object.fromEntries(CHECKED_HEADERS.filter((name) => headers.has(name)).map((name) => [name, headers.get(name)]))
 
 // The page-fetching interface the runner depends on. A headless browser can
-// replace it later as long as it returns the same shape. html is null unless
+// replace it later as long as it returns the same shape and awaits `beforeHop(url)` before every request, which is
+// how the per-host delay reaches redirect hops. html is null unless
 // the response is a 200 with an HTML content type. robotsHeader is the X-Robots-Tag value or null.
 // headers holds the CHECKED_HEADERS that were sent, and bodyBytes the decompressed size of the html (null without html).
-export async function fetchPage(url, { timeout } = {}) {
-  const res = await request(url, { timeout, accept: 'text/html,application/xhtml+xml' })
+export async function fetchPage(url, { timeout, beforeHop } = {}) {
+  const res = await request(url, { timeout, beforeHop, accept: 'text/html,application/xhtml+xml' })
   const contentType = res.headers.get('content-type') ?? ''
   let html = null
   let bodyBytes = null

@@ -161,16 +161,18 @@ test('auditPage: one redirect is info, a chain is a warning', async () => {
   assert.equal(chain.issues[0].context, 'http://a.test/ -> https://a.test/ -> https://a.test/b')
 })
 
-test('auditPage: passes the timeout to fetchPage', async () => {
+test('auditPage: passes the timeout and the pacing to fetchPage', async () => {
   let options
+  const beforeHop = async () => {}
   await auditPage('https://a.test/', {
     timeout: 1234,
+    beforeHop,
     fetchPage: async (url, opts) => {
       options = opts
       return page(url)
     }
   })
-  assert.deepEqual(options, { timeout: 1234 })
+  assert.deepEqual(options, { timeout: 1234, beforeHop })
 })
 
 test('runAudit: keeps input order and never exceeds the concurrency limit', async () => {
@@ -194,7 +196,9 @@ test('runAudit: keeps input order and never exceeds the concurrency limit', asyn
 
 test('runAudit: spaces requests to the same host but not across hosts', async () => {
   const starts = []
-  const fetchPage = async (url) => {
+  // Like the real fetchPage, the pacing is awaited before the request.
+  const fetchPage = async (url, { beforeHop }) => {
+    await beforeHop(url)
     starts.push({ host: new URL(url).host, at: performance.now() })
     return page(url)
   }

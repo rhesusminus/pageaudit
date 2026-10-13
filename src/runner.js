@@ -53,7 +53,7 @@ export const checksFailed = (page) => page.issues.some((issue) => issue.type ===
 
 // Fetches and checks one page. A page that cannot be fetched or checked becomes an issue on
 // that page instead of an exception, so one bad page never stops the run.
-export async function auditPage(url, { fetchPage = defaultFetchPage, timeout = DEFAULT_TIMEOUT_MS } = {}) {
+export async function auditPage(url, { fetchPage = defaultFetchPage, timeout = DEFAULT_TIMEOUT_MS, beforeHop } = {}) {
   // A fixed key order keeps the JSON report stable whichever check built the issue.
   const withUrl = (issues) => {
     const ids = uniqueIds(issues.map((issue) => issueId(url, issue.type, issue.selector || issue.context)))
@@ -71,7 +71,7 @@ export async function auditPage(url, { fetchPage = defaultFetchPage, timeout = D
   }
   let fetched
   try {
-    fetched = await fetchPage(url, { timeout })
+    fetched = await fetchPage(url, { timeout, beforeHop })
   } catch (err) {
     return {
       url,
@@ -90,8 +90,9 @@ export async function auditPage(url, { fetchPage = defaultFetchPage, timeout = D
   return { url, finalUrl, status, redirects, issues: withUrl(mergeRobotsIssues(issues)), facts, response, links }
 }
 
-// Audits every URL with at most `concurrency` requests in flight. `pace(url)` is awaited before each page is
-// fetched, to space out requests to the same host: pass the one the whole run shares. Results keep input order.
+// Audits every URL with at most `concurrency` requests in flight. `pace(url)` is awaited before every request,
+// redirect hops included, to space out requests to the same host: pass the one the whole run shares.
+// Results keep input order.
 export async function runAudit(
   urls,
   {
@@ -109,8 +110,7 @@ export async function runAudit(
   async function worker() {
     while (next < urls.length) {
       const i = next++
-      await pace(urls[i])
-      pages[i] = await auditPage(urls[i], { fetchPage, timeout })
+      pages[i] = await auditPage(urls[i], { fetchPage, timeout, beforeHop: pace })
       onProgress(++done, urls.length)
     }
   }
