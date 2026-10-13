@@ -356,21 +356,66 @@ test('sitemap: a --sitemap over 50 MB uncompressed is skipped but its facts are 
   )
 })
 
-test('sitemap: a child that is itself an index still has its facts kept, once', async (t) => {
+// Serves `bodies` by path on https://a.test, redirects http to https and answers 404 for any other path.
+// Returns the URLs requested, in order.
+function serveSitemaps(t, bodies) {
+  const requests = []
   t.mock.method(globalThis, 'fetch', async (input) => {
-    const nested = new URL(input).pathname === '/child.xml'
-    const body = nested
-      ? '<sitemapindex><sitemap><loc/></sitemap></sitemapindex>'
-      : '<sitemapindex><sitemap><loc>https://a.test/child.xml</loc></sitemap><sitemap><loc>https://a.test/child.xml</loc></sitemap></sitemapindex>'
-    return new Response(body, { headers: { 'content-type': 'application/xml' } })
+    const url = new URL(input)
+    requests.push(url.href)
+    if (url.protocol === 'http:')
+      return new Response(null, { status: 301, headers: { location: url.href.replace('http:', 'https:') } })
+    const body = bodies[url.pathname]
+    return body ? new Response(body) : new Response('gone', { status: 404 })
   })
-  const { files, skipped } = await fromSitemap('https://a.test/root.xml')
+  return requests
+}
+
+test('sitemap: every file is read once, however often an index lists it, and an index that lists itself is not read again', async (t) => {
+  const loc = (path) => `<sitemap><loc>https://a.test/${path}</loc></sitemap>`
+  const requests = serveSitemaps(t, {
+    // Asked for as http, read from https after a redirect, and listing its https address.
+    '/root.xml': `<sitemapindex>${['urls.xml', 'child.xml', 'gone.xml', 'urls.xml', 'child.xml', 'gone.xml', 'root.xml'].map(loc).join('')}</sitemapindex>`,
+    '/urls.xml': '<urlset><url><loc>https://a.test/1</loc></url></urlset>',
+    '/child.xml': '<sitemapindex><sitemap><loc/></sitemap></sitemapindex>'
+  })
+  const { entries, skipped, files } = await fromSitemap('http://a.test/root.xml')
+  assert.deepEqual(requests, [
+    'http://a.test/root.xml',
+    'https://a.test/root.xml',
+    'https://a.test/urls.xml',
+    'https://a.test/child.xml',
+    'https://a.test/gone.xml'
+  ])
+  assert.deepEqual(values(entries), ['https://a.test/1'])
+  assert.deepEqual(
+    skipped.map(({ input, reason }) => [input, reason]),
+    [
+      ['https://a.test/child.xml', 'nested sitemap index (only one level is followed)'],
+      ['https://a.test/gone.xml', 'could not read sitemap: HTTP 404']
+    ]
+  )
   assert.deepEqual(
     files.map((f) => [f.url, f.emptyLocs]),
     [
-      ['https://a.test/root.xml', 0],
+      ['http://a.test/root.xml', 0],
+      ['https://a.test/urls.xml', 0],
       ['https://a.test/child.xml', 1]
     ]
   )
-  assert.equal(skipped.length, 2)
+})
+
+test('sitemap: a child that redirects to a file read before is not read or counted again', async (t) => {
+  const requests = serveSitemaps(t, {
+    '/root.xml':
+      '<sitemapindex><sitemap><loc>http://a.test/1.xml</loc></sitemap><sitemap><loc>https://a.test/1.xml</loc></sitemap></sitemapindex>',
+    '/1.xml': '<urlset><url><loc>https://a.test/1</loc></url></urlset>'
+  })
+  const { entries, files } = await fromSitemap('https://a.test/root.xml')
+  assert.deepEqual(requests, ['https://a.test/root.xml', 'http://a.test/1.xml', 'https://a.test/1.xml'])
+  assert.deepEqual(values(entries), ['https://a.test/1', 'https://a.test/1'])
+  assert.deepEqual(
+    files.map((file) => file.url),
+    ['https://a.test/root.xml', 'http://a.test/1.xml']
+  )
 })
