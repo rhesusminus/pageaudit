@@ -2,6 +2,8 @@ import pkg from '../package.json' with { type: 'json' }
 
 export const USER_AGENT = `pageaudit/${pkg.version} (+https://github.com/rhesusminus/pageaudit)`
 export const DEFAULT_TIMEOUT_MS = 15000
+// Googlebot only reads the first 2 MB of an HTML file, so a page is checked the way it sees it and no more is read.
+export const HTML_MAX_BYTES = 2 * 1024 * 1024
 const MAX_REDIRECTS = 10
 // The encodings Googlebot accepts. Node's fetch decodes all three but only asks for gzip and deflate itself,
 // so a server that only offers brotli would otherwise look like it does not compress.
@@ -186,17 +188,20 @@ const checkedHeaders = (headers) =>
 // The page-fetching interface the runner depends on. A headless browser can
 // replace it later as long as it returns the same shape and awaits `beforeHop(url)` before every request, which is
 // how the per-host delay reaches redirect hops. html is null unless
-// the response is a 200 with an HTML content type. robotsHeader is the X-Robots-Tag value or null.
+// the response is a 200 with an HTML content type, and holds at most the first HTML_MAX_BYTES of it: truncated is
+// true when there was more. robotsHeader is the X-Robots-Tag value or null.
 // headers holds the CHECKED_HEADERS that were sent, and bodyBytes the decompressed size of the html (null without html).
 export async function fetchPage(url, { timeout, beforeHop } = {}) {
   const res = await request(url, { timeout, beforeHop, accept: 'text/html,application/xhtml+xml' })
   const contentType = res.headers.get('content-type') ?? ''
   let html = null
   let bodyBytes = null
+  let truncated = false
   if (res.status === 200 && /html/i.test(contentType)) {
-    const { bytes } = await res.read(Infinity)
-    html = decode(bytes, contentType)
-    bodyBytes = bytes.length
+    const body = await res.read(HTML_MAX_BYTES)
+    html = decode(body.bytes, contentType)
+    bodyBytes = body.bytes.length
+    truncated = body.truncated
   } else {
     await res.discard()
   }
@@ -207,6 +212,7 @@ export async function fetchPage(url, { timeout, beforeHop } = {}) {
     redirects: res.redirects,
     contentType,
     html,
+    truncated,
     robotsHeader: res.headers.get('x-robots-tag'),
     headers: checkedHeaders(res.headers),
     bodyBytes

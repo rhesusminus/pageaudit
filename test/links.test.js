@@ -83,15 +83,15 @@ test('checkLinkTargets: audited pages cost no request, by the URL given or the f
   assert.match(outcomes.get('https://a.test/gone').failed, /could not be fetched/)
 })
 
-test('checkLinkTargets: counts the pages whose own links could not be read', async () => {
-  const failed = { type: 'check-failed' }
+test('checkLinkTargets: counts the pages whose own links could not all be read', async () => {
   const pages = [
     page('https://a.test/1'),
-    page('https://a.test/deep', [], { facts: null, links: null, issues: [failed] }),
+    page('https://a.test/deep', [], { facts: null, links: null, issues: [{ type: 'check-failed' }] }),
+    page('https://a.test/large', [], { issues: [{ type: 'html-too-large' }] }),
     page('https://a.test/gone', [], { finalUrl: null, status: null, facts: null, links: null })
   ]
   const { unread } = await checkLinkTargets(pages, { request: stubRequest({}).request, pace: noPace })
-  assert.equal(unread, 1)
+  assert.equal(unread, 2)
 })
 
 test('checkLinkTargets: past the cap the targets linked from the fewest pages are left unchecked', async () => {

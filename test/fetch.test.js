@@ -189,6 +189,17 @@ test('fetch: returns the checked headers that were sent and the body size in byt
   assert.equal(page.bodyBytes, 24)
 })
 
+test('fetchPage: reads the first 2 MB of HTML and says when there was more', async (t) => {
+  const limit = 2 * 1024 * 1024
+  const html = (bytes) => '<p>'.padEnd(bytes, 'a')
+  respond(t, html(limit + 1), 'text/html')
+  const cut = await fetchPage('https://x.test/')
+  assert.deepEqual([cut.html.length, cut.bodyBytes, cut.truncated], [limit, limit, true])
+  respond(t, html(limit), 'text/html')
+  const whole = await fetchPage('https://x.test/')
+  assert.deepEqual([whole.html.length, whole.bodyBytes, whole.truncated], [limit, limit, false])
+})
+
 test('fetch: follows redirects and records every hop', async (t) => {
   serve(t, {
     'http://x.test/a': redirect('https://x.test/a'),
@@ -278,6 +289,7 @@ test('fetch: error statuses and non-HTML responses return no html', async (t) =>
     redirects: [],
     contentType: 'text/html',
     html: null,
+    truncated: false,
     robotsHeader: null,
     headers: {},
     bodyBytes: null
