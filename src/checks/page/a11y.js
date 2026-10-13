@@ -63,11 +63,12 @@ function referencedIds($) {
 }
 
 function checkDuplicateIds($) {
-  const byId = new Map()
-  $('[id]').each((_, el) => {
-    const id = $(el).attr('id')
-    if (id) byId.set(id, [...(byId.get(id) ?? []), el])
-  })
+  const byId = Map.groupBy(
+    $('[id]')
+      .toArray()
+      .filter((el) => $(el).attr('id')),
+    (el) => $(el).attr('id')
+  )
   const referenced = referencedIds($)
   return [...byId]
     .filter(([, els]) => els.length > 1)
