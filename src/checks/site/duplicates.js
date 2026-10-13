@@ -19,7 +19,8 @@ function shared(pages, valuesOf) {
       if (!byValue.has(key)) byValue.set(key, { value, groups: new Map(), finalUrls: new Set() })
       const { groups, finalUrls } = byValue.get(key)
       const group = canonicalGroup(page)
-      groups.set(group, [...(groups.get(group) ?? []), page.url])
+      if (!groups.has(group)) groups.set(group, [])
+      groups.get(group).push(page.url)
       finalUrls.add(pageKey(page.finalUrl))
     }
   }

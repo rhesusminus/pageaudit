@@ -49,11 +49,10 @@ function checkOrigin(origin, robots, pages) {
 // Only the origin the page ended up on is read, a Disallow on the origin it was redirected from is not checked.
 // Pages are audited whatever robots.txt says, the audit is run by the owner of the site.
 export async function checkRobotsTxt(pages, { load = loadRobots } = {}) {
-  const byOrigin = new Map()
-  for (const page of pages.filter((p) => p.status === 200 && p.finalUrl)) {
-    const origin = new URL(page.finalUrl).origin
-    byOrigin.set(origin, [...(byOrigin.get(origin) ?? []), page])
-  }
+  const byOrigin = Map.groupBy(
+    pages.filter((p) => p.status === 200 && p.finalUrl),
+    (page) => new URL(page.finalUrl).origin
+  )
   // The origins are read at the same time, one slow host should not hold up the rest.
   const checked = await mapLimited([...byOrigin], MAX_CONCURRENT, async ([origin, group]) =>
     checkOrigin(origin, await load(origin), group)
