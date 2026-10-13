@@ -13,12 +13,12 @@ const MAX_REDIRECTS = 5
 // Reads and parses the robots.txt of an origin, the way Google treats the answer:
 // 200 is parsed, any other 4xx than 429 means there is no file and everything is allowed,
 // 5xx and 429 mean it is temporarily unreachable. A network failure, or a body that cannot be read, is `failed`
-// with the reason: the page itself can load while its robots.txt does not.
-export async function loadRobots(origin, { timeout } = {}) {
+// with the reason: the page itself can load while its robots.txt does not. `beforeHop` paces the requests, see request().
+export async function loadRobots(origin, { timeout, beforeHop } = {}) {
   const url = `${origin}/robots.txt`
   let res
   try {
-    res = await request(url, { timeout, maxRedirects: MAX_REDIRECTS, accept: 'text/plain, */*;q=0.8' })
+    res = await request(url, { timeout, beforeHop, maxRedirects: MAX_REDIRECTS, accept: 'text/plain, */*;q=0.8' })
   } catch (err) {
     return err.tooManyRedirects ? { status: 'missing' } : { status: 'failed', reason: err.reason ?? err.message }
   }

@@ -16,7 +16,7 @@ import { fromArgs } from './input/args.js'
 import { fromFile } from './input/file.js'
 import { resolveUrls } from './input/resolve.js'
 import { fromSitemap } from './input/sitemap.js'
-import { cachedRobotsLoader } from './robots.js'
+import { cachedRobotsLoader, loadRobots } from './robots.js'
 import { lighthouseFailed, runLighthouse, shortSummary } from './lighthouse.js'
 import { hostThrottle } from './concurrency.js'
 import { checkLinkTargets, linksComplete, MAX_LINK_CHECKS } from './links.js'
@@ -137,7 +137,7 @@ function parseOptions(argv) {
 
 // Collects entries from every input. Only the inputs themselves are fatal (a file
 // that cannot be read, a sitemap that cannot be fetched); bad URLs are skipped.
-async function readInputs(options, stdin, spinner) {
+async function readInputs(options, stdin, { spinner, pace }) {
   const entries = fromArgs(options.urls)
   const chosen = options.lighthousePages.map((value) => ({ value, source: '--lighthouse-page', lighthouse: true }))
   const skipped = []
@@ -148,7 +148,7 @@ async function readInputs(options, stdin, spinner) {
   for (const path of options.files) for (const entry of await fromFile(path, { stdin })) entries.push(entry)
   for (const url of options.sitemaps) {
     if (spinner) spinner.text = `Reading sitemap ${url}`
-    const sitemap = await fromSitemap(url)
+    const sitemap = await fromSitemap(url, { beforeHop: pace })
     for (const entry of sitemap.entries) entries.push(entry)
     for (const skip of sitemap.skipped) skipped.push(skip)
     for (const file of sitemap.files) sitemapFiles.push(file)
@@ -159,10 +159,10 @@ async function readInputs(options, stdin, spinner) {
 }
 
 // Resolves the URLs to audit. Returns { inputs } or { exitCode } when reading the inputs failed.
-async function loadInputs(options, stdin, { startSpinner }) {
+async function loadInputs(options, stdin, { startSpinner, pace }) {
   const spinner = options.sitemaps.length || options.files.includes('-') ? startSpinner('Reading URLs') : null
   try {
-    const inputs = await readInputs(options, stdin, spinner)
+    const inputs = await readInputs(options, stdin, { spinner, pace })
     spinner?.stop()
     return { inputs }
   } catch (err) {
@@ -247,8 +247,8 @@ async function addLighthouse(pages, startSpinner, runner, { all, chosen, runs })
 
 // Reads the robots.txt files of the audited sites and checks them and the sitemaps against them, with a spinner
 // because a slow host can take a while. Each robots.txt is read once for all checks.
-async function checkRobotsAndSitemaps(pages, inputs, options, { startSpinner }) {
-  const load = cachedRobotsLoader()
+async function checkRobotsAndSitemaps(pages, inputs, options, { startSpinner, pace }) {
+  const load = cachedRobotsLoader((origin) => loadRobots(origin, { beforeHop: pace }))
   const loaded = pages.some((page) => page.status === 200 && page.finalUrl)
   const spinner = loaded || inputs.sitemapFiles.length ? startSpinner('Reading robots.txt...') : null
   try {
@@ -365,7 +365,8 @@ export async function run(argv, { stdin = process.stdin, lighthouse = runLightho
   const json = options.json ?? !process.stdout.isTTY
   const spin = !json && canSpin(process.stderr)
   const startSpinner = (text) => (spin ? ora({ text, stream: process.stderr }).start() : null)
-  // One spacing for the pages and the link checks, so --delay also holds between the two.
+  // One spacing for every request of the run, so --delay holds across sitemaps, pages, redirect hops, robots.txt
+  // and link checks alike.
   const session = { startSpinner, pace: hostThrottle(options.delay ?? DEFAULT_DELAY_MS) }
 
   const { inputs, exitCode } = await loadInputs(options, stdin, session)
