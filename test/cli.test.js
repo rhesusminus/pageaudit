@@ -151,6 +151,24 @@ test('cli: pages that cannot be audited become issues instead of stopping the ru
   assert.deepEqual(report.summary, { pages: 5, errors: 3, warnings: 0, infos: 1 })
 })
 
+test('cli: a page the checks cannot process is an issue and the other pages are kept', async (t) => {
+  const path = join(await tempDir(t), 'report.html')
+  const names = ['good.html', 'deep-nesting.html']
+  const { code, report } = await runJson(t, [...names.map(fixtureUrl), '--html', path])
+  assert.equal(code, 1)
+  assert.deepEqual(
+    report.pages.map((p) => [p.status, pageTypes(p)]),
+    [
+      [200, []],
+      [200, ['check-failed']]
+    ]
+  )
+  assert.deepEqual(report.pages[0].facts, GOOD_FACTS)
+  assert.equal(report.pages[1].facts, null)
+  assert.equal(report.pages[1].issues[0].message, 'Could not check the page: its elements are nested too deeply')
+  assert.match(await readFile(path, 'utf8'), /The page could not be checked/)
+})
+
 test('cli: a non-HTML page alone is not an error', async (t) => {
   const { code, report } = await runJson(t, [fixtureUrl('not-html')])
   assert.equal(code, 0)
@@ -855,5 +873,23 @@ test('cli: --check-links does not report orphan pages when a sitemap page could 
   )
   const { report } = await runCliWithMock(t, ['--sitemap', 'https://a.test/s.xml', '--check-links'])
   assert.equal(report.summary.pages, 2)
+  assert.ok(report.site.every((issue) => issue.type !== 'orphan-page'))
+})
+
+test('cli: --check-links does not report orphan pages when a sitemap page could not be checked', async (t) => {
+  const page = (body) => `<html lang="en"><head><title>Page</title></head><body>${body}</body></html>`
+  const deep = 10000
+  mockSite(t, {
+    '/robots.txt': 'User-agent: *\nAllow: /',
+    '/s.xml': '<urlset><url><loc>https://a.test/a</loc></url><url><loc>https://a.test/b</loc></url></urlset>',
+    // The only link to /b is on a page whose HTML the checks cannot process, so it is never read.
+    '/a': page(`<a href="/b">B</a>${'<span>'.repeat(deep)}x${'</span>'.repeat(deep)}`),
+    '/b': page('')
+  })
+  const { report } = await runCliWithMock(t, ['--sitemap', 'https://a.test/s.xml', '--check-links'])
+  assert.deepEqual(
+    report.pages.map((p) => pageTypes(p).includes('check-failed')),
+    [true, false]
+  )
   assert.ok(report.site.every((issue) => issue.type !== 'orphan-page'))
 })
