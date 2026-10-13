@@ -274,6 +274,20 @@ test('cli: --sitemap follows a sitemap index and reports skipped child sitemaps'
   )
 })
 
+test('cli: a sitemap given twice, or given and also listed by an index, is read once', async (t) => {
+  const index = fixtureUrl('sitemap-index.xml')
+  const { report } = await runJson(t, ['--sitemap', index, '--sitemap', fixtureUrl('sitemap.xml'), '--sitemap', index])
+  const requested = globalThis.fetch.mock.calls.map((call) => String(call.arguments[0]))
+  assert.deepEqual(
+    requested.filter((url) => url.endsWith('.xml')),
+    ['sitemap-index.xml', 'sitemap.xml', 'sitemap-nested-index.xml', 'missing-sitemap.xml'].map(fixtureUrl)
+  )
+  assert.deepEqual(
+    report.skipped.map((s) => s.reason),
+    ['nested sitemap index (only one level is followed)', 'could not read sitemap: HTTP 404']
+  )
+})
+
 test('cli: arguments, files and sitemaps combine, and --limit caps the result', async (t) => {
   const { report, stderr } = await runJson(t, [
     fixtureUrl('duplicate.html'),

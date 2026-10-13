@@ -77,44 +77,62 @@ const fileFacts = ({ url, finalUrl, kind, tooLarge, entries, emptyLocs, locs, la
   lastmods
 })
 
-// URLs listed in a sitemap, and `files` with the facts of every sitemap file that was read. A sitemap index is followed one level deep: child
-// sitemaps that fail or are themselves indexes are skipped, not fatal. A file that is too large is skipped too, also
-// the sitemap itself, but its facts are kept so it is still reported. Throws
-// when the sitemap itself cannot be read. `beforeHop` paces the requests, see request().
-export async function fromSitemap(url, { timeout, beforeHop } = {}) {
-  let sitemap
+// Reads a sitemap file once per `cache`, which maps every address a file was requested at, or redirected to, to its
+// read, also a failed one. `fresh` is false for a file read before, whose facts are kept already.
+async function readOnce(url, { cache, timeout, beforeHop }) {
+  if (cache.has(url)) return { file: await cache.get(url), fresh: false }
+  const read = readSitemap(url, { timeout, beforeHop })
+  cache.set(url, read)
+  const file = await read
+  // A file is only known by its final address once it is read, so an address that redirects to a file read before
+  // still costs its requests, but the file is not counted twice.
+  if (cache.has(file.finalUrl) && file.finalUrl !== url) return { file: await cache.get(file.finalUrl), fresh: false }
+  cache.set(file.finalUrl, read)
+  return { file, fresh: true }
+}
+
+const entries = (locs, file) => locs.map((value) => ({ value, source: `sitemap ${file}`, sitemap: file }))
+
+// Adds the entries of every child of an index to `result`. A child that fails, is too large or is itself an index is
+// skipped. A child listed twice, or the index itself, is followed once.
+async function followIndex(index, result, options) {
+  const followed = new Set([index.url, index.finalUrl])
+  for (const child of index.locs) {
+    if (followed.has(child)) continue
+    followed.add(child)
+    const skip = (why) => result.skipped.push({ input: child, source: `sitemap index ${index.url}`, reason: why })
+    let nested
+    try {
+      nested = await readOnce(child, options)
+    } catch (err) {
+      skip(`could not read sitemap: ${reason(err)}`)
+      continue
+    }
+    if (nested.fresh) result.files.push(fileFacts(nested.file))
+    if (nested.file.tooLarge) skip(TOO_LARGE)
+    else if (nested.file.kind === 'index') skip('nested sitemap index (only one level is followed)')
+    else for (const entry of entries(nested.file.locs, child)) result.entries.push(entry)
+  }
+}
+
+// URLs listed in a sitemap, and `files` with the facts of every sitemap file that was read. A sitemap index is
+// followed one level deep: child sitemaps that fail or are themselves indexes are skipped, not fatal. A file that is
+// too large is skipped too, also the sitemap itself, but its facts are kept so it is still reported. Throws when the
+// sitemap itself cannot be read. `beforeHop` paces the requests, see request(). `cache` holds the files read so far,
+// see readOnce(): a run that shares one requests each file once, also one given twice or given and also listed by an
+// index, and keeps its facts once.
+export async function fromSitemap(url, { timeout, beforeHop, cache = new Map() } = {}) {
+  const options = { cache, timeout, beforeHop }
+  let root
   try {
-    sitemap = await readSitemap(url, { timeout, beforeHop })
+    root = await readOnce(url, options)
   } catch (err) {
     throw new Error(`Could not read sitemap ${url}: ${reason(err)}`, { cause: err })
   }
-  if (sitemap.tooLarge)
-    return {
-      entries: [],
-      skipped: [{ input: url, source: '--sitemap', reason: TOO_LARGE }],
-      files: [fileFacts(sitemap)]
-    }
-  const entries = (locs, file) => locs.map((value) => ({ value, source: `sitemap ${file}`, sitemap: file }))
-  if (sitemap.kind === 'urlset')
-    return { entries: entries(sitemap.locs, url), skipped: [], files: [fileFacts(sitemap)] }
-
-  const result = { entries: [], skipped: [], files: [fileFacts(sitemap)] }
-  const recorded = new Set([url])
-  for (const child of sitemap.locs) {
-    const skip = (why) => result.skipped.push({ input: child, source: `sitemap index ${url}`, reason: why })
-    let nested
-    try {
-      nested = await readSitemap(child, { timeout, beforeHop })
-    } catch (err) {
-      skip(`could not read sitemap: ${reason(err)}`, { cause: err })
-      continue
-    }
-    // An index that lists itself, or a file listed twice, is one file.
-    if (!recorded.has(nested.url)) result.files.push(fileFacts(nested))
-    recorded.add(nested.url)
-    if (nested.tooLarge) skip(TOO_LARGE)
-    else if (nested.kind === 'index') skip('nested sitemap index (only one level is followed)')
-    else for (const entry of entries(nested.locs, child)) result.entries.push(entry)
-  }
+  const sitemap = root.file
+  const result = { entries: [], skipped: [], files: root.fresh ? [fileFacts(sitemap)] : [] }
+  if (sitemap.tooLarge) result.skipped.push({ input: url, source: '--sitemap', reason: TOO_LARGE })
+  else if (sitemap.kind === 'urlset') result.entries = entries(sitemap.locs, url)
+  else await followIndex(sitemap, result, options)
   return result
 }
