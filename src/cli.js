@@ -22,7 +22,7 @@ import { checkLinkTargets, linksComplete, MAX_LINK_CHECKS } from './links.js'
 import { lighthouseIssues } from './lighthouse-issues.js'
 import { directoryOutputs, writeReportFile } from './output.js'
 import { buildReport, formatReport } from './report.js'
-import { DEFAULT_CONCURRENCY, DEFAULT_DELAY_MS, runAudit } from './runner.js'
+import { checksFailed, DEFAULT_CONCURRENCY, DEFAULT_DELAY_MS, runAudit } from './runner.js'
 
 const MAX_LIGHTHOUSE_RUNS = 9
 
@@ -204,6 +204,9 @@ async function auditUrls(urls, options, startSpinner) {
   return pages
 }
 
+// Lighthouse loads the page in Chrome, so it also runs on a page whose HTML the static checks could not process.
+const returnedHtml = (page) => page.facts !== null || checksFailed(page)
+
 // Runs Lighthouse once per distinct final URL (several inputs can redirect to the same
 // page) and attaches the outcome to every page that ended up there. `all` is --lighthouse and `chosen` the pages
 // picked with --lighthouse-page or a marker, by the URL as given. Picked pages get the full detail, also when
@@ -217,10 +220,10 @@ async function addLighthouse(pages, startSpinner, runner, { all, chosen, runs })
   const picked = new Set(chosen)
   const isPicked = (page) => picked.has(page.url)
   // A page the user picked but that gave no HTML gets told why, instead of silently losing the run.
-  for (const page of pages.filter((p) => p.facts === null && isPicked(p))) {
+  for (const page of pages.filter((p) => !returnedHtml(p) && isPicked(p))) {
     page.issues.push(lighthouseFailed(page.url, 'the page did not return HTML'))
   }
-  const targets = pages.filter((page) => page.facts !== null && (all || isPicked(page)))
+  const targets = pages.filter((page) => returnedHtml(page) && (all || isPicked(page)))
   const urls = [...new Set(targets.map((page) => page.finalUrl))]
   if (!urls.length) return
   const progress = (done) => `Lighthouse ${done}/${urls.length} pages...`

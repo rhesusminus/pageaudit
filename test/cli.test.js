@@ -350,6 +350,16 @@ test('cli: --lighthouse attaches a summary to pages that returned HTML', async (
   assert.equal('lighthouse' in report.pages[1], false)
 })
 
+test('cli: --lighthouse still runs on a page the static checks could not process', async (t) => {
+  const summary = { scores: { seo: 90 }, metrics: {}, audits: [], warnings: [] }
+  const seen = []
+  const lighthouse = async (list) => (seen.push(...list), [{ summary }])
+  const { report } = await runJson(t, [fixtureUrl('deep-nesting.html'), '--lighthouse'], { lighthouse })
+  assert.deepEqual(seen, [fixtureUrl('deep-nesting.html')])
+  assert.deepEqual(report.pages[0].lighthouse, summary)
+  assert.deepEqual(pageTypes(report.pages[0]), ['check-failed'])
+})
+
 test('cli: a Lighthouse failure is an info issue on the page and does not stop the run', async (t) => {
   const lighthouse = fakeLighthouse([{ error: 'Could not start Chrome: nope' }])
   const { code, report } = await runJson(t, [fixtureUrl('good.html'), '--lighthouse'], { lighthouse })
