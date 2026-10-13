@@ -18,6 +18,7 @@ import { resolveUrls } from './input/resolve.js'
 import { fromSitemap } from './input/sitemap.js'
 import { cachedRobotsLoader } from './robots.js'
 import { lighthouseFailed, runLighthouse, shortSummary } from './lighthouse.js'
+import { hostThrottle } from './concurrency.js'
 import { checkLinkTargets, linksComplete, MAX_LINK_CHECKS } from './links.js'
 import { lighthouseIssues } from './lighthouse-issues.js'
 import { directoryOutputs, writeReportFile } from './output.js'
@@ -158,7 +159,7 @@ async function readInputs(options, stdin, spinner) {
 }
 
 // Resolves the URLs to audit. Returns { inputs } or { exitCode } when reading the inputs failed.
-async function loadInputs(options, stdin, startSpinner) {
+async function loadInputs(options, stdin, { startSpinner }) {
   const spinner = options.sitemaps.length || options.files.includes('-') ? startSpinner('Reading URLs') : null
   try {
     const inputs = await readInputs(options, stdin, spinner)
@@ -190,12 +191,12 @@ function announceInputs({ urls, skipped, total, sitemapFiles }, options) {
   return true
 }
 
-async function auditUrls(urls, options, startSpinner) {
+async function auditUrls(urls, options, { startSpinner, pace }) {
   const progress = (done) => `Auditing ${done}/${urls.length} pages...`
   const spinner = startSpinner(progress(0))
   const pages = await runAudit(urls, {
     concurrency: options.concurrency,
-    delay: options.delay,
+    pace,
     onProgress: (done) => {
       if (spinner) spinner.text = progress(done)
     }
@@ -246,7 +247,7 @@ async function addLighthouse(pages, startSpinner, runner, { all, chosen, runs })
 
 // Reads the robots.txt files of the audited sites and checks them and the sitemaps against them, with a spinner
 // because a slow host can take a while. Each robots.txt is read once for all checks.
-async function checkRobotsAndSitemaps(pages, inputs, options, startSpinner) {
+async function checkRobotsAndSitemaps(pages, inputs, options, { startSpinner }) {
   const load = cachedRobotsLoader()
   const loaded = pages.some((page) => page.status === 200 && page.finalUrl)
   const spinner = loaded || inputs.sitemapFiles.length ? startSpinner('Reading robots.txt...') : null
@@ -307,12 +308,12 @@ const findsOrphans = (options, inputs, links) =>
   options.sitemaps.length > 0 && inputs.sitemapsComplete && inputs.urls.length === inputs.total && linksComplete(links)
 
 // Requests every internal link target the audit has not seen yet, then checks the links.
-async function checkInternalLinks(pages, inputs, options, startSpinner) {
+async function checkInternalLinks(pages, inputs, options, { startSpinner, pace }) {
   const progress = (done, total) => `Checking links ${done}/${total}...`
   const spinner = startSpinner('Checking links...')
   const targets = await checkLinkTargets(pages, {
     concurrency: options.concurrency,
-    delay: options.delay,
+    pace,
     onProgress: (done, total) => {
       if (spinner) spinner.text = progress(done, total)
     }
@@ -330,12 +331,12 @@ async function checkInternalLinks(pages, inputs, options, startSpinner) {
 }
 
 // The cross-page issues: duplicates, robots.txt, sitemaps and, with --check-links, internal links.
-async function checkAllPages(pages, inputs, options, startSpinner) {
+async function checkAllPages(pages, inputs, options, session) {
   return [
     ...checkSite(pages),
-    ...(await checkRobotsAndSitemaps(pages, inputs, options, startSpinner)),
+    ...(await checkRobotsAndSitemaps(pages, inputs, options, session)),
     ...checkSitemapEntries(pages, inputs.listed),
-    ...(options.checkLinks ? await checkInternalLinks(pages, inputs, options, startSpinner) : [])
+    ...(options.checkLinks ? await checkInternalLinks(pages, inputs, options, session) : [])
   ]
 }
 
@@ -364,18 +365,20 @@ export async function run(argv, { stdin = process.stdin, lighthouse = runLightho
   const json = options.json ?? !process.stdout.isTTY
   const spin = !json && canSpin(process.stderr)
   const startSpinner = (text) => (spin ? ora({ text, stream: process.stderr }).start() : null)
+  // One spacing for the pages and the link checks, so --delay also holds between the two.
+  const session = { startSpinner, pace: hostThrottle(options.delay ?? DEFAULT_DELAY_MS) }
 
-  const { inputs, exitCode } = await loadInputs(options, stdin, startSpinner)
+  const { inputs, exitCode } = await loadInputs(options, stdin, session)
   if (exitCode) return exitCode
   if (!announceInputs(inputs, options)) return 2
 
-  const pages = await auditUrls(inputs.urls, options, startSpinner)
+  const pages = await auditUrls(inputs.urls, options, session)
   await addLighthouse(pages, startSpinner, lighthouse, {
     all: options.lighthouse,
     chosen: inputs.marked,
     runs: options.lighthouseRuns
   })
-  const site = await checkAllPages(pages, inputs, options, startSpinner)
+  const site = await checkAllPages(pages, inputs, options, session)
   const report = buildReport({ pages, site, skipped: inputs.skipped })
   console.log(json ? JSON.stringify(report, null, 2) : formatReport(report, process.stdout.columns))
   if (!(await writeFiles(options, report, { logo, totalUrls: inputs.total }))) return 2

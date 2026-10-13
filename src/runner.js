@@ -90,21 +90,26 @@ export async function auditPage(url, { fetchPage = defaultFetchPage, timeout = D
   return { url, finalUrl, status, redirects, issues: withUrl(mergeRobotsIssues(issues)), facts, response, links }
 }
 
-// Audits every URL with at most `concurrency` requests in flight, starting
-// requests to the same host at least `delay` ms apart. Results keep input order.
+// Audits every URL with at most `concurrency` requests in flight. `pace(url)` is awaited before each page is
+// fetched, to space out requests to the same host: pass the one the whole run shares. Results keep input order.
 export async function runAudit(
   urls,
-  { fetchPage, timeout, concurrency = DEFAULT_CONCURRENCY, delay = DEFAULT_DELAY_MS, onProgress = () => {} } = {}
+  {
+    fetchPage,
+    timeout,
+    concurrency = DEFAULT_CONCURRENCY,
+    pace = hostThrottle(DEFAULT_DELAY_MS),
+    onProgress = () => {}
+  } = {}
 ) {
   const pages = new Array(urls.length)
-  const waitForHost = hostThrottle(delay)
   let next = 0
   let done = 0
 
   async function worker() {
     while (next < urls.length) {
       const i = next++
-      await waitForHost(urls[i])
+      await pace(urls[i])
       pages[i] = await auditPage(urls[i], { fetchPage, timeout })
       onProgress(++done, urls.length)
     }

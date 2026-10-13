@@ -6,6 +6,9 @@ import { hostThrottle } from '../src/concurrency.js'
 import { checkLinkTargets, linksComplete, linkTargets } from '../src/links.js'
 import { parse } from '../src/parse.js'
 
+// Starts every request at once, so tests do not wait for the per-host delay.
+const noPace = async () => {}
+
 // An audited HTML page with the given internal link targets.
 const page = (url, links = [], fields = {}) => ({
   url,
@@ -72,7 +75,7 @@ test('checkLinkTargets: audited pages cost no request, by the URL given or the f
     page('https://a.test/gone', [], { finalUrl: null, status: null, facts: null, links: null })
   ]
   const { request, calls } = stubRequest({})
-  const { outcomes, unchecked } = await checkLinkTargets(pages, { request, delay: 0 })
+  const { outcomes, unchecked } = await checkLinkTargets(pages, { request, pace: noPace })
   assert.deepEqual(calls, ['https://a.test/other'])
   assert.equal(unchecked, 0)
   assert.equal(outcomes.get('https://a.test/old').redirects.length, 1)
@@ -87,7 +90,7 @@ test('checkLinkTargets: counts the pages whose own links could not be read', asy
     page('https://a.test/deep', [], { facts: null, links: null, issues: [failed] }),
     page('https://a.test/gone', [], { finalUrl: null, status: null, facts: null, links: null })
   ]
-  const { unread } = await checkLinkTargets(pages, { request: stubRequest({}).request, delay: 0 })
+  const { unread } = await checkLinkTargets(pages, { request: stubRequest({}).request, pace: noPace })
   assert.equal(unread, 1)
 })
 
@@ -97,7 +100,7 @@ test('checkLinkTargets: past the cap the targets linked from the fewest pages ar
     page('https://a.test/2', ['https://a.test/nav'])
   ]
   const { request, calls } = stubRequest({})
-  const { outcomes, unchecked } = await checkLinkTargets(pages, { request, delay: 0, max: 1 })
+  const { outcomes, unchecked } = await checkLinkTargets(pages, { request, pace: noPace, max: 1 })
   assert.deepEqual(calls, ['https://a.test/nav'])
   assert.equal(unchecked, 1)
   assert.equal(outcomes.has('https://a.test/rare'), false)
@@ -106,8 +109,22 @@ test('checkLinkTargets: past the cap the targets linked from the fewest pages ar
 
 test('checkLinkTargets: a failed request becomes an outcome with the reason', async () => {
   const { request } = stubRequest({ 'https://a.test/slow': { reason: 'timed out after 15s' } })
-  const { outcomes } = await checkLinkTargets([page('https://a.test/', ['https://a.test/slow'])], { request, delay: 0 })
+  const { outcomes } = await checkLinkTargets([page('https://a.test/', ['https://a.test/slow'])], {
+    request,
+    pace: noPace
+  })
   assert.deepEqual(outcomes.get('https://a.test/slow'), { failed: 'timed out after 15s' })
+})
+
+test('checkLinkTargets: pace is awaited before every request it makes, redirect hops included', async () => {
+  const pace = async () => {}
+  const passed = []
+  const request = async (url, { beforeHop }) => {
+    passed.push(beforeHop)
+    return { status: 200, finalUrl: url, redirects: [], discard: async () => {} }
+  }
+  await checkLinkTargets([page('https://a.test/', ['https://a.test/x', 'https://a.test/y'])], { request, pace })
+  assert.deepEqual(passed, [pace, pace])
 })
 
 test('hostThrottle: requests to one host start at least the delay apart, other hosts do not wait', async (t) => {
@@ -223,7 +240,7 @@ test('checkLinkTargets: a page reached through a redirect with a fragment is kno
     })
   ]
   const { request, calls } = stubRequest({})
-  const { outcomes } = await checkLinkTargets(pages, { request, delay: 0 })
+  const { outcomes } = await checkLinkTargets(pages, { request, pace: noPace })
   assert.deepEqual(calls, [])
   assert.equal(outcomes.get('https://a.test/target').status, 200)
 })
