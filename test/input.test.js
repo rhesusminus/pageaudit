@@ -89,7 +89,11 @@ test('sitemap: follows an index one level deep and skips failing or nested child
   const { entries, skipped } = await fromSitemap(index)
   assert.deepEqual(values(entries), values((await fromSitemap(`${FIXTURE_HOST}/sitemap.xml`)).entries))
   assert.deepEqual(skipped, [
-    { input: index, source: `sitemap index ${index}`, reason: 'nested sitemap index (only one level is followed)' },
+    {
+      input: `${FIXTURE_HOST}/sitemap-nested-index.xml`,
+      source: `sitemap index ${index}`,
+      reason: 'nested sitemap index (only one level is followed)'
+    },
     {
       input: `${FIXTURE_HOST}/missing-sitemap.xml`,
       source: `sitemap index ${index}`,
@@ -104,7 +108,9 @@ test('sitemap: beforeHop is awaited before the index and every child sitemap', a
   await fromSitemap(`${FIXTURE_HOST}/sitemap-index.xml`, { beforeHop: async (url) => hops.push(url) })
   assert.deepEqual(
     hops,
-    ['sitemap-index.xml', 'sitemap.xml', 'sitemap-index.xml', 'missing-sitemap.xml'].map((n) => `${FIXTURE_HOST}/${n}`)
+    ['sitemap-index.xml', 'sitemap.xml', 'sitemap-nested-index.xml', 'missing-sitemap.xml'].map(
+      (n) => `${FIXTURE_HOST}/${n}`
+    )
   )
 })
 
@@ -271,7 +277,8 @@ test('sitemap: fromSitemap returns the facts of the index and of every child, be
     files.map(({ url, kind }) => [url, kind]),
     [
       [`${FIXTURE_HOST}/sitemap-index.xml`, 'index'],
-      [`${FIXTURE_HOST}/sitemap.xml`, 'urlset']
+      [`${FIXTURE_HOST}/sitemap.xml`, 'urlset'],
+      [`${FIXTURE_HOST}/sitemap-nested-index.xml`, 'index']
     ]
   )
   assert.ok(files.every((f) => !f.tooLarge && f.entries >= f.locs.length))

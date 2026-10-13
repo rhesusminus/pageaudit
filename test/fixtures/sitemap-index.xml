@@ -5,7 +5,7 @@
   </sitemap>
   <sitemap>
     <!-- An index inside an index is not followed. -->
-    <loc>https://fixtures.test/sitemap-index.xml</loc>
+    <loc>https://fixtures.test/sitemap-nested-index.xml</loc>
   </sitemap>
   <sitemap>
     <loc>https://fixtures.test/missing-sitemap.xml</loc>
