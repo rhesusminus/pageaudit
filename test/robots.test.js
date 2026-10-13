@@ -101,6 +101,21 @@ test('loadRobots: only the first 500 KiB are read', async (t) => {
   assert.equal(parser.isDisallowed('https://x.test/a', 'Googlebot'), false)
 })
 
+test('loadRobots: a connection that drops after the first 500 KiB does not fail the read', async (t) => {
+  const rules = 'User-agent: *\nDisallow: /private/\n'
+  const chunks = [rules.padEnd(500 * 1024 + 1, '#')]
+  const body = new ReadableStream({
+    pull(controller) {
+      if (chunks.length) controller.enqueue(new TextEncoder().encode(chunks.shift()))
+      else controller.error(Object.assign(new TypeError('terminated'), { cause: { code: 'ECONNRESET' } }))
+    }
+  })
+  respond(t, 200, body)
+  const robots = await loadRobots('https://x.test')
+  assert.equal(robots.status, 'ok')
+  assert.equal(robots.parser.isDisallowed('https://x.test/private/a', 'Googlebot'), true)
+})
+
 const page = (url, fields = {}) => ({
   url,
   finalUrl: url,

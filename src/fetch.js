@@ -39,6 +39,22 @@ function httpUrl(url, value, what) {
   return parsed
 }
 
+// The first `maxBytes` of a body, and whether there was more. Reading stops there, so the rest is never held in
+// memory and a failure after the limit cannot spoil what came before it.
+async function readLimited(body, maxBytes) {
+  const chunks = []
+  let size = 0
+  const reader = body.getReader()
+  while (size <= maxBytes) {
+    const { done, value } = await reader.read()
+    if (done) return { bytes: Buffer.concat(chunks, size), truncated: false }
+    chunks.push(value)
+    size += value.length
+  }
+  await reader.cancel().catch(() => {})
+  return { bytes: Buffer.concat(chunks, maxBytes), truncated: true }
+}
+
 // The final answer of a request: where it ended up and how to read the body.
 function answer(url, res, current, redirects, timeout) {
   return {
@@ -46,9 +62,10 @@ function answer(url, res, current, redirects, timeout) {
     status: res.status,
     redirects,
     headers: res.headers,
-    async bytes() {
+    // { bytes, truncated }: at most `maxBytes` of the body, see readLimited().
+    async read(maxBytes) {
       try {
-        return new Uint8Array(await res.arrayBuffer())
+        return res.body ? await readLimited(res.body, maxBytes) : { bytes: new Uint8Array(), truncated: false }
       } catch (err) {
         throw fetchError(url, err, timeout)
       }
@@ -174,7 +191,7 @@ export async function fetchPage(url, { timeout, beforeHop } = {}) {
   let html = null
   let bodyBytes = null
   if (res.status === 200 && /html/i.test(contentType)) {
-    const bytes = await res.bytes()
+    const { bytes } = await res.read(Infinity)
     html = decode(bytes, contentType)
     bodyBytes = bytes.length
   } else {

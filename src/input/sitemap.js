@@ -32,7 +32,7 @@ async function readSitemap(url, { timeout, beforeHop }) {
     await res.discard()
     throw new Error(`HTTP ${res.status}`)
   }
-  let bytes = await res.bytes()
+  let { bytes } = await res.read(Infinity)
   // A .xml.gz file served as-is, not as Content-Encoding (which fetch already decodes).
   if (bytes[0] === 0x1f && bytes[1] === 0x8b) bytes = gunzipSync(bytes)
   // The sitemap protocol requires UTF-8. The limit of 50 MB is on the uncompressed file.
