@@ -80,6 +80,17 @@ test('checkLinkTargets: audited pages cost no request, by the URL given or the f
   assert.match(outcomes.get('https://a.test/gone').failed, /could not be fetched/)
 })
 
+test('checkLinkTargets: counts the pages whose own links could not be read', async () => {
+  const failed = { type: 'check-failed' }
+  const pages = [
+    page('https://a.test/1'),
+    page('https://a.test/deep', [], { facts: null, links: null, issues: [failed] }),
+    page('https://a.test/gone', [], { finalUrl: null, status: null, facts: null, links: null })
+  ]
+  const { unread } = await checkLinkTargets(pages, { request: stubRequest({}).request, delay: 0 })
+  assert.equal(unread, 1)
+})
+
 test('checkLinkTargets: past the cap the targets linked from the fewest pages are left unchecked', async () => {
   const pages = [
     page('https://a.test/1', ['https://a.test/rare', 'https://a.test/nav']),
@@ -222,13 +233,14 @@ test('linksComplete: only when nothing was left unchecked and every destination 
     ['https://a.test/a', { status: 200 }],
     ['https://a.test/b', { status: 404 }]
   ])
-  assert.equal(linksComplete({ outcomes: ok, unchecked: 0 }), true)
-  assert.equal(linksComplete({ outcomes: ok, unchecked: 1 }), false)
+  assert.equal(linksComplete({ outcomes: ok, unchecked: 0, unread: 0 }), true)
+  assert.equal(linksComplete({ outcomes: ok, unchecked: 1, unread: 0 }), false)
+  assert.equal(linksComplete({ outcomes: ok, unchecked: 0, unread: 1 }), false)
   for (const unknown of [{ failed: 'timed out after 15s' }, { status: 503 }, { status: 429 }]) {
     const outcomes = outcomesOf([
       ['https://a.test/a', { status: 200 }],
       ['https://a.test/alias', unknown]
     ])
-    assert.equal(linksComplete({ outcomes, unchecked: 0 }), false, JSON.stringify(unknown))
+    assert.equal(linksComplete({ outcomes, unchecked: 0, unread: 0 }), false, JSON.stringify(unknown))
   }
 })

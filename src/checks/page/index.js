@@ -11,7 +11,7 @@ import { absolute, baseUrl, extractSignals } from './signals.js'
 import { checkSocial } from './social.js'
 import { checkStructuredData } from './structured-data.js'
 
-export { checkFetchError, checkResponse } from './response.js'
+export { checkFetchError, checkHtmlError, checkResponse } from './response.js'
 export { mergeRobotsIssues } from './robots-header.js'
 export { internalLinks } from './signals.js'
 

@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { FetchError } from '../src/fetch.js'
+import { checkHtmlError } from '../src/checks/page/index.js'
 import { auditPage, runAudit } from '../src/runner.js'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
 
@@ -83,6 +84,39 @@ test('auditPage: a network error becomes a fetch-failed error', async () => {
   assert.equal(result.status, null)
   assert.equal(result.facts, null)
   assert.equal(result.links, null)
+})
+
+// Deep enough to overflow the stack of the recursive DOM walks, as a page full of unclosed tags can be.
+const nested = (depth) =>
+  `<html lang="en"><head><title>Deep</title></head><body><a href="/x">${'<span>'.repeat(depth)}x${'</span>'.repeat(depth)}</a></body></html>`
+
+test('auditPage: HTML the checks cannot process is a check-failed error and keeps the response issues', async () => {
+  const result = await auditPage('http://a.test/', {
+    fetchPage: async (url) =>
+      page(url, {
+        finalUrl: 'https://a.test/',
+        redirects: [{ url, status: 301, location: 'https://a.test/' }],
+        html: nested(10000),
+        headers: {},
+        bodyBytes: 1
+      })
+  })
+  assert.deepEqual(types(result), ['redirect', 'check-failed'])
+  const failed = result.issues[1]
+  assert.equal(failed.severity, 'error')
+  assert.equal(failed.message, 'Could not check the page: its elements are nested too deeply')
+  assert.equal(failed.source, 'https://developer.chrome.com/docs/lighthouse/performance/dom-size')
+  assert.equal(result.status, 200)
+  assert.equal(result.facts, null)
+  assert.equal(result.links, null)
+  // The headers did arrive, so the header checks still look at them.
+  assert.deepEqual(result.response, { headers: {}, bodyBytes: 1 })
+})
+
+test('checkHtmlError: any other failure keeps its own message and points at the rule itself', () => {
+  const [issue] = checkHtmlError(new TypeError('cannot read properties of undefined'))
+  assert.equal(issue.message, 'Could not check the page: cannot read properties of undefined')
+  assert.equal(issue.source, 'https://github.com/rhesusminus/pageaudit#readme')
 })
 
 test('auditPage: a non-200 status is an error and skips the HTML checks', async () => {
@@ -184,6 +218,13 @@ test('runAudit: a failing page does not stop the others and progress counts ever
     [2, 3],
     [3, 3]
   ])
+})
+
+test('runAudit: a page whose checks fail does not stop the others', async () => {
+  const fetchPage = async (url) => page(url, url.includes('deep') ? { html: nested(10000) } : {})
+  const urls = ['https://a.test/1', 'https://a.test/deep', 'https://a.test/3']
+  const pages = await runAudit(urls, { fetchPage, delay: 0 })
+  assert.deepEqual(pages.map(types), [[], ['check-failed'], []])
 })
 
 test('runAudit: an empty list resolves to no pages', async () => {

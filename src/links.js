@@ -1,7 +1,7 @@
 import { hostThrottle, mapLimited } from './concurrency.js'
 import { DEFAULT_TIMEOUT_MS, request as defaultRequest } from './fetch.js'
 import { withoutFragment } from './input/resolve.js'
-import { DEFAULT_CONCURRENCY, DEFAULT_DELAY_MS } from './runner.js'
+import { checksFailed, DEFAULT_CONCURRENCY, DEFAULT_DELAY_MS } from './runner.js'
 
 // Most internal links are the same navigation on every page, so this covers a large site. Past it the targets linked
 // from the fewest pages are left unchecked.
@@ -49,7 +49,7 @@ async function fetchOutcome(url, { request, timeout, beforeHop }) {
 
 // Finds out where every internal link target leads: { status, finalUrl, redirects } or { failed: reason }, by URL.
 // Requests use the same concurrency and per-host delay as the audit, the delay also before each redirect hop.
-// `unchecked` counts the targets past `max`.
+// `unchecked` counts the targets past `max`, and `unread` the audited pages whose own links could not be read.
 export async function checkLinkTargets(
   pages,
   {
@@ -72,13 +72,15 @@ export async function checkLinkTargets(
     return outcome
   })
   checked.forEach(({ url }, i) => outcomes.set(url, results[i]))
-  return { outcomes, unchecked: unknown.length - checked.length }
+  return { outcomes, unchecked: unknown.length - checked.length, unread: pages.filter(checksFailed).length }
 }
 
 // An outcome that leaves open where a link leads, or which links an audited page has: a failed request, or a 429 or
 // 5xx answer.
 const unresolved = (outcome) => Boolean(outcome.failed) || outcome.status === 429 || outcome.status >= 500
 
-// True when every link target was followed to a known destination. Every audited page is an outcome too, so a page
-// that could not be fetched or answered with a server error, whose links the audit never saw, makes it false.
-export const linksComplete = ({ outcomes, unchecked }) => unchecked === 0 && ![...outcomes.values()].some(unresolved)
+// True when every link of every audited page is known and was followed to a known destination. Every audited page is
+// an outcome too, so a page that could not be fetched or answered with a server error, whose links the audit never
+// saw, makes it false. So does a page whose HTML the checks could not process, as its links were never read.
+export const linksComplete = ({ outcomes, unchecked, unread }) =>
+  unchecked === 0 && unread === 0 && ![...outcomes.values()].some(unresolved)

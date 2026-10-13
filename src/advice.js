@@ -6,6 +6,11 @@ export const ADVICE = {
     why: 'Visitors and search engines get nothing from this address, so it cannot appear in search results.',
     fix: 'Check that the address is correct and that the server is up, then run the audit again.'
   },
+  'check-failed': {
+    title: 'The page could not be checked',
+    why: 'The page loaded, but the audit could not read its HTML, so none of the page checks ran and its problems are unknown.',
+    fix: 'The message says what went wrong. Elements nested too deeply usually come from tags that are never closed: fix the HTML and run the audit again. Pass any other message on to whoever runs the audit.'
+  },
   'http-status': {
     title: 'The page returns an error',
     why: 'Search engines ignore the content of pages that answer with an error, and visitors see an error page.',

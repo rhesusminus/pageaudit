@@ -22,7 +22,7 @@ import { checkLinkTargets, linksComplete, MAX_LINK_CHECKS } from './links.js'
 import { lighthouseIssues } from './lighthouse-issues.js'
 import { directoryOutputs, writeReportFile } from './output.js'
 import { buildReport, formatReport } from './report.js'
-import { DEFAULT_CONCURRENCY, DEFAULT_DELAY_MS, runAudit } from './runner.js'
+import { checksFailed, DEFAULT_CONCURRENCY, DEFAULT_DELAY_MS, runAudit } from './runner.js'
 
 const MAX_LIGHTHOUSE_RUNS = 9
 
@@ -204,6 +204,9 @@ async function auditUrls(urls, options, startSpinner) {
   return pages
 }
 
+// Lighthouse loads the page in Chrome, so it also runs on a page whose HTML the static checks could not process.
+const returnedHtml = (page) => page.facts !== null || checksFailed(page)
+
 // Runs Lighthouse once per distinct final URL (several inputs can redirect to the same
 // page) and attaches the outcome to every page that ended up there. `all` is --lighthouse and `chosen` the pages
 // picked with --lighthouse-page or a marker, by the URL as given. Picked pages get the full detail, also when
@@ -217,10 +220,10 @@ async function addLighthouse(pages, startSpinner, runner, { all, chosen, runs })
   const picked = new Set(chosen)
   const isPicked = (page) => picked.has(page.url)
   // A page the user picked but that gave no HTML gets told why, instead of silently losing the run.
-  for (const page of pages.filter((p) => p.facts === null && isPicked(p))) {
+  for (const page of pages.filter((p) => !returnedHtml(p) && isPicked(p))) {
     page.issues.push(lighthouseFailed(page.url, 'the page did not return HTML'))
   }
-  const targets = pages.filter((page) => page.facts !== null && (all || isPicked(page)))
+  const targets = pages.filter((page) => returnedHtml(page) && (all || isPicked(page)))
   const urls = [...new Set(targets.map((page) => page.finalUrl))]
   if (!urls.length) return
   const progress = (done) => `Lighthouse ${done}/${urls.length} pages...`
@@ -307,7 +310,7 @@ const findsOrphans = (options, inputs, links) =>
 async function checkInternalLinks(pages, inputs, options, startSpinner) {
   const progress = (done, total) => `Checking links ${done}/${total}...`
   const spinner = startSpinner('Checking links...')
-  const { outcomes, unchecked } = await checkLinkTargets(pages, {
+  const targets = await checkLinkTargets(pages, {
     concurrency: options.concurrency,
     delay: options.delay,
     onProgress: (done, total) => {
@@ -315,13 +318,13 @@ async function checkInternalLinks(pages, inputs, options, startSpinner) {
     }
   })
   spinner?.stop()
-  if (unchecked) {
+  if (targets.unchecked) {
     console.error(
-      `Checked ${MAX_LINK_CHECKS} link targets, ${unchecked} linked from fewer pages were not checked, so orphan pages were not looked for.`
+      `Checked ${MAX_LINK_CHECKS} link targets, ${targets.unchecked} linked from fewer pages were not checked, so orphan pages were not looked for.`
     )
   }
-  return checkLinks(pages, outcomes, {
-    orphans: findsOrphans(options, inputs, { outcomes, unchecked }),
+  return checkLinks(pages, targets.outcomes, {
+    orphans: findsOrphans(options, inputs, targets),
     listed: inputs.listed
   })
 }
