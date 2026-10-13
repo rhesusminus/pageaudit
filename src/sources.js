@@ -35,5 +35,7 @@ export const SOURCES = {
   htmlId: 'https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/id',
   mixedContent: 'https://web.dev/articles/what-is-mixed-content',
   securityHeaders: 'https://web.dev/articles/security-headers',
-  textCompression: 'https://developer.chrome.com/docs/lighthouse/performance/uses-text-compression'
+  textCompression: 'https://developer.chrome.com/docs/lighthouse/performance/uses-text-compression',
+  domSize: 'https://developer.chrome.com/docs/lighthouse/performance/dom-size',
+  pageaudit: 'https://github.com/rhesusminus/pageaudit#readme'
 }

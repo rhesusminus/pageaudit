@@ -307,7 +307,7 @@ const findsOrphans = (options, inputs, links) =>
 async function checkInternalLinks(pages, inputs, options, startSpinner) {
   const progress = (done, total) => `Checking links ${done}/${total}...`
   const spinner = startSpinner('Checking links...')
-  const { outcomes, unchecked } = await checkLinkTargets(pages, {
+  const targets = await checkLinkTargets(pages, {
     concurrency: options.concurrency,
     delay: options.delay,
     onProgress: (done, total) => {
@@ -315,13 +315,13 @@ async function checkInternalLinks(pages, inputs, options, startSpinner) {
     }
   })
   spinner?.stop()
-  if (unchecked) {
+  if (targets.unchecked) {
     console.error(
-      `Checked ${MAX_LINK_CHECKS} link targets, ${unchecked} linked from fewer pages were not checked, so orphan pages were not looked for.`
+      `Checked ${MAX_LINK_CHECKS} link targets, ${targets.unchecked} linked from fewer pages were not checked, so orphan pages were not looked for.`
     )
   }
-  return checkLinks(pages, outcomes, {
-    orphans: findsOrphans(options, inputs, { outcomes, unchecked }),
+  return checkLinks(pages, targets.outcomes, {
+    orphans: findsOrphans(options, inputs, targets),
     listed: inputs.listed
   })
 }

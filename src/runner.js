@@ -1,6 +1,7 @@
 import {
   checkFetchError,
   checkHtml,
+  checkHtmlError,
   checkResponse,
   extractFacts,
   internalLinks,
@@ -22,20 +23,35 @@ export const DEFAULT_DELAY_MS = 200
 
 const NO_HTML = { issues: [], facts: null, response: null, links: null }
 
-// The checks, facts and response details of a page that returned HTML. `response` and `links` are for the site
-// checks and are not part of the report: `response` holds the headers and size, null when the fetcher did not say
-// which headers were sent, so an unknown header is never reported as missing. `links` lists the internal link targets.
-function auditHtml({ finalUrl, html, headers, bodyBytes }) {
+// The checks and facts of a page that returned HTML, and `links`, the internal link targets for the site checks.
+function auditHtml({ finalUrl, html }) {
   const $ = parse(html)
   return {
     issues: checkHtml($, { url: finalUrl, html }),
     facts: extractFacts($, finalUrl),
-    response: headers ? { headers, bodyBytes } : null,
     links: internalLinks($, finalUrl)
   }
 }
 
-// Fetches and checks one page. A page that cannot be fetched becomes an issue on
+// The checks of a page, NO_HTML unless it returned HTML. `response` is for the site checks and is not part of the
+// report: the headers and size, null when the fetcher did not say which headers were sent, so an unknown header is
+// never reported as missing. HTML the checks cannot process becomes an issue on that page, like a page that cannot be
+// fetched, so it never discards the pages audited around it. Its headers were still received and are still checked.
+function htmlResults(fetched) {
+  if (fetched.status !== 200 || fetched.html === null) return NO_HTML
+  const { headers, bodyBytes } = fetched
+  const response = headers ? { headers, bodyBytes } : null
+  try {
+    return { ...auditHtml(fetched), response }
+  } catch (err) {
+    return { ...NO_HTML, issues: checkHtmlError(err), response }
+  }
+}
+
+// True for a page that returned HTML the checks could not process, so its facts and links are unknown, not absent.
+export const checksFailed = (page) => page.issues.some((issue) => issue.type === 'check-failed')
+
+// Fetches and checks one page. A page that cannot be fetched or checked becomes an issue on
 // that page instead of an exception, so one bad page never stops the run.
 export async function auditPage(url, { fetchPage = defaultFetchPage, timeout = DEFAULT_TIMEOUT_MS } = {}) {
   // A fixed key order keeps the JSON report stable whichever check built the issue.
@@ -68,8 +84,8 @@ export async function auditPage(url, { fetchPage = defaultFetchPage, timeout = D
       links: null
     }
   }
-  const { finalUrl, status, redirects, html } = fetched
-  const { issues: htmlIssues, facts, response, links } = status === 200 && html !== null ? auditHtml(fetched) : NO_HTML
+  const { finalUrl, status, redirects } = fetched
+  const { issues: htmlIssues, facts, response, links } = htmlResults(fetched)
   const issues = [...checkResponse(fetched), ...htmlIssues]
   return { url, finalUrl, status, redirects, issues: withUrl(mergeRobotsIssues(issues)), facts, response, links }
 }

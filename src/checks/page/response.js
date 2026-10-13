@@ -15,6 +15,23 @@ export function checkFetchError(err) {
   ]
 }
 
+// A page that returned HTML the checks could not process. A stack overflow comes from elements nested too deeply to
+// walk, which a reader can act on. Any other failure is the audit's own, documented with the rule itself.
+// The page's problems are unknown, so it must not pass as a clean page.
+export function checkHtmlError(err) {
+  const tooDeep = err instanceof RangeError && /call stack/i.test(err.message)
+  return [
+    {
+      type: 'check-failed',
+      severity: 'error',
+      category: 'best-practice',
+      source: tooDeep ? SOURCES.domSize : SOURCES.pageaudit,
+      message: `Could not check the page: ${tooDeep ? 'its elements are nested too deeply' : err.message}`,
+      context: ''
+    }
+  ]
+}
+
 function checkRedirects({ url, redirects }) {
   const chain = [url, ...redirects.map((r) => r.location)].join(' -> ')
   if (redirects.length > 1) {
