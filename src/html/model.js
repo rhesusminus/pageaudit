@@ -43,9 +43,18 @@ export function groupIssues(report) {
 }
 
 // Each page with the site-wide issues it is part of (duplicate titles and the like) added
-// to its own, so a page is never called clean while a site-wide problem lists it.
-export const pagesWithSiteIssues = ({ pages, site }) =>
-  pages.map((page) => ({ ...page, issues: [...page.issues, ...site.filter((issue) => issue.urls.includes(page.url))] }))
+// to its own, so a page is never called clean while a site-wide problem lists it. The issues are indexed by URL
+// once, a site issue can list every page of a sitemap.
+export function pagesWithSiteIssues({ pages, site }) {
+  const byUrl = new Map()
+  for (const issue of site) {
+    for (const url of new Set(issue.urls)) {
+      if (!byUrl.has(url)) byUrl.set(url, [])
+      byUrl.get(url).push(issue)
+    }
+  }
+  return pages.map((page) => ({ ...page, issues: [...page.issues, ...(byUrl.get(page.url) ?? [])] }))
+}
 
 // Site issues that list no audited page, such as a sitemap file that is too large. They are on no page, so
 // the page health cannot show them.
