@@ -43,9 +43,12 @@ function checkH1s($, headings) {
   return []
 }
 
-function checkHeadingOrder($, headings) {
+// A page with no <h1> is already reported by missing-h1, so its first heading may be an <h2> without a second
+// warning for the same problem.
+function checkHeadingOrder($, headings, hasH1) {
   const issues = []
-  let previous = 0
+  let previous = hasH1 ? 0 : 1
+  let first = true
   for (const el of headings) {
     const level = Number(el.tagName[1])
     if (level > previous + 1) {
@@ -54,7 +57,7 @@ function checkHeadingOrder($, headings) {
         severity: 'warning',
         category: 'accessibility',
         source: SOURCES.headings,
-        message: `Heading level skipped: <h${level}> after ${previous ? `<h${previous}>` : 'no heading'}`,
+        message: `Heading level skipped: <h${level}> after ${first ? 'no heading' : `<h${previous}>`}`,
         context: truncate(`<h${level}>${collapseWhitespace($(el).text())}</h${level}>`),
         ...evidence($, el)
       })
@@ -71,11 +74,13 @@ function checkHeadingOrder($, headings) {
       })
     }
     previous = level
+    first = false
   }
   return issues
 }
 
 export function checkHeadings($) {
   const headings = $('h1, h2, h3, h4, h5, h6').toArray()
-  return [...checkH1s($, headings), ...checkHeadingOrder($, headings)]
+  const hasH1 = headings.some((el) => el.tagName === 'h1')
+  return [...checkH1s($, headings), ...checkHeadingOrder($, headings, hasH1)]
 }
