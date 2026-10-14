@@ -93,13 +93,21 @@ test('auditPage: a network error becomes a fetch-failed error', async () => {
 const nested = (depth) =>
   `<html lang="en"><head><title>Deep</title></head><body><a href="/x">${'<span>'.repeat(depth)}x${'</span>'.repeat(depth)}</a></body></html>`
 
+test('auditPage: a page nested thousands of levels deep is checked like any other', async () => {
+  const result = await auditPage('https://a.test/', { fetchPage: async (url) => page(url, { html: nested(10000) }) })
+  assert.ok(!types(result).includes('check-failed'))
+  assert.equal(result.facts.title, 'Deep')
+  assert.deepEqual(result.links, ['https://a.test/x'])
+})
+
 test('auditPage: HTML the checks cannot process is a check-failed error and keeps the response issues', async () => {
   const result = await auditPage('http://a.test/', {
     fetchPage: async (url) =>
       page(url, {
-        finalUrl: 'https://a.test/',
+        // An address the checks cannot resolve links against makes them throw.
+        finalUrl: 'not a url',
         redirects: [{ url, status: 301, location: 'https://a.test/' }],
-        html: nested(10000),
+        html: GOOD,
         headers: {},
         bodyBytes: 1
       })
@@ -107,8 +115,8 @@ test('auditPage: HTML the checks cannot process is a check-failed error and keep
   assert.deepEqual(types(result), ['redirect', 'check-failed'])
   const failed = result.issues[1]
   assert.equal(failed.severity, 'error')
-  assert.equal(failed.message, 'Could not check the page: its elements are nested too deeply')
-  assert.equal(failed.source, 'https://developer.chrome.com/docs/lighthouse/performance/dom-size')
+  assert.equal(failed.message, 'Could not check the page: Invalid URL')
+  assert.equal(failed.source, 'https://github.com/rhesusminus/pageaudit#readme')
   assert.equal(result.status, 200)
   assert.equal(result.facts, null)
   assert.equal(result.links, null)
@@ -232,8 +240,8 @@ test('runAudit: a failing page does not stop the others and progress counts ever
 })
 
 test('runAudit: a page whose checks fail does not stop the others', async () => {
-  const fetchPage = async (url) => page(url, url.includes('deep') ? { html: nested(10000) } : {})
-  const urls = ['https://a.test/1', 'https://a.test/deep', 'https://a.test/3']
+  const fetchPage = async (url) => page(url, url.includes('broken') ? { finalUrl: 'not a url' } : {})
+  const urls = ['https://a.test/1', 'https://a.test/broken', 'https://a.test/3']
   const pages = await runAudit(urls, { fetchPage, pace: noPace })
   assert.deepEqual(pages.map(types), [[], ['check-failed'], []])
 })

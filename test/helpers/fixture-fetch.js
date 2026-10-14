@@ -23,7 +23,7 @@ const HEADER_PAGES = {
 }
 const REDIRECTS = { 'redirect-once': '/good.html', 'redirect-twice': '/redirect-once' }
 // Fixture pages built here because they are too large to keep as files. deep-nesting.html nests elements deeper than
-// the checks can walk, too-large.html has its only <h1> after the first 2 MB.
+// Chrome parses, too-large.html has its only <h1> after the first 2 MB.
 const NESTING = 10000
 const GENERATED = {
   'deep-nesting.html': `<html lang="en"><head><title>Deep</title></head><body><a href="/x">${'<span>'.repeat(NESTING)}x${'</span>'.repeat(NESTING)}</a></body></html>`,
