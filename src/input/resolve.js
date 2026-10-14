@@ -1,4 +1,23 @@
 const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i
+// `host:port` reads as a URL with the scheme `host:`.
+const HOST_AND_PORT = /^[^/?#:\s]+:\d+(?:[/?#]|$)/
+const LOCAL_HOST = /^(?:localhost|[^/?#]*\.localhost|\d{1,3}(?:\.\d{1,3}){3}|\[[^\]/?#]+\])(?::|[/?#]|$)/i
+
+// The address a scheme-less input was probably meant as, or undefined. Local servers rarely have a certificate, so
+// they get http.
+function suggestion(value) {
+  const scheme = LOCAL_HOST.test(value) ? 'http' : 'https'
+  try {
+    return new URL(`${scheme}://${value}`).host ? `${scheme}://${value}` : undefined
+  } catch {
+    return undefined
+  }
+}
+
+const withHint = (reason, value) => {
+  const address = suggestion(value)
+  return address ? `${reason}, did you mean ${address}?` : reason
+}
 
 // Returns the URL to fetch (fragment removed) and a key that identifies the page:
 // the host is lowercased by URL parsing, the query is kept and a trailing slash
@@ -8,10 +27,15 @@ export function normalize(value) {
   try {
     parsed = new URL(value)
   } catch {
-    throw new Error(HAS_SCHEME.test(value) ? 'not a valid URL' : 'not a valid URL (missing http:// or https://)')
+    throw new Error(
+      HAS_SCHEME.test(value) ? 'not a valid URL' : `not a valid URL (${withHint('missing http:// or https://', value)})`
+    )
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error(`unsupported protocol ${parsed.protocol} (only http and https)`)
+    const reason = 'only http and https'
+    throw new Error(
+      `unsupported protocol ${parsed.protocol} (${HOST_AND_PORT.test(value) ? withHint(reason, value) : reason})`
+    )
   }
   parsed.hash = ''
   const url = parsed.href

@@ -190,10 +190,26 @@ test('resolve: normalize treats a trailing slash as the same page', () => {
   assert.notEqual(normalize('https://a.test/x?q=1').key, normalize('https://a.test/x?q=2').key)
 })
 
+test('resolve: normalize hints at the address of a scheme-less input, http for a local server', () => {
+  assert.throws(
+    () => normalize('example.com'),
+    /missing http:\/\/ or https:\/\/, did you mean https:\/\/example\.com\?\)/
+  )
+  assert.throws(() => normalize('127.0.0.1:3000'), /did you mean http:\/\/127\.0\.0\.1:3000\?/)
+  assert.throws(() => normalize('[::1]:3000'), /did you mean http:\/\/\[::1\]:3000\?/)
+  assert.throws(() => normalize('[::ffff:127.0.0.1]:8765'), /did you mean http:\/\/\[::ffff:127\.0\.0\.1\]:8765\?/)
+  assert.throws(
+    () => normalize('localhost:8765'),
+    /unsupported protocol localhost: \(only http and https, did you mean http:\/\/localhost:8765\?\)/
+  )
+  assert.throws(() => normalize('example.com:80/a'), /did you mean https:\/\/example\.com:80\/a\?/)
+  assert.throws(() => normalize('ftp://x.test'), /^Error: unsupported protocol ftp: \(only http and https\)$/)
+})
+
 test('resolve: normalize rejects non-http URLs with a reason', () => {
   assert.throws(() => normalize('mailto:a@b.test'), /unsupported protocol mailto: \(only http and https\)/)
-  assert.throws(() => normalize('example.com'), /not a valid URL \(missing http:\/\/ or https:\/\/\)/)
   assert.throws(() => normalize('http://'), /^Error: not a valid URL$/)
+  assert.throws(() => normalize('not a url'), /^Error: not a valid URL \(missing http:\/\/ or https:\/\/\)$/)
 })
 
 test('resolve: merges inputs in order, dedupes and reports skipped inputs', async () => {
@@ -212,7 +228,10 @@ test('resolve: merges inputs in order, dedupes and reports skipped inputs', asyn
     skipped.map(({ input, reason }) => [input, reason]),
     [
       ['ftp://fixtures.test/file.txt', 'unsupported protocol ftp: (only http and https)'],
-      ['fixtures.test/no-scheme.html', 'not a valid URL (missing http:// or https://)']
+      [
+        'fixtures.test/no-scheme.html',
+        'not a valid URL (missing http:// or https://, did you mean https://fixtures.test/no-scheme.html?)'
+      ]
     ]
   )
   assert.equal(skipped[0].source, `${fixturePath('urls.txt')}:8`)
