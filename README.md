@@ -71,13 +71,13 @@ Tables follow the terminal width (80 to 114 columns).
 
 ### Exit codes
 
-| Code | Meaning                                                                  |
-| ---- | ------------------------------------------------------------------------ |
-| 0    | No errors (warnings and infos are allowed, unless `--fail-on warning`)   |
-| 1    | At least one error, or a warning with `--fail-on warning`                |
-| 2    | Usage error, an unreadable URL file or sitemap, or no valid URL to audit |
+| Code | Meaning                                                                                     |
+| ---- | ------------------------------------------------------------------------------------------- |
+| 0    | No errors (warnings and infos are allowed, unless `--fail-on warning`)                      |
+| 1    | At least one error, or a warning with `--fail-on warning`                                   |
+| 2    | Usage error, an unreadable input, an output file that cannot be written, or no URL to audit |
 
-A page that cannot be fetched or returns an error status is an error on that page (exit 1), not a reason to stop.
+A page that cannot be fetched or returns an error status is an error on that page (exit 1), not a reason to stop. A sitemap that was read but lists no URL to audit is still checked, so that run exits 0 or 1. An unreadable input is a URL file, sitemap or `--logo` that cannot be read. An `--out` or `--html` path that is a directory exits 2 before any page is fetched, and a report file that cannot be written exits 2 even after a complete audit.
 
 ### HTML report
 
@@ -422,7 +422,7 @@ docs/pageaudit-v4-page-data-html-report.md    the v4 (page data and HTML report)
 
 Pipeline: inputs -> `resolveUrls` -> `runAudit` (`fetchPage` -> `checkResponse` -> `parse` -> `checkHtml` per page) -> `checkSite`, `checkRobotsTxt`, `checkSitemapEntries` and, with `--check-links`, `checkLinkTargets` -> `checkLinks` -> `buildReport` -> table or JSON.
 
-`fetchPage(url, { timeout })` returns `{ url, finalUrl, status, redirects, contentType, html, robotsHeader, headers, bodyBytes }` and only throws for network failures. It is the only thing the runner needs from the network layer, so a headless browser can replace it without touching the checks or the runner.
+`fetchPage(url, { timeout, beforeHop })` returns `{ url, finalUrl, status, redirects, contentType, html, truncated, robotsHeader, headers, bodyBytes }` and only throws for network failures. `html` holds at most the first 2 MiB of the body (`HTML_MAX_BYTES`), and `truncated` is true when there was more. `beforeHop(url)` is awaited before every request of the redirect chain, so the per-host `--delay` also spaces redirect hops. It is the only thing the runner needs from the network layer, so a headless browser can replace it without touching the checks or the runner, as long as it returns the same shape and calls `beforeHop` the same way.
 
 Every page issue has the same shape, so `report.js` has no per-check special cases:
 
