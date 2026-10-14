@@ -1,6 +1,6 @@
 # pageaudit
 
-> **Note:** this project is my testing ground for agentic coding. It was planned and built together with an AI coding agent (Claude Code), from a plan written in a chat (`docs/seo-harness-plan.md`, and `docs/pageaudit-v2-plan.md` for multi-page auditing) through implementation, tests and git workflow. Treat it as an experiment, not a polished product.
+> **Note:** this project is my testing ground for agentic coding. It was planned and built together with an AI coding agent (Claude Code), from plans written in a chat (in `docs/`, starting with `docs/seo-harness-plan.md`) through implementation, tests and git workflow. Treat it as an experiment, not a polished product.
 
 A small Node.js CLI that fetches one or more pages, parses the static HTML and reports basic SEO/HTML issues: images, meta tags, headings and the HTTP response of each page, plus cross-page checks such as duplicate titles.
 
@@ -47,12 +47,14 @@ Link-following crawling is not supported.
 | `--fail-on <level>`       | `error` | `warning` makes warnings fail the run too (for CI).                                                                                                                                                                 |
 | `--lighthouse`            | off     | Also run Lighthouse on every page that returned HTML. Needs a local Chrome or Chromium. See below.                                                                                                                  |
 | `--lighthouse-page <url>` |         | Run Lighthouse with full detail on this page. Can be repeated. The page is added to the audit if missing and `--limit` never drops it. In a `--urls-file`, a URL followed by `lighthouse` does the same. See below. |
+| `--lighthouse-runs <n>`   | 1       | Run Lighthouse `n` times per page (1 to 9) and keep the median run, since single runs vary. See below.                                                                                                              |
 | `--out <path>`            |         | Also write the JSON report to a file, for example to hand to Claude. Exits 2 if the file cannot be written.                                                                                                         |
 | `--html <path>`           |         | Also write a report for customers as one self-contained HTML file. See below.                                                                                                                                       |
 | `--title <text>`          |         | Report title in the HTML report (default `Website audit`). Needs `--html`.                                                                                                                                          |
 | `--client <name>`         |         | Client name in the HTML report. Needs `--html`.                                                                                                                                                                     |
 | `--logo <file>`           |         | Logo for the HTML report: png, jpg, gif, webp or svg, at most 512 KB. Needs `--html`.                                                                                                                               |
 | `--json`                  |         | Print the JSON report. Also the default when stdout is not a TTY.                                                                                                                                                   |
+| `-h`, `--help`            |         | Show the options.                                                                                                                                                                                                   |
 
 Each request has a 15 s timeout (covering redirects and the body), follows up to 10 redirects and sends `User-Agent: pageaudit/<version> (+https://github.com/rhesusminus/pageaudit)`.
 
@@ -213,7 +215,7 @@ Rules follow what Google and the W3C actually say, not folklore, so severities a
 | HTML       | `mixed-content`: `http://` resource on an `https` page                                                                                                      | warning         | best-practice                 |
 | HTML       | `client-side-rendered`: almost no text and an empty app root, so the raw HTML results may be incomplete                                                     | info            | best-practice                 |
 | Response   | `fetch-failed`: network error, timeout or more than 10 redirects                                                                                            | error           | seo                           |
-| Response   | `check-failed`: HTML the checks could not process, such as elements nested thousands of levels deep (the HTML checks are skipped)                           | error           | best-practice                 |
+| Response   | `check-failed`: HTML the checks could not process (the HTML checks are skipped)                                                                             | error           | best-practice                 |
 | Response   | `http-status`: any status other than 200 (the HTML checks are skipped)                                                                                      | error           | seo                           |
 | Response   | `not-html`: the content type is not HTML, for example a PDF in a sitemap (the HTML checks are skipped)                                                      | info            | seo                           |
 | Response   | `redirect-chain`: more than one redirect before the final page                                                                                              | warning         | seo                           |
@@ -272,7 +274,7 @@ Pages count as one page when they end up at the same final URL or declare the sa
 
 The length limits (60, 160, 70) are heuristics, not official rules: Google states there is no limit and truncates by pixel width. Empty alt is only an error when it leaves a link or button without any accessible name.
 
-Before checking, `<template>` elements are removed because their content is inert. Whitespace runs in the title, description and heading text are collapsed before measuring, like browsers do, and issue contexts are capped at 120 characters. The link checks are the exception: their context is made of addresses, and the final address of a redirect is what the link should be changed to, so each address is kept whole up to 2000 characters.
+Before checking, `<template>` elements are removed because their content is inert. Elements nested deeper than 513 levels are moved up to their parent's parent, as Chrome's parser does, so a deeply nested page is checked as Google renders it. Whitespace runs in the title, description and heading text are collapsed before measuring, like browsers do, and issue contexts are capped at 120 characters. The link checks are the exception: their context is made of addresses, and the final address of a redirect is what the link should be changed to, so each address is kept whole up to 2000 characters.
 
 `fetchPage` decodes the body the way browsers do: a BOM wins, then the `Content-Type` charset, then a `<meta charset>` or `http-equiv` prescan of the first 1024 bytes, then UTF-8. Fetch failures report the underlying cause (error code or message), for example `Could not fetch the page: ENOTFOUND`.
 
@@ -351,7 +353,7 @@ src/
   fetch.js              fetchPage(url): redirects, timeout, User-Agent, encoding sniffing, X-Robots-Tag
   robots.js             loadRobots(origin): reads and parses a robots.txt the way Google treats the answer
   links.js              checkLinkTargets(): where the internal links lead, for --check-links
-  parse.js              parse(html): Cheerio DOM, with inert <template> content removed
+  parse.js              parse(html): Cheerio DOM, with inert <template> content removed and the depth capped like Chrome
   runner.js             runs the page checks over all URLs with concurrency and a per-host delay
   text.js               collapseWhitespace() and charCount() shared by the checks
   checks/
@@ -381,6 +383,7 @@ src/
       robots.js         checkRobotsTxt(): pages the robots.txt blocks
       sitemap.js        checkSitemapEntries(): pages a sitemap lists that send mixed signals
       index.js          checkSite()
+    evidence.js         the selector, html and parentHtml of the element behind an issue
     snippet.js          truncate()/snippet(): caps issue contexts at 120 characters
   severity.js           countSeverities(), worstFirst() and severity ordering, shared by every report
   sources.js            documentation URLs referenced by each issue's `source` field
@@ -394,7 +397,12 @@ test/
   runner.test.js        runner with a mocked fetchPage: concurrency, delay, failures
   site.test.js          site checks over runner results
   checks.test.js        unit tests for each page check
+  a11y.test.js          form labels, duplicate ids, the main landmark and link names
+  parse.test.js         template removal and the DOM depth cap
   fetch.test.js         fetchPage: redirects, User-Agent, encoding sniffing, errors
+  robots.test.js        robots.txt loading and Googlebot matching, and the X-Robots-Tag header
+  lighthouse.test.js    trimming a Lighthouse result and running Chrome, with its failures
+  lighthouse-issues.test.js  Lighthouse metrics and scores as issues
   report.test.js        the JSON report: summary, rules, ids and capped facts
   terminal.test.js      terminal tables and wrapping
   severity.test.js      severity counting and ordering
@@ -408,6 +416,8 @@ test/
   helpers/report-pages.js    audited pages and site issues for the report and terminal tests
 docs/seo-harness-plan.md     the original v1 plan
 docs/pageaudit-v2-plan.md    the v2 (multi-page) plan
+docs/pageaudit-v3-lighthouse-plan.md          the v3 (Lighthouse) plan
+docs/pageaudit-v4-page-data-html-report.md    the v4 (page data and HTML report) plan
 ```
 
 Pipeline: inputs -> `resolveUrls` -> `runAudit` (`fetchPage` -> `checkResponse` -> `parse` -> `checkHtml` per page) -> `checkSite`, `checkRobotsTxt`, `checkSitemapEntries` and, with `--check-links`, `checkLinkTargets` -> `checkLinks` -> `buildReport` -> table or JSON.
@@ -418,6 +428,7 @@ Every page issue has the same shape, so `report.js` has no per-check special cas
 
 ```js
 {
+  id: 'missing-alt-3f2a9c1e',     // type plus a hash of the page and the element, see src/issue-id.js
   url: 'https://example.com/',    // the page, as given in the input
   type: 'missing-alt',            // machine-readable identifier
   severity: 'error',              // 'error' | 'warning' | 'info'
@@ -425,21 +436,28 @@ Every page issue has the same shape, so `report.js` has no per-check special cas
   source: 'https://www.w3.org/WAI/tutorials/images/decorative/',
   message: 'Image missing alt attribute',
   context: '<img src="/a.jpg">'   // snippet for locating the problem
+  // optional: selector, html, parentHtml (the element behind the issue), actual and expected (length checks)
 }
 ```
 
 Site issues have the same fields except that `url` is replaced by `urls`, the list of pages involved.
 
-The JSON report is meant to be handed to a human or an LLM for prioritizing fixes, so its shape is kept stable:
+The JSON report is meant to be handed to a human or an LLM for prioritizing fixes, so its shape is kept stable (`schema/report.schema.json` has the details):
 
 ```js
 {
-  pages: [{ url, finalUrl, status, redirects: [{ url, status, location }], issues: [...] }],
+  schemaVersion: 1,
+  generatedAt: '2026-10-15T08:00:00.000Z',
+  pages: [{ url, finalUrl, status, redirects: [{ url, status, location }], issues: [...], facts, lighthouse }],
   site: [...],                    // site issues
   skipped: [{ input, source, reason }],
+  rules: { [type]: { title, why, fix } },
+  lighthouseAudits: { [id]: { description, learnMore } },
   summary: { pages, errors, warnings, infos }
 }
 ```
+
+`lighthouse` is only present on pages Lighthouse ran for, and `lighthouseAudits` only when an audit is described.
 
 `status` and `finalUrl` are `null` when the page could not be fetched at all.
 
@@ -448,10 +466,10 @@ The JSON report is meant to be handed to a human or an LLM for prioritizing fixe
 Tests use the built-in `node:test` runner with no extra dependencies. `npm test` runs `node --test test/*.test.js`, so helpers in `test/helpers/` are not run as tests. Nothing touches the network.
 
 - Unit tests cover each rule firing, not firing and the length boundaries.
-- HTML fixtures cover the positive and negative cases: `good.html` has no issues, `duplicate.html` shares its title, description and h1 with `good.html`, the `bad-*.html` files (`overlong`, `missing`, `canonical`, `images`, `empty`, `markup`, `hreflang`) trigger the remaining rules, and `hreflang.html` and `hreflang-fi.html` are a language pair with a missing return link and a `noindex` alternate. Several bad files are needed because some rules are mutually exclusive, for example a title cannot be both missing and too long.
-- Input tests read `urls.txt` (comments, duplicates, invalid lines), `sitemap.xml` and `sitemap-index.xml` (which lists itself as a nested index and a missing child sitemap).
+- HTML fixtures cover the positive and negative cases: `good.html` has no issues, `duplicate.html` shares its title, description and h1 with `good.html`, the `bad-*.html` files (`overlong`, `missing`, `canonical`, `images`, `empty`, `markup`, `hreflang`) trigger the remaining rules, and `hreflang.html` and `hreflang-fi.html` are a language pair with a missing return link and a `noindex` alternate. `noindex.html`, `noindex-header.html` and `blocked.html` feed the indexing, robots.txt and sitemap checks, `sitemap-quality.xml` lists them for the sitemap checks, and `rich.html` carries every kind of metadata for the signals tests. Several bad files are needed because some rules are mutually exclusive, for example a title cannot be both missing and too long.
+- Input tests read `urls.txt` (comments, duplicates, invalid lines), `sitemap.xml` and `sitemap-index.xml` (which lists `sitemap.xml`, a nested index that is not followed and a missing child sitemap).
 - Runner and site check tests pass a mocked `fetchPage` to `runAudit`, so concurrency, the per-host delay and failures are tested without HTTP.
-- CLI tests call `run()` with `--json` and `globalThis.fetch` mocked (`test/helpers/fixture-fetch.js`). Requests to `https://fixtures.test/<name>` are served from `test/fixtures/<name>`, `/timeout`, `/not-html`, `/server-error`, `/redirect-once` and `/redirect-twice` simulate other responses, and `links.html` links to each kind of target for the link checks. Every fixture page is served with a secure set of response headers, except `weak-headers.html`, which tests the header checks, and unknown names and other hosts fail with a 404 or a network error. This exercises the real input, fetch, parse, check, report and exit-code path. The terminal output is not run through `run()`; it is covered by the `test/report.test.js` unit tests.
+- CLI tests call `run()` with `--json` and `globalThis.fetch` mocked (`test/helpers/fixture-fetch.js`). Requests to `https://fixtures.test/<name>` are served from `test/fixtures/<name>`, `/timeout`, `/not-html`, `/server-error`, `/redirect-once` and `/redirect-twice` simulate other responses, and `links.html` links to each kind of target for the link checks. Every fixture page is served with a secure set of response headers, except `weak-headers.html`, which tests the header checks, and unknown names and other hosts fail with a 404 or a network error. This exercises the real input, fetch, parse, check, report and exit-code path. The terminal output is not run through `run()`; it is covered by the `test/terminal.test.js` unit tests.
 
 ## Limitations and out of scope
 
