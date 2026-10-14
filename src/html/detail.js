@@ -97,6 +97,7 @@ export function auditRow(audit, notes) {
 export function lcpElement(element) {
   if (!element) return ''
   return markup`<p class="note">Largest element on screen:</p>
+    ${element.nodeLabel ? markup`<p>${element.nodeLabel}</p>` : ''}
     <code>${element.selector}</code>
     ${element.snippet ? markup`<pre><code>${element.snippet}</code></pre>` : ''}`
 }

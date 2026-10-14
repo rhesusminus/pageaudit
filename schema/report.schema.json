@@ -341,7 +341,11 @@
           "required": ["selector", "snippet"],
           "properties": {
             "selector": { "type": "string" },
-            "snippet": { "$ref": "#/$defs/nullableString" }
+            "snippet": { "$ref": "#/$defs/nullableString" },
+            "nodeLabel": {
+              "type": "string",
+              "description": "The element's text or alt text, when the snippet does not already show it."
+            }
           }
         },
         "audits": {

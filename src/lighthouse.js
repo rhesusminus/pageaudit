@@ -75,7 +75,15 @@ export function summarize(lhr, runInfo = {}) {
     scores: Object.fromEntries(Object.entries(lhr.categories).map(([id, { score }]) => [id, percent(score)])),
     ...runInfo,
     metrics: Object.fromEntries(Object.entries(METRICS).map(([key, id]) => [key, metricValue(lhr.audits[id])])),
-    ...(lcpElement ? { lcpElement: { selector: lcpElement.selector, snippet: lcpElement.snippet ?? null } } : {}),
+    ...(lcpElement
+      ? {
+          lcpElement: {
+            selector: lcpElement.selector,
+            snippet: lcpElement.snippet ?? null,
+            ...(lcpElement.nodeLabel ? { nodeLabel: lcpElement.nodeLabel } : {})
+          }
+        }
+      : {}),
     audits: failing.slice(0, MAX_AUDITS).map((a) => summarizeAudit(a, categoryOf.get(a.id))),
     ...(failing.length > MAX_AUDITS ? { omittedAudits: failing.length - MAX_AUDITS } : {}),
     warnings: [...(lhr.runWarnings ?? []), ...audits.filter(isBroken).map(brokenMessage)]

@@ -130,7 +130,7 @@ The JSON report gets a `lighthouse` object on each audited page instead of the f
 - `lighthouseVersion` and `formFactor` (`mobile` by default), so a number can be placed later
 - `scores`: 0 to 100 for `performance`, `accessibility`, `best-practices` and `seo`
 - `metrics`: `fcp`, `lcp`, `tbt`, `speedIndex` in ms and `cls`
-- `lcpElement`: `{ selector, snippet }` of the element behind the largest contentful paint, when Lighthouse found it
+- `lcpElement`: `{ selector, snippet, nodeLabel? }` of the element behind the largest contentful paint, when Lighthouse found it. `nodeLabel` is its text or alt text, left out when the snippet already shows it
 - `runs` and `scoreSpread` (`[lowest, highest]` per category), placed after `scores`, only with `--lighthouse-runs` above 1
 - `audits`: only the audits scoring below 90, worst first, at most the 10 worst (`omittedAudits` counts the rest). Each has its category, title, score, display value, the `savings` when Lighthouse worked them out, and up to three affected `items`. `savings` can hold `ms` and `bytes` (overall) and `metrics` (the gain per metric: `fcp`, `lcp`, `inp`, `tbt` in ms and `cls`). Zero is left out, as it means no estimate. An item has only the fields Lighthouse gave: `url` (with `line`), `selector`, `nodeLabel`, `snippet`, `explanation` (why it fails, such as the contrast ratio, up to 500 characters), `label` (a failed check, a console error or a third party), `wastedMs`, `wastedBytes` and `totalBytes`. Other text is capped at 300 characters. `items` used to be a list of strings
 - the top-level `lighthouseAudits` object holds each audit's plain-words `description` and first `learnMore` link once, by audit id, instead of on every page

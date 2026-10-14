@@ -342,7 +342,7 @@ const detailedLighthouse = {
   formFactor: 'mobile',
   runs: 3,
   scoreSpread: { performance: [70, 90], seo: null },
-  lcpElement: { selector: 'img.hero', snippet: '<img class="hero">' },
+  lcpElement: { selector: 'img.hero', snippet: '<img class="hero">', nodeLabel: 'Hero <photo>' },
   audits: [
     {
       id: 'unused-css',
@@ -374,6 +374,7 @@ test('renderHtml: Lighthouse audits show their category, savings, items and expl
   assert.match(out, /Cut &lt;b&gt;CSS&lt;\/b&gt;\./)
   assert.match(out, /<a href="https:\/\/web\.dev\/x"[^>]*>\s*Learn more\s*<\/a>/)
   assert.match(out, /img\.hero/)
+  assert.match(out, /<p>Hero &lt;photo&gt;<\/p>/)
   assert.match(out, /Lighthouse 12\.0\.0, mobile\. The middle of 3 runs; scores ranged: speed 70 to 90\./)
   // Without notes, items or savings an audit has no details block.
   const plain = renderHtml(report)

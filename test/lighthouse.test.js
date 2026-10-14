@@ -352,6 +352,23 @@ test('summarize: records the Lighthouse version, the form factor and the LCP ele
   for (const key of ['lighthouseVersion', 'formFactor', 'lcpElement']) assert.equal(key in bare, false)
 })
 
+// A snippet without the element's text keeps the label, so the report says which heading or image it is.
+test('summarize: the LCP element keeps its label when the snippet does not show it', () => {
+  const lhr = structuredClone(LHR)
+  lhr.audits['lcp-breakdown-insight'] = audit('lcp-breakdown-insight', null, {
+    scoreDisplayMode: 'informative',
+    details: {
+      type: 'list',
+      items: [{ type: 'node', selector: 'main > h2', snippet: '<h2 class="x">', nodeLabel: 'Energiaa talteen' }]
+    }
+  })
+  assert.deepEqual(summarize(lhr).lcpElement, {
+    selector: 'main > h2',
+    snippet: '<h2 class="x">',
+    nodeLabel: 'Energiaa talteen'
+  })
+})
+
 // Gives each run its own performance score, in the order the runs happen.
 function scripted(performances, { fail = [] } = {}) {
   let n = 0
