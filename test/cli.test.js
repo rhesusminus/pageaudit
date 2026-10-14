@@ -151,22 +151,13 @@ test('cli: pages that cannot be audited become issues instead of stopping the ru
   assert.deepEqual(report.summary, { pages: 5, errors: 3, warnings: 0, infos: 1 })
 })
 
-test('cli: a page the checks cannot process is an issue and the other pages are kept', async (t) => {
-  const path = join(await tempDir(t), 'report.html')
+test('cli: a page nested deeper than Chrome parses is checked like any other', async (t) => {
   const names = ['good.html', 'deep-nesting.html']
-  const { code, report } = await runJson(t, [...names.map(fixtureUrl), '--html', path])
-  assert.equal(code, 1)
-  assert.deepEqual(
-    report.pages.map((p) => [p.status, pageTypes(p)]),
-    [
-      [200, []],
-      [200, ['check-failed']]
-    ]
-  )
-  assert.deepEqual(report.pages[0].facts, GOOD_FACTS)
-  assert.equal(report.pages[1].facts, null)
-  assert.equal(report.pages[1].issues[0].message, 'Could not check the page: its elements are nested too deeply')
-  assert.match(await readFile(path, 'utf8'), /The page could not be checked/)
+  const { code, report } = await runJson(t, names.map(fixtureUrl))
+  assert.equal(code, 0)
+  assert.equal(report.pages[1].status, 200)
+  assert.equal(report.pages[1].facts.title, 'Deep')
+  assert.ok(report.pages.every((p) => !pageTypes(p).includes('check-failed')))
 })
 
 test('cli: a page over 2 MB is checked the way Googlebot reads it, only the first 2 MB', async (t) => {
@@ -369,16 +360,6 @@ test('cli: --lighthouse attaches a summary to pages that returned HTML', async (
   assert.deepEqual(seen, [fixtureUrl('good.html')])
   assert.deepEqual(report.pages[0].lighthouse, summary)
   assert.equal('lighthouse' in report.pages[1], false)
-})
-
-test('cli: --lighthouse still runs on a page the static checks could not process', async (t) => {
-  const summary = { scores: { seo: 90 }, metrics: {}, audits: [], warnings: [] }
-  const seen = []
-  const lighthouse = async (list) => (seen.push(...list), [{ summary }])
-  const { report } = await runJson(t, [fixtureUrl('deep-nesting.html'), '--lighthouse'], { lighthouse })
-  assert.deepEqual(seen, [fixtureUrl('deep-nesting.html')])
-  assert.deepEqual(report.pages[0].lighthouse, summary)
-  assert.deepEqual(pageTypes(report.pages[0]), ['check-failed'])
 })
 
 test('cli: a Lighthouse failure is an info issue on the page and does not stop the run', async (t) => {
@@ -907,21 +888,18 @@ test('cli: --check-links does not report orphan pages when a sitemap page could 
   assert.ok(report.site.every((issue) => issue.type !== 'orphan-page'))
 })
 
-test('cli: --check-links does not report orphan pages when a sitemap page could not be checked', async (t) => {
+test('cli: --check-links reads the links of a sitemap page nested deeper than Chrome parses', async (t) => {
   const page = (body) => `<html lang="en"><head><title>Page</title></head><body>${body}</body></html>`
   const deep = 10000
   mockSite(t, {
     '/robots.txt': 'User-agent: *\nAllow: /',
     '/s.xml': '<urlset><url><loc>https://a.test/a</loc></url><url><loc>https://a.test/b</loc></url></urlset>',
-    // The only link to /b is on a page whose HTML the checks cannot process, so it is never read.
-    '/a': page(`<a href="/b">B</a>${'<span>'.repeat(deep)}x${'</span>'.repeat(deep)}`),
-    '/b': page('')
+    // The only link to /b is on a page nested far past Chrome's limit, so /b is not an orphan.
+    '/a': page(`${'<span>'.repeat(deep)}<a href="/b">B</a>${'</span>'.repeat(deep)}`),
+    '/b': page('<a href="/a">A</a>')
   })
   const { report } = await runCliWithMock(t, ['--sitemap', 'https://a.test/s.xml', '--check-links'])
-  assert.deepEqual(
-    report.pages.map((p) => pageTypes(p).includes('check-failed')),
-    [true, false]
-  )
+  assert.ok(report.pages.every((p) => !pageTypes(p).includes('check-failed')))
   assert.ok(report.site.every((issue) => issue.type !== 'orphan-page'))
 })
 

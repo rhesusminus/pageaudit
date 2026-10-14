@@ -9,7 +9,7 @@ export const ADVICE = {
   'check-failed': {
     title: 'The page could not be checked',
     why: 'The page loaded, but the audit could not read its HTML, so none of the page checks ran and its problems are unknown.',
-    fix: 'The message says what went wrong. Elements nested too deeply usually come from tags that are never closed: fix the HTML and run the audit again. Pass any other message on to whoever runs the audit.'
+    fix: 'The message says what went wrong. Pass it on to whoever runs the audit.'
   },
   'http-status': {
     title: 'The page returns an error',

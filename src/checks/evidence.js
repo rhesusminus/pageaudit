@@ -1,3 +1,4 @@
+import { isElement } from '../parse.js'
 import { collapseWhitespace, limit } from '../text.js'
 
 const MAX_HTML = 500
@@ -7,9 +8,6 @@ const FRAME = new Set(['html', 'head', 'body'])
 const VALID_ID = /^[A-Za-z][\w-]*$/
 
 const cap = (text, max = MAX_HTML) => limit(collapseWhitespace(text), max)
-
-// domhandler types script and style elements 'script' and 'style' instead of 'tag'.
-const isElement = (node) => node?.type === 'tag' || node?.type === 'script' || node?.type === 'style'
 
 // How many elements have each id, counted once per document. An id that is used twice does not find one element.
 const idCounts = new WeakMap()
