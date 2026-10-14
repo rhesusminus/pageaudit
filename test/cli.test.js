@@ -335,9 +335,27 @@ test('cli: usage errors exit 2', async (t) => {
 test('cli: --help prints the options and exits 0', async (t) => {
   const { code, stdout } = await runCli(t, ['--help'])
   assert.equal(code, 0)
-  for (const option of ['--urls-file', '--sitemap', '--limit', '--concurrency', '--delay', '--fail-on', '--json']) {
+  for (const option of [
+    '--urls-file',
+    '--sitemap',
+    '--limit',
+    '--concurrency',
+    '--delay',
+    '--fail-on',
+    '--json',
+    '--no-json'
+  ]) {
     assert.match(stdout, new RegExp(option))
   }
+})
+
+test('cli: --no-json prints the tables, --json prints JSON', async (t) => {
+  const table = await runCli(t, [fixtureUrl('good.html'), '--no-json'])
+  assert.equal(table.code, 0)
+  assert.throws(() => JSON.parse(table.stdout))
+  assert.match(table.stdout, /\d+ errors?, \d+ warnings?/)
+  const json = await runCli(t, [fixtureUrl('good.html'), '--json'])
+  assert.equal(JSON.parse(json.stdout).pages.length, 1)
 })
 
 test('cli: spinner is only enabled on a TTY that reports columns', () => {

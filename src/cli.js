@@ -58,7 +58,7 @@ Options:
   --title <text>       report title in the HTML report (default "Website audit")
   --client <name>      client name shown in the HTML report
   --logo <file>        logo for the HTML report (png, jpg, gif, webp or svg, at most 512 KB)
-  --json               print the report as JSON (default when stdout is not a TTY)
+  --json, --no-json    print the report as JSON (default when stdout is not a TTY), or force the table
   -h, --help           show this help
 
 --urls-file, --sitemap and --lighthouse-page can be given more than once.`
@@ -106,7 +106,12 @@ function requireValues(values, names) {
 }
 
 function parseOptions(argv) {
-  const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: OPTIONS })
+  const { values, positionals } = parseArgs({
+    args: argv,
+    allowPositionals: true,
+    allowNegative: true,
+    options: OPTIONS
+  })
   requireValues(values, ['out', 'html', 'title', 'client', 'logo'])
   if (values['lighthouse-page']?.includes('')) throw new Error('--lighthouse-page needs a value')
   const failOn = values['fail-on'] ?? 'error'

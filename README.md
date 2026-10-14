@@ -52,7 +52,7 @@ Link-following crawling is not supported.
 | `--title <text>`          |         | Report title in the HTML report (default `Website audit`). Needs `--html`.                                                                                                                                          |
 | `--client <name>`         |         | Client name in the HTML report. Needs `--html`.                                                                                                                                                                     |
 | `--logo <file>`           |         | Logo for the HTML report: png, jpg, gif, webp or svg, at most 512 KB. Needs `--html`.                                                                                                                               |
-| `--json`                  |         | Print the JSON report. Also the default when stdout is not a TTY.                                                                                                                                                   |
+| `--json`, `--no-json`     |         | Print the JSON report, or force the tables. JSON is the default when stdout is not a TTY.                                                                                                                           |
 
 Each request has a 15 s timeout (covering redirects and the body), follows up to 10 redirects and sends `User-Agent: pageaudit/<version> (+https://github.com/rhesusminus/pageaudit)`.
 
@@ -66,6 +66,8 @@ In a terminal a spinner shows `Auditing 12/40 pages...` on stderr (skipped for J
 4. A final line such as `40 pages, 6 errors, 19 warnings, 3 infos`.
 
 Tables follow the terminal width (80 to 114 columns).
+
+When stdout is not a terminal the report is printed as JSON. `--no-json` prints the tables there too, for example to page them with `pageaudit https://example.com --no-json | less -R`, and `--json` prints JSON in a terminal.
 
 ### Exit codes
 
