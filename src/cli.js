@@ -21,7 +21,7 @@ import { lighthouseFailed, runLighthouse, shortSummary } from './lighthouse.js'
 import { hostThrottle } from './concurrency.js'
 import { checkLinkTargets, linksComplete, MAX_LINK_CHECKS } from './links.js'
 import { lighthouseIssues } from './lighthouse-issues.js'
-import { directoryOutputs, writeReportFile } from './output.js'
+import { reportPathProblems, writeReportFile } from './output.js'
 import { buildReport } from './report.js'
 import { formatReport } from './terminal.js'
 import { checksFailed, DEFAULT_CONCURRENCY, DEFAULT_DELAY_MS, runAudit } from './runner.js'
@@ -297,14 +297,14 @@ async function loadLogo(path) {
   }
 }
 
-// Report files that are directories fail only after the whole audit, so they are refused up front.
-async function outputsAreFiles(options) {
-  const directories = await directoryOutputs([
+// Report paths that would fail only after the whole audit are refused up front.
+async function reportPathsUsable(options) {
+  const problems = await reportPathProblems([
     ['--out', options.out],
     ['--html', options.html]
   ])
-  if (directories.length) console.error(directories.join('\n'))
-  return directories.length === 0
+  if (problems.length) console.error(problems.join('\n'))
+  return problems.length === 0
 }
 
 // Orphan pages can only be told apart when the audit followed every link of a whole sitemap: with a --limit cut, a
@@ -362,7 +362,7 @@ export async function run(argv, { stdin = process.stdin, lighthouse = runLightho
     return 2
   }
 
-  if (!(await outputsAreFiles(options))) return 2
+  if (!(await reportPathsUsable(options))) return 2
 
   const logo = await loadLogo(options.branding.logo)
   if (logo === undefined) return 2
