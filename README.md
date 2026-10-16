@@ -10,6 +10,7 @@ Requires Node 24 (see `.nvmrc`).
 
 ```sh
 npm install
+node bin/pageaudit.js                                           # asks for the pages to audit
 node bin/pageaudit.js https://example.com                       # one page
 node bin/pageaudit.js https://a.com/x https://a.com/y           # several pages
 node bin/pageaudit.js --urls-file urls.txt                      # one URL per line, # for comments
@@ -23,6 +24,8 @@ npm test
 ```
 
 The `pageaudit` bin is declared in `package.json`, so `npm link` makes it available as `pageaudit`.
+
+Run with no arguments in a terminal, `pageaudit` asks for the page URLs (several separated by spaces) and then audits them as if they were given as arguments. Without a terminal on stdin and stdout, as in scripts and CI, no arguments is still a usage error.
 
 ### Inputs
 
@@ -76,6 +79,7 @@ Tables follow the terminal width (80 to 114 columns).
 | 0    | No errors (warnings and infos are allowed, unless `--fail-on warning`)                      |
 | 1    | At least one error, or a warning with `--fail-on warning`                                   |
 | 2    | Usage error, an unreadable input, an output file that cannot be written, or no URL to audit |
+| 130  | The questions asked when run with no arguments were cancelled (Ctrl+C or Esc)               |
 
 A page that cannot be fetched or returns an error status is an error on that page (exit 1), not a reason to stop. A sitemap that was read but lists no URL to audit is still checked, so that run exits 0 or 1. An unreadable input is a URL file, sitemap or `--logo` that cannot be read. An `--out` or `--html` path that is a directory exits 2 before any page is fetched, and a report file that cannot be written exits 2 even after a complete audit.
 
@@ -325,9 +329,10 @@ Judgment calls that are not straight from those pages:
 ## Architecture
 
 ```
-bin/pageaudit.js        entry point, calls run() and sets the exit code
+bin/pageaudit.js        entry point, asks for the setup when given no arguments, calls run() and sets the exit code
 src/
   cli.js                arg parsing, spinner, wires the pipeline together
+  wizard.js             askArgs(): the questions asked when run with no arguments in a terminal, turned into arguments
   input/
     args.js             URLs from CLI arguments
     file.js             URLs from --urls-file (or stdin), with the optional lighthouse marker
