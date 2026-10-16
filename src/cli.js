@@ -11,7 +11,7 @@ import {
   checkSitemapHosts
 } from './checks/site/sitemap.js'
 import { readLogo } from './html/logo.js'
-import { renderHtml } from './html/render.js'
+import { DEFAULT_TITLE, renderHtml } from './html/render.js'
 import { fromArgs } from './input/args.js'
 import { fromFile } from './input/file.js'
 import { resolveUrls } from './input/resolve.js'
@@ -55,7 +55,7 @@ Options:
   --fail-on <level>    exit 1 on any "error" (default) or on any "warning" or error
   --out <path>         also write the JSON report to a file, for example to hand to Claude
   --html <path>        also write a report for customers as one self-contained HTML file
-  --title <text>       report title in the HTML report (default "Website audit")
+  --title <text>       report title in the HTML report (default "${DEFAULT_TITLE}")
   --client <name>      client name shown in the HTML report
   --logo <file>        logo for the HTML report (png, jpg, gif, webp or svg, at most 512 KB)
   --json               print the report as JSON (default when stdout is not a TTY)

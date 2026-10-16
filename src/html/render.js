@@ -7,11 +7,13 @@ import { CSS } from './styles.js'
 // Opens every collapsed section while printing, so a PDF holds the whole report.
 const PRINT_SCRIPT = `(function(){var closed=[];addEventListener('beforeprint',function(){closed=[].slice.call(document.querySelectorAll('details:not([open])'));closed.forEach(function(d){d.open=true})});addEventListener('afterprint',function(){closed.forEach(function(d){d.open=false})})})()`
 
+export const DEFAULT_TITLE = 'Website audit'
+
 // Renders the report as one self-contained HTML document: inline CSS, no external
 // requests, readable offline and printable to PDF. `logo` is a data URI.
 export function renderHtml(
   report,
-  { title = 'Website audit', client = null, logo = null, totalUrls = report.pages.length, timeZone } = {}
+  { title = DEFAULT_TITLE, client = null, logo = null, totalUrls = report.pages.length, timeZone } = {}
 ) {
   const pages = pagesWithSiteIssues(report)
   const health = pageHealth(pages)
