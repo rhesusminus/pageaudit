@@ -1,5 +1,5 @@
 import { accessSync, constants, statSync } from 'node:fs'
-import { cancel, intro, isCancel, outro, select, text } from '@clack/prompts'
+import { cancel, intro, isCancel, multiselect, outro, select, text } from '@clack/prompts'
 import { normalize } from './input/resolve.js'
 
 // The setup is asked only when nothing was given and a person is at the terminal, so scripts, pipes and CI keep
@@ -45,10 +45,13 @@ export function checkUrlFile(value = '') {
   }
 }
 
+// The limit answer that audits every page. An empty answer becomes it, so the answer shown is never blank.
+const NO_LIMIT = 'all'
+
 export function checkLimit(value = '') {
   const limit = value.trim()
-  if (limit && !(/^\d+$/.test(limit) && Number(limit) >= 1)) {
-    return 'Enter a whole number of at least 1, or leave it empty to audit all'
+  if (limit && limit !== NO_LIMIT && !(/^\d+$/.test(limit) && Number(limit) >= 1)) {
+    return `Enter a whole number of at least 1, or leave it empty to audit ${NO_LIMIT}`
   }
 }
 
@@ -77,10 +80,23 @@ const SOURCES = {
   }
 }
 
+// The checks that can be added to the static ones, with the hint shown while choosing and their option.
+const CHECKS = {
+  lighthouse: {
+    label: 'Lighthouse',
+    hint: 'speed and quality scores, needs Chrome, slow',
+    flag: '--lighthouse'
+  },
+  links: { label: 'Internal links', hint: 'where the internal links lead, more requests', flag: '--check-links' }
+}
+
 // The command line arguments that run the audit the answers describe.
-export function answersToArgs({ source, input, limit }) {
+export function answersToArgs({ source, input, limit, checks = [] }) {
   const args = SOURCES[source].args(input)
-  if (limit?.trim()) args.push('--limit', limit.trim())
+  const max = limit?.trim()
+  if (max && max !== NO_LIMIT) args.push('--limit', max)
+  // In a fixed order, so the command does not depend on the order the checks were picked in.
+  for (const [name, { flag }] of Object.entries(CHECKS)) if (checks.includes(name)) args.push(flag)
   return args
 }
 
@@ -114,7 +130,20 @@ export async function askArgs(streams = {}) {
     limit: ({ source }) =>
       source === 'pages'
         ? undefined
-        : text({ message: 'How many pages at most?', placeholder: 'all', validate: checkLimit, ...streams })
+        : text({
+            message: 'How many pages at most?',
+            placeholder: NO_LIMIT,
+            defaultValue: NO_LIMIT,
+            validate: checkLimit,
+            ...streams
+          }),
+    checks: () =>
+      multiselect({
+        message: 'Which extra checks should run?',
+        options: Object.entries(CHECKS).map(([value, { label, hint }]) => ({ value, label, hint })),
+        required: false,
+        ...streams
+      })
   })
   if (!answers) {
     cancel('Cancelled.', streams)
