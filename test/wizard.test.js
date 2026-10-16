@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { PassThrough, Writable } from 'node:stream'
+import { stripVTControlCharacters } from 'node:util'
 import {
   answersToArgs,
   askArgs,
@@ -35,7 +36,7 @@ async function askShown(...typed) {
     await new Promise((resolve) => setImmediate(resolve))
     input.write(keys)
   }
-  return { args: await answer, shown: shown.join('') }
+  return { args: await answer, shown: stripVTControlCharacters(shown.join('')) }
 }
 
 const ask = async (...typed) => (await askShown(...typed)).args
@@ -74,9 +75,9 @@ test('wizard: a URL file must be a readable file', () => {
   assert.equal(checkUrlFile(fixturePath('')), `${fixturePath('')} is not a file`)
 })
 
-test('wizard: the limit is empty or a whole number of at least 1', () => {
-  for (const limit of ['', ' ', undefined, '1', ' 20 ']) assert.equal(checkLimit(limit), undefined, limit)
-  for (const limit of ['0', '-1', '2.5', 'ten']) {
+test('wizard: the limit is empty, all or a whole number of at least 1', () => {
+  for (const limit of ['', ' ', undefined, 'all', '1', ' 20 ']) assert.equal(checkLimit(limit), undefined, limit)
+  for (const limit of ['0', '-1', '2.5', 'ten', 'All']) {
     assert.equal(checkLimit(limit), 'Enter a whole number of at least 1, or leave it empty to audit all', limit)
   }
 })
@@ -99,6 +100,7 @@ test('wizard: a sitemap or a file becomes its option, with the limit when one wa
     '--limit',
     '20'
   ])
+  assert.deepEqual(answersToArgs({ source: 'file', input: ' urls.txt ', limit: 'all' }), ['--urls-file', 'urls.txt'])
   assert.deepEqual(answersToArgs({ source: 'file', input: ' urls.txt ', limit: undefined }), [
     '--urls-file',
     'urls.txt'
@@ -118,9 +120,12 @@ test('wizard: asks for a sitemap and a limit', async () => {
   ])
 })
 
-test('wizard: asks for a URL file, and an empty limit audits all', async () => {
+test('wizard: asks for a URL file, and an empty limit audits all and is shown as all', async () => {
   const file = fixturePath('urls.txt')
-  assert.deepEqual(await ask(DOWN + DOWN + ENTER, `${file}\r`, ENTER), ['--urls-file', file])
+  const { args, shown } = await askShown(DOWN + DOWN + ENTER, `${file}\r`, ENTER)
+  assert.deepEqual(args, ['--urls-file', file])
+  // The answered question, not the placeholder shown while it is asked.
+  assert.match(shown, /◇ {2}How many pages at most\?\n│ {2}all\n/)
 })
 
 test('wizard: shows the command it would run', async () => {

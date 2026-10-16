@@ -45,10 +45,13 @@ export function checkUrlFile(value = '') {
   }
 }
 
+// The limit answer that audits every page. An empty answer becomes it, so the answer shown is never blank.
+const NO_LIMIT = 'all'
+
 export function checkLimit(value = '') {
   const limit = value.trim()
-  if (limit && !(/^\d+$/.test(limit) && Number(limit) >= 1)) {
-    return 'Enter a whole number of at least 1, or leave it empty to audit all'
+  if (limit && limit !== NO_LIMIT && !(/^\d+$/.test(limit) && Number(limit) >= 1)) {
+    return `Enter a whole number of at least 1, or leave it empty to audit ${NO_LIMIT}`
   }
 }
 
@@ -80,7 +83,8 @@ const SOURCES = {
 // The command line arguments that run the audit the answers describe.
 export function answersToArgs({ source, input, limit }) {
   const args = SOURCES[source].args(input)
-  if (limit?.trim()) args.push('--limit', limit.trim())
+  const max = limit?.trim()
+  if (max && max !== NO_LIMIT) args.push('--limit', max)
   return args
 }
 
@@ -114,7 +118,13 @@ export async function askArgs(streams = {}) {
     limit: ({ source }) =>
       source === 'pages'
         ? undefined
-        : text({ message: 'How many pages at most?', placeholder: 'all', validate: checkLimit, ...streams })
+        : text({
+            message: 'How many pages at most?',
+            placeholder: NO_LIMIT,
+            defaultValue: NO_LIMIT,
+            validate: checkLimit,
+            ...streams
+          })
   })
   if (!answers) {
     cancel('Cancelled.', streams)
