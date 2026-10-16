@@ -7,16 +7,25 @@ const tty = { isTTY: true }
 const pipe = { isTTY: undefined }
 
 // Answers the prompts by typing into clack's input, one chunk per prompt once the previous output has rendered.
-async function ask(...typed) {
+// Returns the arguments and what was shown.
+async function askShown(...typed) {
   const input = new PassThrough()
-  const output = new Writable({ write: (_chunk, _encoding, done) => done() })
+  const shown = []
+  const output = new Writable({
+    write: (chunk, _encoding, done) => {
+      shown.push(chunk.toString())
+      done()
+    }
+  })
   const answer = askArgs({ input, output })
   for (const keys of typed) {
     await new Promise((resolve) => setImmediate(resolve))
     input.write(keys)
   }
-  return answer
+  return { args: await answer, shown: shown.join('') }
 }
+
+const ask = async (...typed) => (await askShown(...typed)).args
 
 test('wizard: only runs with no arguments and a terminal on both ends', () => {
   assert.equal(wantsWizard([], tty, tty), true)
@@ -43,6 +52,11 @@ test('wizard: every page URL becomes an argument', () => {
 
 test('wizard: returns the arguments for the typed pages', async () => {
   assert.deepEqual(await ask('https://a.test/ https://b.test/\r'), ['https://a.test/', 'https://b.test/'])
+})
+
+test('wizard: shows the command it would run', async () => {
+  const { shown } = await askShown('https://a.test/ https://b.test/\r')
+  assert.match(shown, /Would run: pageaudit https:\/\/a\.test\/ https:\/\/b\.test\//)
 })
 
 test('wizard: asks again after an invalid URL', async () => {

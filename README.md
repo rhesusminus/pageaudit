@@ -10,7 +10,7 @@ Requires Node 24 (see `.nvmrc`).
 
 ```sh
 npm install
-node bin/pageaudit.js                                           # asks for the pages to audit
+node bin/pageaudit.js                                           # asks for the pages, shows the command
 node bin/pageaudit.js https://example.com                       # one page
 node bin/pageaudit.js https://a.com/x https://a.com/y           # several pages
 node bin/pageaudit.js --urls-file urls.txt                      # one URL per line, # for comments
@@ -25,7 +25,7 @@ npm test
 
 The `pageaudit` bin is declared in `package.json`, so `npm link` makes it available as `pageaudit`.
 
-Run with no arguments in a terminal, `pageaudit` asks for the page URLs (several separated by spaces) and then audits them as if they were given as arguments. Without a terminal on stdin and stdout, as in scripts and CI, no arguments is still a usage error.
+Run with no arguments in a terminal, `pageaudit` asks for the page URLs (several separated by spaces) and shows the command that would audit them. While the questions are being built it does not run that command, so trying it sends no requests, and it exits 0. Without a terminal on stdin and stdout, as in scripts and CI, no arguments is still a usage error.
 
 ### Inputs
 
@@ -329,7 +329,7 @@ Judgment calls that are not straight from those pages:
 ## Architecture
 
 ```
-bin/pageaudit.js        entry point, asks for the setup when given no arguments, calls run() and sets the exit code
+bin/pageaudit.js        entry point, calls run() (or with no arguments asks for the setup) and sets the exit code
 src/
   cli.js                arg parsing, spinner, wires the pipeline together
   wizard.js             askArgs(): the questions asked when run with no arguments in a terminal, turned into arguments

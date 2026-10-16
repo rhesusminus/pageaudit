@@ -37,6 +37,7 @@ export async function askArgs(streams = {}) {
     cancel('Cancelled.', streams)
     return null
   }
-  outro('Starting the audit', streams)
-  return answersToArgs({ pages })
+  const args = answersToArgs({ pages })
+  outro(`Would run: pageaudit ${args.join(' ')}`, streams)
+  return args
 }
