@@ -70,6 +70,8 @@ In a terminal a spinner shows `Auditing 12/40 pages...` on stderr (skipped for J
 3. A `Site` section with the cross-page issues.
 4. A final line such as `40 pages, 6 errors, 19 warnings, 3 infos`.
 
+With `--out` or `--html`, a line on stderr then says where each report file was written, such as `HTML report written to report.html`, in JSON output too.
+
 Tables follow the terminal width (80 to 114 columns).
 
 ### Exit codes
