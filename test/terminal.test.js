@@ -98,6 +98,34 @@ test('formatIssueTable: wide characters wrap by display width without losing tex
   assert.equal(contextLines(plain).join('').replaceAll(' ', ''), title.replaceAll(' ', ''))
 })
 
+// The text of one column of a table, its lines joined with spaces.
+const columnText = (plain, column) =>
+  plain
+    .split('\n')
+    .filter((l) => l.startsWith('│'))
+    .slice(1)
+    .map((l) => l.split('│')[column].trim())
+    .filter(Boolean)
+    .join(' ')
+
+const LONG_WORD_MESSAGE = 'No X-Content-Type-Options-and-X-Frame-Options: nosniff header'
+
+test('formatIssueTable: a message word longer than the column is split, not cut off', () => {
+  const plain = plainColored(() => formatIssueTable([issue('info', 'seo', LONG_WORD_MESSAGE, '<x>')], 80))
+  assert.doesNotMatch(plain, /…/)
+  assert.equal(columnText(plain, 3).replaceAll(' ', ''), LONG_WORD_MESSAGE.replaceAll(' ', ''))
+  assert.deepEqual([...tableWidths(plain)], [80])
+})
+
+test('formatSiteTable: a message word longer than the column is split, not cut off', () => {
+  const issues = [{ ...site[0], message: LONG_WORD_MESSAGE, context: 'https://a.test: no header' }]
+  const plain = plainColored(() => formatSiteTable(issues, 80))
+  assert.doesNotMatch(plain, /…/)
+  const text = `${LONG_WORD_MESSAGE} https://a.test: no header`
+  assert.equal(columnText(plain, 3).replaceAll(' ', ''), text.replaceAll(' ', ''))
+  assert.deepEqual([...tableWidths(plain)], [80])
+})
+
 test('formatIssueTable: lists errors first, then warnings, then infos', () => {
   const plain = stripVTControlCharacters(formatIssueTable([images[2], images[1], images[0]]))
   const severities = plain.match(/│ (error|warning|info) /g).map((m) => m.slice(2, -1))

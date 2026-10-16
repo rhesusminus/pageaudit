@@ -68,14 +68,13 @@ export function formatIssueTable(issues, columns) {
   const table = new Table({
     head: ['Severity', 'Category', 'Issue', 'Context'],
     colWidths: widths,
-    wordWrap: true,
     style: { head: [] }
   })
   for (const issue of bySeverity(issues)) {
     table.push([
       COLORS[issue.severity](issue.severity),
       chalk.dim(issue.category),
-      issue.message,
+      wrap(issue.message, widths[2]),
       wrap(chalk.dim(issue.context ?? ''), widths[3])
     ])
   }
@@ -87,14 +86,13 @@ export function formatSiteTable(issues, columns) {
   const table = new Table({
     head: ['Severity', 'Category', 'Issue', 'Pages'],
     colWidths: widths,
-    wordWrap: true,
     style: { head: [] }
   })
   for (const issue of bySeverity(issues)) {
     table.push([
       COLORS[issue.severity](issue.severity),
       chalk.dim(issue.category),
-      `${issue.message}\n${wrap(chalk.dim(issue.context), widths[2])}`,
+      `${wrap(issue.message, widths[2])}\n${wrap(chalk.dim(issue.context), widths[2])}`,
       issue.urls.map((url) => wrap(url, widths[3])).join('\n')
     ])
   }
