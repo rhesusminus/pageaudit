@@ -64,7 +64,7 @@ Options:
 --urls-file, --sitemap and --lighthouse-page can be given more than once.
 Run with no arguments in a terminal to be asked what to audit and shown the command (it is not run yet).`
 
-const OPTIONS = {
+export const OPTIONS = {
   'urls-file': { type: 'string', multiple: true },
   sitemap: { type: 'string', multiple: true },
   limit: { type: 'string' },
