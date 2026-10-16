@@ -61,7 +61,8 @@ Options:
   --json               print the report as JSON (default when stdout is not a TTY)
   -h, --help           show this help
 
---urls-file, --sitemap and --lighthouse-page can be given more than once.`
+--urls-file, --sitemap and --lighthouse-page can be given more than once.
+Run with no arguments in a terminal to be asked for the pages and shown the command (it is not run yet).`
 
 const OPTIONS = {
   'urls-file': { type: 'string', multiple: true },
