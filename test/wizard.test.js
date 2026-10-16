@@ -23,7 +23,8 @@ const DOWN = '\u001B[B'
 const SPACE = ' '
 
 // Answers the prompts by typing into clack's input, one chunk per prompt once the previous output has rendered.
-// Returns the arguments and what was shown.
+// Returns the arguments and what was shown. A prompt still waiting after 5 s, because the test typed too few
+// answers, is cancelled, so the test fails instead of hanging.
 async function askShown(...typed) {
   const input = new PassThrough()
   const shown = []
@@ -33,7 +34,7 @@ async function askShown(...typed) {
       done()
     }
   })
-  const answer = askArgs({ input, output })
+  const answer = askArgs({ input, output, signal: AbortSignal.timeout(5000) })
   for (const keys of typed) {
     await new Promise((resolve) => setImmediate(resolve))
     input.write(keys)
