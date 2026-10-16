@@ -62,7 +62,7 @@ Options:
   -h, --help           show this help
 
 --urls-file, --sitemap and --lighthouse-page can be given more than once.
-Run with no arguments in a terminal to be asked what to audit and shown the command (it is not run yet).`
+Run with no arguments in a terminal to be asked what to audit, shown the command and asked whether to run it.`
 
 export const OPTIONS = {
   'urls-file': { type: 'string', multiple: true },
