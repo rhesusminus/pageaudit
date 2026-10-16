@@ -16,9 +16,11 @@ const tty = { isTTY: true }
 const pipe = { isTTY: undefined }
 const fixturePath = (name) => new URL(`./fixtures/${name}`, import.meta.url).pathname
 
-// Keys for the select prompt: Enter picks the highlighted choice, the arrow moves down.
+// Keys for the select prompts: Enter goes on with the highlighted or picked choices, the arrow moves down and
+// Space picks in a multiselect.
 const ENTER = '\r'
 const DOWN = '\u001B[B'
+const SPACE = ' '
 
 // Answers the prompts by typing into clack's input, one chunk per prompt once the previous output has rendered.
 // Returns the arguments and what was shown.
@@ -107,12 +109,23 @@ test('wizard: a sitemap or a file becomes its option, with the limit when one wa
   ])
 })
 
+test('wizard: each picked check adds its option, in a fixed order', () => {
+  const pages = { source: 'pages', input: 'https://a.test/' }
+  assert.deepEqual(answersToArgs({ ...pages, checks: [] }), ['https://a.test/'])
+  assert.deepEqual(answersToArgs({ ...pages, checks: ['links'] }), ['https://a.test/', '--check-links'])
+  assert.deepEqual(answersToArgs({ ...pages, checks: ['links', 'lighthouse'] }), [
+    'https://a.test/',
+    '--lighthouse',
+    '--check-links'
+  ])
+})
+
 test('wizard: returns the arguments for the typed pages, without asking for a limit', async () => {
-  assert.deepEqual(await ask(ENTER, 'https://a.test/ https://b.test/\r'), ['https://a.test/', 'https://b.test/'])
+  assert.deepEqual(await ask(ENTER, 'https://a.test/ https://b.test/\r', ENTER), ['https://a.test/', 'https://b.test/'])
 })
 
 test('wizard: asks for a sitemap and a limit', async () => {
-  assert.deepEqual(await ask(DOWN + ENTER, 'https://a.test/s.xml\r', '20\r'), [
+  assert.deepEqual(await ask(DOWN + ENTER, 'https://a.test/s.xml\r', '20\r', ENTER), [
     '--sitemap',
     'https://a.test/s.xml',
     '--limit',
@@ -122,21 +135,32 @@ test('wizard: asks for a sitemap and a limit', async () => {
 
 test('wizard: asks for a URL file, and an empty limit audits all and is shown as all', async () => {
   const file = fixturePath('urls.txt')
-  const { args, shown } = await askShown(DOWN + DOWN + ENTER, `${file}\r`, ENTER)
+  const { args, shown } = await askShown(DOWN + DOWN + ENTER, `${file}\r`, ENTER, ENTER)
   assert.deepEqual(args, ['--urls-file', file])
   // The answered question, not the placeholder shown while it is asked.
   assert.match(shown, /◇ {2}How many pages at most\?\n│ {2}all\n/)
 })
 
+test('wizard: asks for extra checks', async () => {
+  const page = [ENTER, 'https://a.test/\r']
+  assert.deepEqual(await ask(...page, SPACE + ENTER), ['https://a.test/', '--lighthouse'])
+  assert.deepEqual(await ask(...page, DOWN + SPACE + ENTER), ['https://a.test/', '--check-links'])
+  assert.deepEqual(await ask(...page, SPACE + DOWN + SPACE + ENTER), [
+    'https://a.test/',
+    '--lighthouse',
+    '--check-links'
+  ])
+})
+
 test('wizard: shows the command it would run', async () => {
-  const { shown } = await askShown(ENTER, 'https://a.test/ https://b.test/\r')
+  const { shown } = await askShown(ENTER, 'https://a.test/ https://b.test/\r', ENTER)
   assert.match(shown, /Would run: pageaudit https:\/\/a\.test\/ https:\/\/b\.test\//)
 })
 
 test('wizard: asks again after an invalid answer', async () => {
   // Ctrl+U clears the rejected input.
-  assert.deepEqual(await ask(ENTER, 'a.test\r', '\u0015https://a.test/\r'), ['https://a.test/'])
-  assert.deepEqual(await ask(DOWN + ENTER, 'https://a.test/s.xml\r', '0\r', '\u00153\r'), [
+  assert.deepEqual(await ask(ENTER, 'a.test\r', '\u0015https://a.test/\r', ENTER), ['https://a.test/'])
+  assert.deepEqual(await ask(DOWN + ENTER, 'https://a.test/s.xml\r', '0\r', '\u00153\r', ENTER), [
     '--sitemap',
     'https://a.test/s.xml',
     '--limit',
@@ -148,4 +172,5 @@ test('wizard: returns null when cancelled at any question', async () => {
   assert.equal(await ask('\u0003'), null)
   assert.equal(await ask(ENTER, '\u0003'), null)
   assert.equal(await ask(DOWN + ENTER, 'https://a.test/s.xml\r', '\u0003'), null)
+  assert.equal(await ask(ENTER, 'https://a.test/\r', '\u0003'), null)
 })
