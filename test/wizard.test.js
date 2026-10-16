@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,7 +14,9 @@ import {
   checkPageUrls,
   checkReportPath,
   checkSitemapUrl,
+  shellQuote,
   checkUrlFile,
+  commandLines,
   wantsWizard
 } from '../src/wizard.js'
 
@@ -173,7 +176,96 @@ test('wizard: asks for extra checks', async () => {
 
 test('wizard: shows the command it would run', async () => {
   const { shown } = await askShown(ENTER, 'https://a.test/ https://b.test/\r', ENTER, ENTER)
-  assert.match(shown, /Would run: pageaudit https:\/\/a\.test\/ https:\/\/b\.test\//)
+  assert.match(shown, /└ {2}Would run:\n {3}pageaudit https:\/\/a\.test\/ https:\/\/b\.test\/\n/)
+})
+
+test('wizard: quotes an argument only when a shell would change it', () => {
+  for (const arg of ['https://a.test/x?', 'report.html', '--limit', '20', 'a_b@c%d+e=f:g,h']) {
+    const expected = arg.includes('?') ? `'${arg}'` : arg
+    assert.equal(shellQuote(arg), expected, arg)
+  }
+  assert.equal(shellQuote('Acme Oy'), "'Acme Oy'")
+  assert.equal(shellQuote('https://a.test/?a=1&b=2'), "'https://a.test/?a=1&b=2'")
+  assert.equal(shellQuote("Acme's"), String.raw`'Acme'\''s'`)
+  assert.equal(shellQuote('Kevään'), "'Kevään'")
+  assert.equal(shellQuote('~/r.html'), "'~/r.html'")
+  assert.equal(shellQuote(''), "''")
+  // zsh turns =name into the path of the command name, an = later in the argument is plain.
+  assert.equal(shellQuote('=sh'), "'=sh'")
+  assert.equal(shellQuote('a=b'), 'a=b')
+})
+
+const LONG_ARGS = [
+  '--sitemap',
+  'https://example.com/sitemap.xml?lang=fi&x=1',
+  '--limit',
+  '20',
+  '--lighthouse',
+  '--check-links',
+  '--html',
+  'audit.html',
+  '--title',
+  'Kevään audit',
+  '--client',
+  "Acme's Oy",
+  '--logo',
+  'logo.svg',
+  '--out',
+  'report.json'
+]
+
+test('wizard: the command fits on one line when it can', () => {
+  assert.deepEqual(commandLines(['https://a.test/', '--lighthouse'], 77), ['pageaudit https://a.test/ --lighthouse'])
+})
+
+test('wizard: a long command wraps within the width, an option on the line of its value', () => {
+  const lines = commandLines(LONG_ARGS, 77)
+  assert.deepEqual(lines, [
+    "pageaudit --sitemap 'https://example.com/sitemap.xml?lang=fi&x=1' \\",
+    '  --limit 20 --lighthouse --check-links --html audit.html \\',
+    "  --title 'Kevään audit' --client 'Acme'\\''s Oy' --logo logo.svg \\",
+    '  --out report.json'
+  ])
+  for (const line of lines) assert.ok(line.length <= 77, line)
+})
+
+test('wizard: a part longer than a line gets a line of its own', () => {
+  const url = `https://a.test/${'x'.repeat(80)}`
+  assert.deepEqual(commandLines([url, '--json', '--out', 'r.json'], 40), [
+    'pageaudit \\',
+    `  ${url} \\`,
+    '  --json --out r.json'
+  ])
+  assert.deepEqual(commandLines(['--lighthouse', url], 40), ['pageaudit --lighthouse \\', `  ${url}`])
+})
+
+test('wizard: the first part goes on the next line when it fits there and not after pageaudit', () => {
+  const url = `https://a.test/${'x'.repeat(20)}`
+  assert.deepEqual(commandLines([url], 40), ['pageaudit \\', `  ${url}`])
+  assert.deepEqual(commandLines([url], 47), [`pageaudit ${url}`])
+})
+
+test('wizard: a wide character takes two columns of the line', () => {
+  const lines = commandLines(['https://a.test/', '--title', '春'.repeat(8)], 50)
+  assert.deepEqual(lines, ['pageaudit https://a.test/ \\', `  --title '${'春'.repeat(8)}'`])
+})
+
+// The arguments the shown command gives the shell, with pageaudit replaced by a function that prints them.
+function shellArgs(shell, args) {
+  const command = commandLines(args, 40).join('\n')
+  const script = `pageaudit() { for arg in "$@"; do printf '%s\\n' "$arg"; done; }\n${command}\n`
+  return execFileSync(shell, ['-c', script], { encoding: 'utf8' }).split('\n').slice(0, -1)
+}
+
+const ROUND_TRIP_ARGS = [...LONG_ARGS, '--logo', '=sh', '--title', '~/春 $HOME `x` "y" *']
+
+test('wizard: the shown command gives sh back the same arguments', () => {
+  assert.deepEqual(shellArgs('sh', ROUND_TRIP_ARGS), ROUND_TRIP_ARGS)
+})
+
+const hasZsh = !spawnSync('zsh', ['-c', 'true']).error
+test('wizard: the shown command gives zsh back the same arguments', { skip: !hasZsh && 'zsh is not installed' }, () => {
+  assert.deepEqual(shellArgs('zsh', ROUND_TRIP_ARGS), ROUND_TRIP_ARGS)
 })
 
 test('wizard: asks again after an invalid answer', async () => {

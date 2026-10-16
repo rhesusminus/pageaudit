@@ -1,6 +1,8 @@
 import { accessSync, constants, existsSync, realpathSync, statSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { cancel, confirm, intro, isCancel, multiselect, outro, select, text } from '@clack/prompts'
+import stringWidth from 'string-width'
+import { OPTIONS } from './cli.js'
 import { logoType, MAX_LOGO_BYTES } from './html/logo.js'
 import { DEFAULT_TITLE } from './html/render.js'
 import { normalize } from './input/resolve.js'
@@ -172,6 +174,44 @@ export function answersToArgs({ source, input, limit, checks = [], html, title, 
   return args
 }
 
+// Quotes an argument for a POSIX shell, unless it only holds characters every shell takes as they are. A leading =
+// is quoted too, because zsh turns =name into the path of the command name.
+export const shellQuote = (arg) =>
+  /^[\w@%+:,./-][\w@%+=:,./-]*$/.test(arg) ? arg : `'${arg.replaceAll("'", String.raw`'\''`)}'`
+
+// The command as lines that fit in `width` columns, each but the last continued with a backslash, so it can be
+// pasted into a shell as it is. An option stays on the line of its value. A part longer than a line gets one of
+// its own.
+export function commandLines(args, width) {
+  const parts = []
+  let i = 0
+  while (i < args.length) {
+    const name = args[i].startsWith('--') ? args[i].slice(2) : undefined
+    const takesValue = Object.hasOwn(OPTIONS, name ?? '') && OPTIONS[name].type === 'string' && i + 1 < args.length
+    const count = takesValue ? 2 : 1
+    parts.push(
+      args
+        .slice(i, i + count)
+        .map(shellQuote)
+        .join(' ')
+    )
+    i += count
+  }
+  const lines = []
+  let line = 'pageaudit'
+  for (const part of parts) {
+    // Columns as the terminal shows them, where a wide character takes two. Two are kept for the " \" that
+    // continues the line.
+    if (stringWidth(`${line} ${part}`) + 2 > width) {
+      lines.push(`${line} \\`)
+      line = `  ${part}`
+    } else {
+      line = `${line} ${part}`
+    }
+  }
+  return [...lines, line]
+}
+
 // Asks the questions in order. Each gets the answers so far and returns a prompt, or undefined to be skipped.
 // Returns the answers, or null as soon as one is cancelled.
 async function askAll(questions) {
@@ -313,6 +353,10 @@ export async function askArgs(streams = {}) {
     return null
   }
   const args = answersToArgs(answers)
-  outro(`Would run: pageaudit ${args.join(' ')}`, streams)
+  // The lines are indented to the text of clack's last line, "└  Would run:".
+  const indent = '   '
+  const width = ((streams.output ?? process.stdout).columns ?? 80) - indent.length
+  const command = commandLines(args, width).map((line) => `${indent}${line}`)
+  outro(['Would run:', ...command].join('\n'), streams)
   return args
 }
