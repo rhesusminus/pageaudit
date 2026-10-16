@@ -4,9 +4,10 @@ import { askArgs, wantsWizard } from '../src/wizard.js'
 
 const argv = process.argv.slice(2)
 if (wantsWizard(argv, process.stdin, process.stdout)) {
-  // While the questions are being built, the wizard only shows the command it would run, so trying it sends no
-  // requests. 130 is the usual exit code for a run the user interrupted.
-  process.exitCode = (await askArgs()) ? 0 : 130
+  const setup = await askArgs()
+  // 130 is the usual exit code for a run the user interrupted.
+  if (!setup) process.exitCode = 130
+  else process.exitCode = setup.runNow ? await run(setup.args) : 0
 } else {
   process.exitCode = await run(argv)
 }
