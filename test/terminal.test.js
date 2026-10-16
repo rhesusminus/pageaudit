@@ -55,13 +55,23 @@ test('formatIssueTable: colored cells are never split or leak escape fragments',
   }
 })
 
-test('formatIssueTable: context wraps at the full column width and keeps its text', () => {
-  const plain = stripVTControlCharacters(renderColored())
-  const rows = plain.split('\n').filter((l) => l.startsWith('│'))
-  const contextLines = rows.map((l) => l.split('│')[4].slice(1, -1).trimEnd())
-  assert.ok(contextLines.every((l) => l.length <= 44))
-  assert.equal(contextLines.filter((l) => l.length === 44).length, 4)
-  assert.equal(contextLines.join('').split(CONTEXT).length - 1, 2)
+// The lines of the issue table's Context column, without padding.
+const contextLines = (plain) =>
+  plain
+    .split('\n')
+    .filter((l) => l.startsWith('│'))
+    .slice(1)
+    .map((l) => l.split('│')[4].slice(1).trimEnd())
+
+test('formatIssueTable: context breaks at spaces and splits only a word longer than the column', () => {
+  const context = '<title>The Ultimate Guide to Choosing the Best Gentle Shampoo</title>'
+  const plain = plainColored(() => formatIssueTable([issue('warning', 'seo', 'Title is long', context)], 80))
+  assert.deepEqual(contextLines(plain), ['<title>The Ultimate Guide', 'to Choosing the Best', 'Gentle Shampoo</title>'])
+  // A word longer than the column fills whole lines.
+  const lines = contextLines(stripVTControlCharacters(renderColored())).filter(Boolean)
+  assert.ok(lines.every((l) => l.length <= 44))
+  assert.equal(lines.filter((l) => l.length === 44).length, 4)
+  assert.equal(lines.join('').replaceAll(' ', '').split(CONTEXT.replaceAll(' ', '')).length - 1, 2)
 })
 
 test('formatIssueTable: all table lines have equal width', () => {
@@ -85,13 +95,64 @@ test('formatIssueTable: wide characters wrap by display width without losing tex
   const title = `<title>${'日本語のタイトル'.repeat(8)} 😀😀😀 emoji 🎉🎉</title>`
   const plain = plainColored(() => formatIssueTable([issue('warning', 'seo', 'Title is long', title)], 80))
   assert.doesNotMatch(plain, /…/, 'text was clipped')
-  const context = plain
+  assert.equal(contextLines(plain).join('').replaceAll(' ', ''), title.replaceAll(' ', ''))
+})
+
+// The text of one column of a table, its lines joined with spaces.
+const columnText = (plain, column) =>
+  plain
     .split('\n')
     .filter((l) => l.startsWith('│'))
     .slice(1)
-    .map((l) => l.split('│')[4].slice(1).trimEnd())
-    .join('')
-  assert.equal(context.replaceAll(' ', ''), title.replaceAll(' ', ''))
+    .map((l) => l.split('│')[column].trim())
+    .filter(Boolean)
+    .join(' ')
+
+const LONG_WORD_MESSAGE = 'No X-Content-Type-Options-and-X-Frame-Options: nosniff header'
+
+test('formatIssueTable: a message word longer than the column is split, not cut off', () => {
+  const plain = plainColored(() => formatIssueTable([issue('info', 'seo', LONG_WORD_MESSAGE, '<x>')], 80))
+  assert.doesNotMatch(plain, /…/)
+  assert.equal(columnText(plain, 3).replaceAll(' ', ''), LONG_WORD_MESSAGE.replaceAll(' ', ''))
+  assert.deepEqual([...tableWidths(plain)], [80])
+})
+
+test('formatSiteTable: a message word longer than the column is split, not cut off', () => {
+  const issues = [{ ...site[0], message: LONG_WORD_MESSAGE, context: 'https://a.test: no header' }]
+  const plain = plainColored(() => formatSiteTable(issues, 80))
+  assert.doesNotMatch(plain, /…/)
+  const text = `${LONG_WORD_MESSAGE} https://a.test: no header`
+  assert.equal(columnText(plain, 3).replaceAll(' ', ''), text.replaceAll(' ', ''))
+  assert.deepEqual([...tableWidths(plain)], [80])
+})
+
+// The widths of the columns of a table, from its top border.
+const columnWidthsOf = (plain) =>
+  plain
+    .split('\n')[0]
+    .slice(1, -1)
+    .split('┬')
+    .map((c) => c.length)
+
+test('formatIssueTable: short contexts get a narrow column and the issue the rest', () => {
+  const issues = [issue('error', 'seo', 'Missing <title>', '<head>'), issue('warning', 'seo', 'No <h1>', '<body>')]
+  for (const columns of [80, 114]) {
+    const plain = plainColored(() => formatIssueTable(issues, columns))
+    // "Context" is the widest, plus a space on each side.
+    assert.deepEqual(columnWidthsOf(plain), [10, 15, columns - 5 - 25 - 9, 9])
+  }
+})
+
+test('formatSiteTable: short URLs get a narrow column and the issue the rest', () => {
+  const issues = [{ ...site[0], urls: ['https://a.test/', 'https://a.test/about'] }]
+  const plain = plainColored(() => formatSiteTable(issues, 100))
+  assert.deepEqual(columnWidthsOf(plain), [10, 15, 100 - 5 - 25 - 22, 22])
+  assert.deepEqual(columnText(plain, 4).split(' '), issues[0].urls)
+})
+
+test('formatSiteTable: long URLs share the width by weight and wrap', () => {
+  const plain = plainColored(() => formatSiteTable(site, 114))
+  assert.deepEqual(columnWidthsOf(plain), [10, 15, 38, 46])
 })
 
 test('formatIssueTable: lists errors first, then warnings, then infos', () => {
