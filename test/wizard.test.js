@@ -29,10 +29,13 @@ const fixturePath = (name) => new URL(`./fixtures/${name}`, import.meta.url).pat
 const ENTER = '\r'
 const DOWN = '\u001B[B'
 const SPACE = ' '
+// The last question, whether to run the audit now: Enter keeps the preselected Yes, the right arrow moves to No.
+const RUN = ENTER
+const LATER = '\u001B[C' + ENTER
 
 // Answers the prompts by typing into clack's input, one chunk per prompt once the previous output has rendered.
-// Returns the arguments and what was shown. A prompt still waiting after 5 s, because the test typed too few
-// answers, is cancelled, so the test fails instead of hanging.
+// Returns the arguments, null when cancelled, whether to run them now and what was shown. A prompt still waiting
+// after 5 s, because the test typed too few answers, is cancelled, so the test fails instead of hanging.
 async function askShown(...typed) {
   const input = new PassThrough()
   const shown = []
@@ -47,7 +50,8 @@ async function askShown(...typed) {
     await new Promise((resolve) => setImmediate(resolve))
     input.write(keys)
   }
-  return { args: await answer, shown: stripVTControlCharacters(shown.join('')) }
+  const setup = await answer
+  return { args: setup?.args ?? null, runNow: setup?.runNow, shown: stripVTControlCharacters(shown.join('')) }
 }
 
 const ask = async (...typed) => (await askShown(...typed)).args
@@ -140,14 +144,14 @@ test('wizard: each picked check adds its option, in a fixed order', () => {
 })
 
 test('wizard: returns the arguments for the typed pages, without asking for a limit', async () => {
-  assert.deepEqual(await ask(ENTER, 'https://a.test/ https://b.test/\r', ENTER, ENTER), [
+  assert.deepEqual(await ask(ENTER, 'https://a.test/ https://b.test/\r', ENTER, ENTER, RUN), [
     'https://a.test/',
     'https://b.test/'
   ])
 })
 
 test('wizard: asks for a sitemap and a limit', async () => {
-  assert.deepEqual(await ask(DOWN + ENTER, 'https://a.test/s.xml\r', '20\r', ENTER, ENTER), [
+  assert.deepEqual(await ask(DOWN + ENTER, 'https://a.test/s.xml\r', '20\r', ENTER, ENTER, RUN), [
     '--sitemap',
     'https://a.test/s.xml',
     '--limit',
@@ -157,7 +161,7 @@ test('wizard: asks for a sitemap and a limit', async () => {
 
 test('wizard: asks for a URL file, and an empty limit audits all and is shown as all', async () => {
   const file = fixturePath('urls.txt')
-  const { args, shown } = await askShown(DOWN + DOWN + ENTER, `${file}\r`, ENTER, ENTER, ENTER)
+  const { args, shown } = await askShown(DOWN + DOWN + ENTER, `${file}\r`, ENTER, ENTER, ENTER, RUN)
   assert.deepEqual(args, ['--urls-file', file])
   // The answered question, not the placeholder shown while it is asked.
   assert.match(shown, /◇ {2}How many pages at most\?\n│ {2}all\n/)
@@ -165,18 +169,30 @@ test('wizard: asks for a URL file, and an empty limit audits all and is shown as
 
 test('wizard: asks for extra checks', async () => {
   const page = [ENTER, 'https://a.test/\r']
-  assert.deepEqual(await ask(...page, SPACE + ENTER, ENTER), ['https://a.test/', '--lighthouse'])
-  assert.deepEqual(await ask(...page, DOWN + SPACE + ENTER, ENTER), ['https://a.test/', '--check-links'])
-  assert.deepEqual(await ask(...page, SPACE + DOWN + SPACE + ENTER, ENTER), [
+  assert.deepEqual(await ask(...page, SPACE + ENTER, ENTER, RUN), ['https://a.test/', '--lighthouse'])
+  assert.deepEqual(await ask(...page, DOWN + SPACE + ENTER, ENTER, RUN), ['https://a.test/', '--check-links'])
+  assert.deepEqual(await ask(...page, SPACE + DOWN + SPACE + ENTER, ENTER, RUN), [
     'https://a.test/',
     '--lighthouse',
     '--check-links'
   ])
 })
 
-test('wizard: shows the command it would run', async () => {
-  const { shown } = await askShown(ENTER, 'https://a.test/ https://b.test/\r', ENTER, ENTER)
-  assert.match(shown, /└ {2}Would run:\n {3}pageaudit https:\/\/a\.test\/ https:\/\/b\.test\/\n/)
+test('wizard: shows the command before asking whether to run it', async () => {
+  const { shown } = await askShown(ENTER, 'https://a.test/ https://b.test/\r', ENTER, ENTER, RUN)
+  assert.match(shown, /◇ {2}Command:\n│ {2}pageaudit https:\/\/a\.test\/ https:\/\/b\.test\/\n/)
+  assert.ok(shown.indexOf('Command:') < shown.indexOf('Run the audit now?'))
+})
+
+test('wizard: runs the audit now unless told to run it later', async () => {
+  const run = await askShown(...ONE_PAGE, ENTER, RUN)
+  assert.deepEqual(run.args, ['https://a.test/'])
+  assert.equal(run.runNow, true)
+  assert.match(run.shown, /└ {2}Running the audit\.\n/)
+  const later = await askShown(...ONE_PAGE, ENTER, LATER)
+  assert.deepEqual(later.args, ['https://a.test/'])
+  assert.equal(later.runNow, false)
+  assert.match(later.shown, /└ {2}Not run\. Paste the command above into a shell to run it later\.\n/)
 })
 
 test('wizard: quotes an argument only when a shell would change it', () => {
@@ -270,8 +286,8 @@ test('wizard: the shown command gives zsh back the same arguments', { skip: !has
 
 test('wizard: asks again after an invalid answer', async () => {
   // Ctrl+U clears the rejected input.
-  assert.deepEqual(await ask(ENTER, 'a.test\r', '\u0015https://a.test/\r', ENTER, ENTER), ['https://a.test/'])
-  assert.deepEqual(await ask(DOWN + ENTER, 'https://a.test/s.xml\r', '0\r', '\u00153\r', ENTER, ENTER), [
+  assert.deepEqual(await ask(ENTER, 'a.test\r', '\u0015https://a.test/\r', ENTER, ENTER, RUN), ['https://a.test/'])
+  assert.deepEqual(await ask(DOWN + ENTER, 'https://a.test/s.xml\r', '0\r', '\u00153\r', ENTER, ENTER, RUN), [
     '--sitemap',
     'https://a.test/s.xml',
     '--limit',
@@ -286,6 +302,7 @@ test('wizard: returns null when cancelled at any question', async () => {
   assert.equal(await ask(ENTER, 'https://a.test/\r', '\u0003'), null)
   assert.equal(await ask(...ONE_PAGE, '\u0003'), null)
   assert.equal(await ask(...ONE_PAGE, SPACE + ENTER, '\u0003'), null)
+  assert.equal(await ask(...ONE_PAGE, ENTER, '\u0003'), null)
 })
 
 test('wizard: a report path is a file in a folder that exists', (t) => {
@@ -353,7 +370,7 @@ test('wizard: asks for both report files, with their default paths', async (t) =
   const cwd = process.cwd()
   process.chdir(dir)
   t.after(() => process.chdir(cwd))
-  assert.deepEqual(await ask(...ONE_PAGE, SPACE + DOWN + SPACE + ENTER, ENTER, ENTER, ENTER, ENTER, ENTER), [
+  assert.deepEqual(await ask(...ONE_PAGE, SPACE + DOWN + SPACE + ENTER, ENTER, ENTER, ENTER, ENTER, ENTER, RUN), [
     'https://a.test/',
     '--html',
     'report.html',
@@ -367,7 +384,7 @@ test('wizard: an answer of only spaces takes the default path', async (t) => {
   const cwd = process.cwd()
   process.chdir(dir)
   t.after(() => process.chdir(cwd))
-  assert.deepEqual(await ask(...ONE_PAGE, SPACE + DOWN + SPACE + ENTER, '  \r', ENTER, ENTER, ENTER, ' \r'), [
+  assert.deepEqual(await ask(...ONE_PAGE, SPACE + DOWN + SPACE + ENTER, '  \r', ENTER, ENTER, ENTER, ' \r', RUN), [
     'https://a.test/',
     '--html',
     'report.html',
@@ -382,14 +399,14 @@ test('wizard: asks for the HTML report title, client and logo', async (t) => {
   writeFileSync(logo, '<svg xmlns="http://www.w3.org/2000/svg"/>')
   const html = join(dir, 'r.html')
   const typed = [...ONE_PAGE, SPACE + ENTER, `${html}\r`, 'Audit\r', 'Acme Oy\r', `${logo}\r`]
-  const { args, shown } = await askShown(...typed)
+  const { args, shown } = await askShown(...typed, RUN)
   assert.deepEqual(args, ['https://a.test/', '--html', html, '--title', 'Audit', '--client', 'Acme Oy', '--logo', logo])
   assert.doesNotMatch(shown, /JSON report go/)
 })
 
 test('wizard: an empty client and logo are shown as none', async (t) => {
   const html = join(tempDir(t), 'r.html')
-  const { args, shown } = await askShown(...ONE_PAGE, SPACE + ENTER, `${html}\r`, ENTER, ENTER, ENTER)
+  const { args, shown } = await askShown(...ONE_PAGE, SPACE + ENTER, `${html}\r`, ENTER, ENTER, ENTER, RUN)
   assert.deepEqual(args, ['https://a.test/', '--html', html])
   assert.match(shown, /◇ {2}Who is the client\?\n│ {2}none\n/)
   assert.match(shown, /◇ {2}Which logo should it show\?[^\n]*\n│ {2}none\n/)
@@ -401,12 +418,12 @@ test('wizard: asks before replacing a report file, and for another path on no', 
   writeFileSync(old, 'old')
   const json = [...ONE_PAGE, DOWN + SPACE + ENTER, `${old}\r`]
   // Enter keeps the preselected No, the left arrow moves to Yes.
-  assert.deepEqual(await ask(...json, ENTER, `${join(dir, 'new.json')}\r`), [
+  assert.deepEqual(await ask(...json, ENTER, `${join(dir, 'new.json')}\r`, RUN), [
     'https://a.test/',
     '--out',
     join(dir, 'new.json')
   ])
-  assert.deepEqual(await ask(...json, '\u001B[D' + ENTER), ['https://a.test/', '--out', old])
+  assert.deepEqual(await ask(...json, '\u001B[D' + ENTER, RUN), ['https://a.test/', '--out', old])
 })
 
 test('wizard: asks again for a report path that cannot be used', async (t) => {
@@ -414,7 +431,7 @@ test('wizard: asks again for a report path that cannot be used', async (t) => {
   const html = join(dir, 'r.html')
   const typed = [...ONE_PAGE, SPACE + DOWN + SPACE + ENTER, `${join(dir, 'missing', 'r.html')}\r`, `\u0015${html}\r`]
   const reportAnswers = [ENTER, ENTER, ENTER, `${html}\r`, `\u0015${join(dir, 'r.json')}\r`]
-  const { args, shown } = await askShown(...typed, ...reportAnswers)
+  const { args, shown } = await askShown(...typed, ...reportAnswers, RUN)
   assert.deepEqual(args, ['https://a.test/', '--html', html, '--out', join(dir, 'r.json')])
   assert.match(shown, /does not exist/)
   assert.match(shown, /The HTML report goes there/)
@@ -427,7 +444,7 @@ test('wizard: the JSON report cannot take the HTML report path through a link to
   const html = join(dir, 'real', 'r.html')
   const json = join(dir, 'real', 'r.json')
   const typed = [...ONE_PAGE, SPACE + DOWN + SPACE + ENTER, `${html}\r`, ENTER, ENTER, ENTER]
-  const { args, shown } = await askShown(...typed, `${join(dir, 'link', 'r.html')}\r`, `\u0015${json}\r`)
+  const { args, shown } = await askShown(...typed, `${join(dir, 'link', 'r.html')}\r`, `\u0015${json}\r`, RUN)
   assert.deepEqual(args, ['https://a.test/', '--html', html, '--out', json])
   assert.match(shown, /The HTML report goes there/)
 })

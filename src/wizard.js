@@ -1,6 +1,6 @@
 import { accessSync, constants, existsSync, realpathSync, statSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
-import { cancel, confirm, intro, isCancel, multiselect, outro, select, text } from '@clack/prompts'
+import { cancel, confirm, intro, isCancel, log, multiselect, outro, select, text } from '@clack/prompts'
 import stringWidth from 'string-width'
 import { OPTIONS } from './cli.js'
 import { logoType, MAX_LOGO_BYTES } from './html/logo.js'
@@ -339,8 +339,9 @@ const reportQuestions = (streams) => ({
       : undefined
 })
 
-// Asks for the audit setup. Returns the arguments for run(), or null when the user cancelled. The streams are
-// clack's input and output, given in tests.
+// Asks for the audit setup, shows the command it makes and asks whether to run it now. Returns the arguments for
+// run() and whether to run them, or null when the user cancelled. The streams are clack's input and output, given
+// in tests.
 export async function askArgs(streams = {}) {
   intro('pageaudit', streams)
   const answers = await askAll({
@@ -353,10 +354,14 @@ export async function askArgs(streams = {}) {
     return null
   }
   const args = answersToArgs(answers)
-  // The lines are indented to the text of clack's last line, "└  Would run:".
-  const indent = '   '
-  const width = ((streams.output ?? process.stdout).columns ?? 80) - indent.length
-  const command = commandLines(args, width).map((line) => `${indent}${line}`)
-  outro(['Would run:', ...command].join('\n'), streams)
-  return args
+  // clack starts each line with "│  ", so the command gets three columns less.
+  const width = ((streams.output ?? process.stdout).columns ?? 80) - 3
+  log.step(['Command:', ...commandLines(args, width)].join('\n'), streams)
+  const runNow = await confirm({ message: 'Run the audit now?', ...streams })
+  if (isCancel(runNow)) {
+    cancel('Cancelled.', streams)
+    return null
+  }
+  outro(runNow ? 'Running the audit.' : 'Not run. Paste the command above into a shell to run it later.', streams)
+  return { args, runNow }
 }
