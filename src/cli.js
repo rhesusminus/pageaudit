@@ -267,18 +267,19 @@ async function checkRobotsAndSitemaps(pages, inputs, options, { startSpinner, pa
   }
 }
 
-// Writes the --out and --html files. Returns false after printing why when one failed.
+// Writes the --out and --html files and says where each one went, on stderr so the JSON on stdout stays clean.
+// Returns false after printing why when one failed.
 async function writeFiles(options, report, { logo, totalUrls }) {
   const files = []
-  if (options.out) files.push([options.out, `${JSON.stringify(report, null, 2)}\n`])
+  if (options.out) files.push(['JSON', options.out, `${JSON.stringify(report, null, 2)}\n`])
   if (options.html) {
     const { title, client } = options.branding
-    files.push([options.html, renderHtml(report, { title, client, logo, totalUrls })])
+    files.push(['HTML', options.html, renderHtml(report, { title, client, logo, totalUrls })])
   }
   let ok = true
-  for (const [path, content] of files) {
+  for (const [kind, path, content] of files) {
     const failure = await writeReportFile(path, content)
-    if (failure) console.error(failure)
+    console.error(failure ?? `${kind} report written to ${path}`)
     ok &&= !failure
   }
   return ok

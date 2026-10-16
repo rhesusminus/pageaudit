@@ -641,6 +641,23 @@ test('cli: --html to an unwritable path exits 2', async (t) => {
   const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), '--html', '/no/such/dir/r.html', '--json'])
   assert.equal(code, 2)
   assert.match(stderr, /Could not write \/no\/such\/dir\/r.html: ENOENT/)
+  assert.doesNotMatch(stderr, /written/)
+})
+
+test('cli: says where each report file was written, on stderr', async (t) => {
+  const dir = await tempDir(t)
+  const [json, html] = [join(dir, 'r.json'), join(dir, 'r.html')]
+  const { stdout, stderr } = await runCli(t, [fixtureUrl('good.html'), '--json', '--out', json, '--html', html])
+  assert.equal(stderr, `JSON report written to ${json}\nHTML report written to ${html}`)
+  assert.equal(JSON.parse(stdout).summary.pages, 1)
+})
+
+test('cli: says which report files were written when another one failed', async (t) => {
+  const json = join(await tempDir(t), 'r.json')
+  const args = [fixtureUrl('good.html'), '--json', '--out', json, '--html', '/no/such/dir/r.html']
+  const { code, stderr } = await runCli(t, args)
+  assert.equal(code, 2)
+  assert.equal(stderr, `JSON report written to ${json}\nCould not write /no/such/dir/r.html: ENOENT`)
 })
 
 test('cli: a bad logo exits 2 before any page is fetched', async (t) => {
