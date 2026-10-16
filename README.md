@@ -10,7 +10,7 @@ Requires Node 24 (see `.nvmrc`).
 
 ```sh
 npm install
-node bin/pageaudit.js                                           # asks for the pages, shows the command
+node bin/pageaudit.js                                           # asks what to audit, shows the command
 node bin/pageaudit.js https://example.com                       # one page
 node bin/pageaudit.js https://a.com/x https://a.com/y           # several pages
 node bin/pageaudit.js --urls-file urls.txt                      # one URL per line, # for comments
@@ -25,7 +25,7 @@ npm test
 
 The `pageaudit` bin is declared in `package.json`, so `npm link` makes it available as `pageaudit`.
 
-Run with no arguments in a terminal, `pageaudit` asks for the page URLs (several separated by spaces) and shows the command that would audit them. While the questions are being built it does not run that command, so trying it sends no requests, and it exits 0. Without a terminal on stdin and stdout, as in scripts and CI, no arguments is still a usage error.
+Run with no arguments in a terminal, `pageaudit` asks what to audit: page URLs (several separated by spaces), a sitemap or a URL file, and for a sitemap or file how many pages at most. Answers are checked as they are entered, so a bad URL, a file that cannot be read or a wrong limit is asked again. It then shows the command that would run the audit. While the questions are being built it does not run that command, so trying it sends no requests, and it exits 0. Without a terminal on stdin and stdout, as in scripts and CI, no arguments is still a usage error.
 
 ### Inputs
 
