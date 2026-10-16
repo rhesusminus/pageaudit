@@ -2,10 +2,10 @@ import { accessSync, constants, existsSync, statSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { cancel, confirm, intro, isCancel, log, multiselect, outro, select, text } from '@clack/prompts'
 import stringWidth from 'string-width'
-import { OPTIONS } from './cli.js'
 import { logoType, MAX_LOGO_BYTES } from './html/logo.js'
 import { DEFAULT_TITLE } from './html/render.js'
 import { normalize } from './input/resolve.js'
+import { OPTIONS } from './options.js'
 import { sameFile } from './output.js'
 
 // The setup is asked only when nothing was given and a person is at the terminal, so scripts, pipes and CI keep

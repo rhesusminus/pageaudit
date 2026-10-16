@@ -21,6 +21,7 @@ import { lighthouseFailed, runLighthouse, shortSummary } from './lighthouse.js'
 import { hostThrottle } from './concurrency.js'
 import { checkLinkTargets, linksComplete, MAX_LINK_CHECKS } from './links.js'
 import { lighthouseIssues } from './lighthouse-issues.js'
+import { OPTIONS } from './options.js'
 import { reportPathProblems, writeReportFile } from './output.js'
 import { buildReport } from './report.js'
 import { formatReport } from './terminal.js'
@@ -63,26 +64,6 @@ Options:
 
 --urls-file, --sitemap and --lighthouse-page can be given more than once.
 Run with no arguments in a terminal to be asked what to audit, shown the command and asked whether to run it.`
-
-export const OPTIONS = {
-  'urls-file': { type: 'string', multiple: true },
-  sitemap: { type: 'string', multiple: true },
-  limit: { type: 'string' },
-  concurrency: { type: 'string' },
-  delay: { type: 'string' },
-  lighthouse: { type: 'boolean' },
-  'lighthouse-page': { type: 'string', multiple: true },
-  'lighthouse-runs': { type: 'string' },
-  'check-links': { type: 'boolean' },
-  out: { type: 'string' },
-  html: { type: 'string' },
-  title: { type: 'string' },
-  client: { type: 'string' },
-  logo: { type: 'string' },
-  'fail-on': { type: 'string' },
-  json: { type: 'boolean' },
-  help: { type: 'boolean', short: 'h' }
-}
 
 // ora sizes its line clearing as ceil(width / columns), so a TTY that reports
 // 0 columns (Docker -t, some CI terminals) makes spinner.stop() loop forever.
