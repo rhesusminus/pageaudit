@@ -1,5 +1,8 @@
-import { accessSync, constants, statSync } from 'node:fs'
-import { cancel, intro, isCancel, multiselect, outro, select, text } from '@clack/prompts'
+import { accessSync, constants, existsSync, realpathSync, statSync } from 'node:fs'
+import { basename, dirname, join, resolve } from 'node:path'
+import { cancel, confirm, intro, isCancel, multiselect, outro, select, text } from '@clack/prompts'
+import { logoType, MAX_LOGO_BYTES } from './html/logo.js'
+import { DEFAULT_TITLE } from './html/render.js'
 import { normalize } from './input/resolve.js'
 
 // The setup is asked only when nothing was given and a person is at the terminal, so scripts, pipes and CI keep
@@ -33,15 +36,64 @@ export function checkSitemapUrl(value) {
   return checkUrl(urls[0])
 }
 
-// The file is checked when it is entered, so a typo is asked again instead of ending the run with exit 2.
-export function checkUrlFile(value = '') {
-  const path = value.trim()
-  if (!path) return 'Enter the path of the file'
+// Returns why the path is not a file that can be read, or undefined when it is.
+function checkReadableFile(path) {
   try {
     if (!statSync(path).isFile()) return `${path} is not a file`
     accessSync(path, constants.R_OK)
   } catch (err) {
     return `Could not read ${path}: ${err.code ?? err.message}`
+  }
+}
+
+// Files are checked when they are entered, so a typo is asked again instead of ending the run with exit 2.
+export function checkUrlFile(value = '') {
+  const path = value.trim()
+  if (!path) return 'Enter the path of the file'
+  return checkReadableFile(path)
+}
+
+// The answer for an optional value that was left out. An empty answer becomes it, so the answer shown is never blank.
+const NONE = 'none'
+
+export function checkLogoFile(value = '') {
+  const path = value.trim()
+  if (!path || path === NONE) return
+  if (!logoType(path)) return 'The logo must be a png, jpg, gif, webp or svg file'
+  const problem = checkReadableFile(path)
+  if (problem) return problem
+  if (statSync(path).size > MAX_LOGO_BYTES) return `${path} is larger than ${MAX_LOGO_BYTES / 1024} KB`
+}
+
+// A report path must be a file in a folder that exists. A report that cannot be written only fails at the end of
+// the audit, so this is checked when the path is entered. An existing file is fine, the wizard asks before
+// replacing it.
+export function checkReportPath(value = '') {
+  const path = value.trim()
+  if (!path) return 'Enter the path of the file'
+  try {
+    if (statSync(path, { throwIfNoEntry: false })?.isDirectory()) return `${path} is a folder, enter a file path`
+    if (!statSync(dirname(path), { throwIfNoEntry: false })?.isDirectory()) {
+      return `The folder ${dirname(path)} does not exist`
+    }
+  } catch (err) {
+    // Such as a folder that cannot be opened (EACCES) or a name that is too long.
+    return `Could not use ${path}: ${err.code ?? err.message}`
+  }
+}
+
+// The file a report path ends up in once links are followed, so two spellings of one file compare equal. The file
+// itself may not exist yet, its folder does.
+function destination(path) {
+  const full = resolve(path)
+  try {
+    return realpathSync(full)
+  } catch {
+    try {
+      return join(realpathSync(dirname(full)), basename(full))
+    } catch {
+      return full
+    }
   }
 }
 
@@ -90,13 +142,33 @@ const CHECKS = {
   links: { label: 'Internal links', hint: 'where the internal links lead, more requests', flag: '--check-links' }
 }
 
+// The report files that can be written next to the terminal report.
+const REPORTS = {
+  html: { label: 'HTML report', hint: 'one file to show a customer' },
+  json: { label: 'JSON report', hint: 'for scripts or Claude' }
+}
+
+// The trimmed answer to the client or logo question, or undefined when it was left out.
+const optional = (value) => {
+  const answer = value?.trim()
+  return answer && answer !== NONE ? answer : undefined
+}
+
 // The command line arguments that run the audit the answers describe.
-export function answersToArgs({ source, input, limit, checks = [] }) {
+export function answersToArgs({ source, input, limit, checks = [], html, title, client, logo, json }) {
   const args = SOURCES[source].args(input)
   const max = limit?.trim()
   if (max && max !== NO_LIMIT) args.push('--limit', max)
   // In a fixed order, so the command does not depend on the order the checks were picked in.
   for (const [name, { flag }] of Object.entries(CHECKS)) if (checks.includes(name)) args.push(flag)
+  if (html?.trim()) {
+    args.push('--html', html.trim())
+    const heading = title?.trim()
+    if (heading && heading !== DEFAULT_TITLE) args.push('--title', heading)
+    if (optional(client)) args.push('--client', optional(client))
+    if (optional(logo)) args.push('--logo', optional(logo))
+  }
+  if (json?.trim()) args.push('--out', json.trim())
   return args
 }
 
@@ -112,38 +184,129 @@ async function askAll(questions) {
   return answers
 }
 
+// Asks for the path of a report file, and when the file exists whether to replace it. Answering no asks for the
+// path again. Returns the trimmed path or clack's cancel symbol.
+async function askReportPath({ message, defaultPath, validate }, streams) {
+  for (;;) {
+    const answer = await text({
+      message,
+      placeholder: defaultPath,
+      defaultValue: defaultPath,
+      // clack checks the empty input before it becomes the default, so the default is what gets checked.
+      validate: (value) => validate(value?.trim() ? value : defaultPath),
+      ...streams
+    })
+    if (isCancel(answer)) return answer
+    // clack only puts in the default for an empty answer, not for one of spaces.
+    const path = answer.trim() || defaultPath
+    if (!existsSync(path)) return path
+    const replace = await confirm({
+      message: `${path} already exists. Replace it?`,
+      initialValue: false,
+      ...streams
+    })
+    if (isCancel(replace)) return replace
+    if (replace) return path
+  }
+}
+
+// What to audit: the source, its input and, for a sitemap or a file, the limit.
+const sourceQuestions = (streams) => ({
+  source: () =>
+    select({
+      message: 'What should be audited?',
+      options: Object.entries(SOURCES).map(([value, { label }]) => ({ value, label })),
+      ...streams
+    }),
+  input: ({ source }) => {
+    const { message, placeholder, validate } = SOURCES[source]
+    return text({ message, placeholder, validate, ...streams })
+  },
+  limit: ({ source }) =>
+    source === 'pages'
+      ? undefined
+      : text({
+          message: 'How many pages at most?',
+          placeholder: NO_LIMIT,
+          defaultValue: NO_LIMIT,
+          validate: checkLimit,
+          ...streams
+        })
+})
+
+const checkQuestions = (streams) => ({
+  checks: () =>
+    multiselect({
+      message: 'Which extra checks should run?',
+      options: Object.entries(CHECKS).map(([value, { label, hint }]) => ({ value, label, hint })),
+      required: false,
+      ...streams
+    })
+})
+
+// The questions about the HTML report, asked only when it was picked.
+const htmlQuestions = (streams) => ({
+  html: ({ reports }) =>
+    reports.includes('html')
+      ? askReportPath(
+          { message: 'Where should the HTML report go?', defaultPath: 'report.html', validate: checkReportPath },
+          streams
+        )
+      : undefined,
+  title: ({ html }) =>
+    html
+      ? text({
+          message: 'What is the title of the report?',
+          placeholder: DEFAULT_TITLE,
+          defaultValue: DEFAULT_TITLE,
+          ...streams
+        })
+      : undefined,
+  client: ({ html }) =>
+    html ? text({ message: 'Who is the client?', placeholder: NONE, defaultValue: NONE, ...streams }) : undefined,
+  logo: ({ html }) =>
+    html
+      ? text({
+          message: `Which logo should it show? (png, jpg, gif, webp or svg, at most ${MAX_LOGO_BYTES / 1024} KB)`,
+          placeholder: NONE,
+          defaultValue: NONE,
+          validate: checkLogoFile,
+          ...streams
+        })
+      : undefined
+})
+
+// Both reports in one file would leave only the one written last.
+const checkJsonPath = (html) => (value) =>
+  checkReportPath(value) ??
+  (html && destination(value.trim()) === destination(html) ? 'The HTML report goes there' : undefined)
+
+const reportQuestions = (streams) => ({
+  reports: () =>
+    multiselect({
+      message: 'Which report files should be written?',
+      options: Object.entries(REPORTS).map(([value, { label, hint }]) => ({ value, label, hint })),
+      required: false,
+      ...streams
+    }),
+  ...htmlQuestions(streams),
+  json: ({ reports, html }) =>
+    reports.includes('json')
+      ? askReportPath(
+          { message: 'Where should the JSON report go?', defaultPath: 'report.json', validate: checkJsonPath(html) },
+          streams
+        )
+      : undefined
+})
+
 // Asks for the audit setup. Returns the arguments for run(), or null when the user cancelled. The streams are
 // clack's input and output, given in tests.
 export async function askArgs(streams = {}) {
   intro('pageaudit', streams)
   const answers = await askAll({
-    source: () =>
-      select({
-        message: 'What should be audited?',
-        options: Object.entries(SOURCES).map(([value, { label }]) => ({ value, label })),
-        ...streams
-      }),
-    input: ({ source }) => {
-      const { message, placeholder, validate } = SOURCES[source]
-      return text({ message, placeholder, validate, ...streams })
-    },
-    limit: ({ source }) =>
-      source === 'pages'
-        ? undefined
-        : text({
-            message: 'How many pages at most?',
-            placeholder: NO_LIMIT,
-            defaultValue: NO_LIMIT,
-            validate: checkLimit,
-            ...streams
-          }),
-    checks: () =>
-      multiselect({
-        message: 'Which extra checks should run?',
-        options: Object.entries(CHECKS).map(([value, { label, hint }]) => ({ value, label, hint })),
-        required: false,
-        ...streams
-      })
+    ...sourceQuestions(streams),
+    ...checkQuestions(streams),
+    ...reportQuestions(streams)
   })
   if (!answers) {
     cancel('Cancelled.', streams)
