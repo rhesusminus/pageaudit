@@ -28,8 +28,9 @@ function columnWidths(columns, layout) {
 }
 
 // Wraps by display width ourselves: cli-table3's character wrapping counts ANSI
-// escape codes as width and clips wide characters instead of wrapping them.
-const wrap = (text, width) => wrapAnsi(text, width - CELL_PADDING, { hard: true, wordWrap: false, trim: false })
+// escape codes as width and clips wide characters instead of wrapping them. Lines
+// break at spaces, and only a word longer than the column is split.
+const wrap = (text, width) => wrapAnsi(text, width - CELL_PADDING, { hard: true })
 
 const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`
 

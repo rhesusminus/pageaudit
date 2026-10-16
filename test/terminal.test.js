@@ -55,13 +55,23 @@ test('formatIssueTable: colored cells are never split or leak escape fragments',
   }
 })
 
-test('formatIssueTable: context wraps at the full column width and keeps its text', () => {
-  const plain = stripVTControlCharacters(renderColored())
-  const rows = plain.split('\n').filter((l) => l.startsWith('│'))
-  const contextLines = rows.map((l) => l.split('│')[4].slice(1, -1).trimEnd())
-  assert.ok(contextLines.every((l) => l.length <= 44))
-  assert.equal(contextLines.filter((l) => l.length === 44).length, 4)
-  assert.equal(contextLines.join('').split(CONTEXT).length - 1, 2)
+// The lines of the issue table's Context column, without padding.
+const contextLines = (plain) =>
+  plain
+    .split('\n')
+    .filter((l) => l.startsWith('│'))
+    .slice(1)
+    .map((l) => l.split('│')[4].slice(1).trimEnd())
+
+test('formatIssueTable: context breaks at spaces and splits only a word longer than the column', () => {
+  const context = '<title>The Ultimate Guide to Choosing the Best Gentle Shampoo</title>'
+  const plain = plainColored(() => formatIssueTable([issue('warning', 'seo', 'Title is long', context)], 80))
+  assert.deepEqual(contextLines(plain), ['<title>The Ultimate Guide', 'to Choosing the Best', 'Gentle Shampoo</title>'])
+  // A word longer than the column fills whole lines.
+  const lines = contextLines(stripVTControlCharacters(renderColored())).filter(Boolean)
+  assert.ok(lines.every((l) => l.length <= 44))
+  assert.equal(lines.filter((l) => l.length === 44).length, 4)
+  assert.equal(lines.join('').replaceAll(' ', '').split(CONTEXT.replaceAll(' ', '')).length - 1, 2)
 })
 
 test('formatIssueTable: all table lines have equal width', () => {
@@ -85,13 +95,7 @@ test('formatIssueTable: wide characters wrap by display width without losing tex
   const title = `<title>${'日本語のタイトル'.repeat(8)} 😀😀😀 emoji 🎉🎉</title>`
   const plain = plainColored(() => formatIssueTable([issue('warning', 'seo', 'Title is long', title)], 80))
   assert.doesNotMatch(plain, /…/, 'text was clipped')
-  const context = plain
-    .split('\n')
-    .filter((l) => l.startsWith('│'))
-    .slice(1)
-    .map((l) => l.split('│')[4].slice(1).trimEnd())
-    .join('')
-  assert.equal(context.replaceAll(' ', ''), title.replaceAll(' ', ''))
+  assert.equal(contextLines(plain).join('').replaceAll(' ', ''), title.replaceAll(' ', ''))
 })
 
 test('formatIssueTable: lists errors first, then warnings, then infos', () => {
