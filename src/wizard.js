@@ -1,11 +1,12 @@
-import { accessSync, constants, existsSync, realpathSync, statSync } from 'node:fs'
-import { basename, dirname, join, resolve } from 'node:path'
+import { accessSync, constants, existsSync, statSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { cancel, confirm, intro, isCancel, log, multiselect, outro, select, text } from '@clack/prompts'
 import stringWidth from 'string-width'
 import { OPTIONS } from './cli.js'
 import { logoType, MAX_LOGO_BYTES } from './html/logo.js'
 import { DEFAULT_TITLE } from './html/render.js'
 import { normalize } from './input/resolve.js'
+import { sameFile } from './output.js'
 
 // The setup is asked only when nothing was given and a person is at the terminal, so scripts, pipes and CI keep
 // getting the usage error.
@@ -81,21 +82,6 @@ export function checkReportPath(value = '') {
   } catch (err) {
     // Such as a folder that cannot be opened (EACCES) or a name that is too long.
     return `Could not use ${path}: ${err.code ?? err.message}`
-  }
-}
-
-// The file a report path ends up in once links are followed, so two spellings of one file compare equal. The file
-// itself may not exist yet, its folder does.
-function destination(path) {
-  const full = resolve(path)
-  try {
-    return realpathSync(full)
-  } catch {
-    try {
-      return join(realpathSync(dirname(full)), basename(full))
-    } catch {
-      return full
-    }
   }
 }
 
@@ -318,8 +304,7 @@ const htmlQuestions = (streams) => ({
 
 // Both reports in one file would leave only the one written last.
 const checkJsonPath = (html) => (value) =>
-  checkReportPath(value) ??
-  (html && destination(value.trim()) === destination(html) ? 'The HTML report goes there' : undefined)
+  checkReportPath(value) ?? (html && sameFile(value.trim(), html) ? 'The HTML report goes there' : undefined)
 
 const reportQuestions = (streams) => ({
   reports: () =>

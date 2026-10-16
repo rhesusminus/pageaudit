@@ -83,7 +83,7 @@ Tables follow the terminal width (80 to 114 columns).
 | 2    | Usage error, an unreadable input, an output file that cannot be written, or no URL to audit |
 | 130  | The questions asked when run with no arguments were cancelled (Ctrl+C or Esc)               |
 
-A page that cannot be fetched or returns an error status is an error on that page (exit 1), not a reason to stop. A sitemap that was read but lists no URL to audit is still checked, so that run exits 0 or 1. An unreadable input is a URL file, sitemap or `--logo` that cannot be read. An `--out` or `--html` path that is a directory exits 2 before any page is fetched, and a report file that cannot be written exits 2 even after a complete audit.
+A page that cannot be fetched or returns an error status is an error on that page (exit 1), not a reason to stop. A sitemap that was read but lists no URL to audit is still checked, so that run exits 0 or 1. An unreadable input is a URL file, sitemap or `--logo` that cannot be read. An `--out` or `--html` path that is a directory, or `--out` and `--html` naming the same file, exits 2 before any page is fetched, and a report file that cannot be written exits 2 even after a complete audit.
 
 ### HTML report
 

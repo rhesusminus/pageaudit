@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { link, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
@@ -635,6 +635,36 @@ test('cli: --out or --html naming a directory exits 2 before any page is fetched
     errors[0].includes(`--html needs a file path, but "${dir}/" is a directory (for example ${dir}/report.html)`)
   )
   assert.equal(fetchMock.mock.callCount(), 0)
+})
+
+test('cli: --out and --html naming the same file exit 2 before any page is fetched', async (t) => {
+  const dir = await tempDir(t)
+  await symlink(dir, join(dir, 'link'))
+  const fetchMock = mockFixtureFetch(t)
+  const errors = []
+  t.mock.method(console, 'error', (...a) => errors.push(a.join(' ')))
+  const message = '--out and --html name the same file, give each report its own'
+  for (const html of [join(dir, 'r.json'), join(dir, 'link', 'r.json')]) {
+    errors.length = 0
+    assert.equal(await run([fixtureUrl('good.html'), '--out', join(dir, 'r.json'), '--html', html, '--json']), 2)
+    assert.deepEqual(errors, [message])
+  }
+  assert.equal(fetchMock.mock.callCount(), 0)
+  await assert.rejects(readFile(join(dir, 'r.json')), { code: 'ENOENT' })
+})
+
+test('cli: --out and --html naming two hard links to one file exit 2 and leave it as it was', async (t) => {
+  const dir = await tempDir(t)
+  const [json, html] = [join(dir, 'r.json'), join(dir, 'r.html')]
+  await writeFile(json, 'old')
+  await link(json, html)
+  const fetchMock = mockFixtureFetch(t)
+  const errors = []
+  t.mock.method(console, 'error', (...a) => errors.push(a.join(' ')))
+  assert.equal(await run([fixtureUrl('good.html'), '--out', json, '--html', html, '--json']), 2)
+  assert.deepEqual(errors, ['--out and --html name the same file, give each report its own'])
+  assert.equal(fetchMock.mock.callCount(), 0)
+  assert.equal(await readFile(json, 'utf8'), 'old')
 })
 
 test('cli: --html to an unwritable path exits 2', async (t) => {
