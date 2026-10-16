@@ -1,5 +1,6 @@
 import chalk from 'chalk'
 import Table from 'cli-table3'
+import stringWidth from 'string-width'
 import wrapAnsi from 'wrap-ansi'
 import { compareSeverity, worstFirst } from './severity.js'
 
@@ -11,21 +12,41 @@ const MIN_WIDTH = 80
 const MAX_WIDTH = 114
 
 // Column widths for a table that fills the terminal (80 to 114 columns): fixed
-// columns keep their width and flexible columns share the rest by weight.
+// columns keep their width and flexible columns share the rest by weight. A
+// flexible column with a max takes at most that, and leaves the rest to the
+// others, so a table needs one flexible column without a max.
 function columnWidths(columns, layout) {
   const total = Math.min(Math.max(columns || MAX_WIDTH, MIN_WIDTH), MAX_WIDTH)
   const fixed = layout.filter((c) => c.width).reduce((sum, c) => sum + c.width, 0)
-  const weights = layout.filter((c) => c.weight).reduce((sum, c) => sum + c.weight, 0)
-  let flexible = total - (layout.length + 1) - fixed
-  let remainingWeight = weights
+  const space = total - (layout.length + 1) - fixed
+  const capped = new Set()
+  for (;;) {
+    const widths = share(space, layout, capped)
+    const over = layout.filter((c, i) => c.max && !capped.has(c) && widths[i] > c.max)
+    if (!over.length) return widths
+    for (const c of over) capped.add(c)
+  }
+}
+
+// Gives each capped column its max and shares what is left by weight.
+function share(space, layout, capped) {
+  let flexible = space - [...capped].reduce((sum, c) => sum + c.max, 0)
+  let remainingWeight = layout.filter((c) => c.weight && !capped.has(c)).reduce((sum, c) => sum + c.weight, 0)
   return layout.map((c) => {
     if (c.width) return c.width
+    if (capped.has(c)) return c.max
     const width = Math.round((flexible * c.weight) / remainingWeight)
     flexible -= width
     remainingWeight -= c.weight
     return width
   })
 }
+
+// The width a column needs to show the widest of these texts and its heading on one line.
+const fit = (heading, texts) =>
+  [heading, ...texts]
+    .flatMap((text) => text.split('\n'))
+    .reduce((widest, line) => Math.max(widest, stringWidth(line)), 0) + CELL_PADDING
 
 // Wraps by display width ourselves: cli-table3's character wrapping counts ANSI
 // escape codes as width and clips wide characters instead of wrapping them. Lines
@@ -64,7 +85,14 @@ export function formatPagesTable(pages, columns) {
 }
 
 export function formatIssueTable(issues, columns) {
-  const widths = columnWidths(columns, [{ width: 10 }, { width: 15 }, { weight: 38 }, { weight: 46 }])
+  const context = {
+    weight: 46,
+    max: fit(
+      'Context',
+      issues.map((issue) => issue.context ?? '')
+    )
+  }
+  const widths = columnWidths(columns, [{ width: 10 }, { width: 15 }, { weight: 38 }, context])
   const table = new Table({
     head: ['Severity', 'Category', 'Issue', 'Context'],
     colWidths: widths,
@@ -82,7 +110,14 @@ export function formatIssueTable(issues, columns) {
 }
 
 export function formatSiteTable(issues, columns) {
-  const widths = columnWidths(columns, [{ width: 10 }, { width: 15 }, { weight: 38 }, { weight: 46 }])
+  const pages = {
+    weight: 46,
+    max: fit(
+      'Pages',
+      issues.flatMap((issue) => issue.urls)
+    )
+  }
+  const widths = columnWidths(columns, [{ width: 10 }, { width: 15 }, { weight: 38 }, pages])
   const table = new Table({
     head: ['Severity', 'Category', 'Issue', 'Pages'],
     colWidths: widths,

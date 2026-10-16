@@ -126,6 +126,35 @@ test('formatSiteTable: a message word longer than the column is split, not cut o
   assert.deepEqual([...tableWidths(plain)], [80])
 })
 
+// The widths of the columns of a table, from its top border.
+const columnWidthsOf = (plain) =>
+  plain
+    .split('\n')[0]
+    .slice(1, -1)
+    .split('┬')
+    .map((c) => c.length)
+
+test('formatIssueTable: short contexts get a narrow column and the issue the rest', () => {
+  const issues = [issue('error', 'seo', 'Missing <title>', '<head>'), issue('warning', 'seo', 'No <h1>', '<body>')]
+  for (const columns of [80, 114]) {
+    const plain = plainColored(() => formatIssueTable(issues, columns))
+    // "Context" is the widest, plus a space on each side.
+    assert.deepEqual(columnWidthsOf(plain), [10, 15, columns - 5 - 25 - 9, 9])
+  }
+})
+
+test('formatSiteTable: short URLs get a narrow column and the issue the rest', () => {
+  const issues = [{ ...site[0], urls: ['https://a.test/', 'https://a.test/about'] }]
+  const plain = plainColored(() => formatSiteTable(issues, 100))
+  assert.deepEqual(columnWidthsOf(plain), [10, 15, 100 - 5 - 25 - 22, 22])
+  assert.deepEqual(columnText(plain, 4).split(' '), issues[0].urls)
+})
+
+test('formatSiteTable: long URLs share the width by weight and wrap', () => {
+  const plain = plainColored(() => formatSiteTable(site, 114))
+  assert.deepEqual(columnWidthsOf(plain), [10, 15, 38, 46])
+})
+
 test('formatIssueTable: lists errors first, then warnings, then infos', () => {
   const plain = stripVTControlCharacters(formatIssueTable([images[2], images[1], images[0]]))
   const severities = plain.match(/│ (error|warning|info) /g).map((m) => m.slice(2, -1))
