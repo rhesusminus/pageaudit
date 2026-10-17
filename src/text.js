@@ -8,8 +8,9 @@ export const charCount = (text) => Array.from(text).length
 export const MAX_URL = 2000
 
 // Caps text at `max` characters (code points, so an emoji is never cut in half),
-// ending in "..." when something was cut.
+// ending in "..." when something was cut and there is room for more than the dots.
 export function limit(text, max) {
   const chars = Array.from(text)
-  return chars.length > max ? `${chars.slice(0, max - 3).join('')}...` : text
+  if (chars.length <= max) return text
+  return max > 3 ? `${chars.slice(0, max - 3).join('')}...` : chars.slice(0, Math.max(max, 0)).join('')
 }

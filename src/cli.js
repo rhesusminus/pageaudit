@@ -23,6 +23,7 @@ import { checkLinkTargets, linksComplete, MAX_LINK_CHECKS } from './links.js'
 import { lighthouseIssues } from './lighthouse-issues.js'
 import { OPTIONS } from './options.js'
 import { reportPathProblems, writeReportFile } from './output.js'
+import { limit } from './text.js'
 import { buildReport } from './report.js'
 import { formatReport } from './terminal.js'
 import { checksFailed, DEFAULT_CONCURRENCY, DEFAULT_DELAY_MS, runAudit } from './runner.js'
@@ -193,6 +194,17 @@ async function auditUrls(urls, options, { startSpinner, pace }) {
 // Lighthouse loads the page in Chrome, so it also runs on a page whose HTML the static checks could not process.
 const returnedHtml = (page) => page.facts !== null || checksFailed(page)
 
+// The Lighthouse spinner line: pages done or, once a page reports its phase, the page being run, its phase and, with
+// several runs, which run. Cut to the terminal width, since a spinner line that wraps leaves its first half behind on
+// every redraw. ora puts the spinner and a space in front of it.
+export function lighthouseProgress({ done, phase, run }, total, runs, columns) {
+  const runText = runs > 1 ? ` (run ${run}/${runs})` : ''
+  const text = phase
+    ? `Lighthouse page ${done + 1}/${total}${runText} - ${phase}`
+    : `Lighthouse ${done}/${total} pages...`
+  return columns > 0 ? limit(text, columns - 2) : text
+}
+
 // Runs Lighthouse once per distinct final URL (several inputs can redirect to the same
 // page) and attaches the outcome to every page that ended up there. `all` is --lighthouse and `chosen` the pages
 // picked with --lighthouse-page or a marker, by the URL as given. Picked pages get the full detail, also when
@@ -212,13 +224,16 @@ async function addLighthouse(pages, startSpinner, runner, { all, chosen, runs })
   const targets = pages.filter((page) => returnedHtml(page) && (all || isPicked(page)))
   const urls = [...new Set(targets.map((page) => page.finalUrl))]
   if (!urls.length) return
-  const progress = (done) => `Lighthouse ${done}/${urls.length} pages...`
-  const spinner = startSpinner(progress(0))
+  const state = { done: 0, phase: null, run: 1 }
+  const spinner = startSpinner(lighthouseProgress(state, urls.length, runs, process.stderr.columns))
+  const show = (change) => {
+    Object.assign(state, change)
+    if (spinner) spinner.text = lighthouseProgress(state, urls.length, runs, process.stderr.columns)
+  }
   const results = await runner(urls, {
     runs,
-    onProgress: (done) => {
-      if (spinner) spinner.text = progress(done)
-    }
+    onProgress: (done) => show({ done, phase: null, run: 1 }),
+    onStatus: (phase, run) => show({ phase, run })
   })
   spinner?.stop()
   for (const page of targets) {
