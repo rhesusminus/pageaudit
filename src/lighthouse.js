@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
 import { issueId } from './issue-id.js'
 import { SOURCES } from './sources.js'
 import { describe, itemsOf, savings } from './lighthouse-detail.js'
@@ -95,10 +97,45 @@ export const shortSummary = (summary) => ({
   }))
 })
 
+// Lighthouse reports its phases as 'status' events on its logger. The logger is resolved from Lighthouse's own
+// location, so the emitter is the one Lighthouse writes to even if npm installs a second copy. The phases are only a
+// nicety, so a logger that cannot be loaded means no phases rather than no Lighthouse.
+export async function loadStatusEvents() {
+  try {
+    const path = createRequire(import.meta.resolve('lighthouse')).resolve('lighthouse-logger')
+    return (await import(pathToFileURL(path).href)).default.events
+  } catch {
+    return undefined
+  }
+}
+
 // Loaded on demand: Lighthouse is heavy and most runs never use it.
 async function loadDefaults() {
-  const [{ default: lighthouse }, { launch }] = await Promise.all([import('lighthouse'), import('chrome-launcher')])
-  return { lighthouse, launch }
+  const [{ default: lighthouse }, { launch }, events] = await Promise.all([
+    import('lighthouse'),
+    import('chrome-launcher'),
+    loadStatusEvents()
+  ])
+  return { lighthouse, launch, events }
+}
+
+// The status messages that start a phase worth showing, by prefix, in the order Lighthouse sends them. Everything
+// else (config steps, the machine benchmark, one message per gatherer and per audit, internal computations) keeps the
+// phase it falls in. Lighthouse also opens about:blank before the page itself, which is still preparation.
+const PHASES = [
+  ['Connecting to browser', 'Preparing browser...'],
+  ['Navigating to about:blank', null],
+  ['Navigating to ', 'Loading page...'],
+  ['Getting artifact: ', 'Collecting page data...'],
+  ['Analyzing and running audits', 'Analyzing and running audits...'],
+  ['Auditing: ', 'Analyzing and running audits...'],
+  ['Generating results', 'Generating results...']
+]
+
+// The phase a Lighthouse status message starts, or null for a message that stays in the current phase.
+export function phaseOf(message) {
+  if (typeof message !== 'string') return null
+  return PHASES.find(([prefix]) => message.startsWith(prefix))?.[1] ?? null
 }
 
 async function runOnce(url, { lighthouse, port }) {
@@ -124,10 +161,11 @@ function scoreSpread(lhrs) {
 // Runs the page `runs` times, one after another, and keeps the run in the middle by performance score. Scores and
 // metrics then come from the same run. A failed run is dropped. Only when every run fails is it an error, and a
 // result that cannot be read is an error too instead of an exception.
-async function auditOne(url, { lighthouse, port, runs }) {
+async function auditOne(url, { lighthouse, port, runs, onRun }) {
   const lhrs = []
   let failure
   for (let i = 0; i < runs; i++) {
+    onRun(i + 1)
     try {
       lhrs.push(await runOnce(url, { lighthouse, port }))
     } catch (err) {
@@ -143,13 +181,34 @@ async function auditOne(url, { lighthouse, port, runs }) {
   }
 }
 
+// Turns Lighthouse's status messages, which arrive as ['status', message], into onStatus(phase, run) calls. Only a
+// change of phase is passed on, so the hundred audits of a run do not each redraw the spinner. `onRun` is told when
+// a new run starts, which shows its first phase again.
+function phaseReporter(onStatus) {
+  let run = 1
+  let shown = null
+  return {
+    listener: ([, message]) => {
+      const phase = phaseOf(message)
+      if (!phase || phase === shown) return
+      shown = phase
+      onStatus(phase, run)
+    },
+    onRun: (n) => {
+      run = n
+      shown = null
+    }
+  }
+}
+
 // Runs Lighthouse for every URL, one at a time in a single Chrome: parallel runs
 // compete for the CPU and skew each other's performance numbers. Never throws, each
-// entry is { summary } or { error }, in input order. `runs` is how many times each page is run. `launch`, `lighthouse` and `load` can be
-// injected so tests do not need Chrome.
+// entry is { summary } or { error }, in input order. `runs` is how many times each page is run. `onStatus(phase, run)`
+// is called when the current page enters a new phase, with the run it is on. `launch`, `lighthouse`, `events` (the
+// emitter of Lighthouse's status messages) and `load` can be injected so tests do not need Chrome.
 export async function runLighthouse(
   urls,
-  { launch, lighthouse, load = loadDefaults, onProgress = () => {}, runs = 1 } = {}
+  { launch, lighthouse, events, load = loadDefaults, onProgress = () => {}, onStatus = () => {}, runs = 1 } = {}
 ) {
   let chrome
   const fail = (message) => urls.map(() => ({ error: message }))
@@ -157,6 +216,7 @@ export async function runLighthouse(
     const defaults = launch && lighthouse ? {} : await load()
     launch ??= defaults.launch
     lighthouse ??= defaults.lighthouse
+    events ??= defaults.events
   } catch (err) {
     return fail(`Could not load Lighthouse: ${err.message}`)
   }
@@ -165,14 +225,17 @@ export async function runLighthouse(
   } catch (err) {
     return fail(`Could not start Chrome: ${err.message}`)
   }
+  const { listener, onRun } = phaseReporter(onStatus)
+  events?.on('status', listener)
   try {
     const results = []
     for (const url of urls) {
-      results.push(await auditOne(url, { lighthouse, port: chrome.port, runs }))
+      results.push(await auditOne(url, { lighthouse, port: chrome.port, runs, onRun }))
       onProgress(results.length)
     }
     return results
   } finally {
+    events?.off('status', listener)
     // A Chrome that already died must not throw away the results. chrome-launcher's
     // kill() is synchronous while other launchers return a promise, so await either.
     try {

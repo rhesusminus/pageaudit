@@ -4,7 +4,7 @@ import { link, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
-import { canSpin, run } from '../src/cli.js'
+import { canSpin, lighthouseProgress, run } from '../src/cli.js'
 import { SCHEMA_VERSION } from '../src/report.js'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
 
@@ -998,4 +998,18 @@ test('cli: --delay spaces every request to a host: sitemaps, pages, redirect hop
     gaps.every((gap) => gap >= 38),
     `gaps ${gaps.join(', ')}`
   )
+})
+
+test('lighthouseProgress: pages done, then the running page with its phase and run, cut to the terminal width', () => {
+  assert.equal(lighthouseProgress({ done: 0, phase: null, run: 1 }, 3, 1, 80), 'Lighthouse 0/3 pages...')
+  const loading = { done: 1, phase: 'Loading page...', run: 1 }
+  assert.equal(lighthouseProgress(loading, 3, 1, 80), 'Lighthouse page 2/3 - Loading page...')
+  assert.equal(lighthouseProgress({ ...loading, run: 2 }, 3, 3, 80), 'Lighthouse page 2/3 (run 2/3) - Loading page...')
+  assert.equal(lighthouseProgress(loading, 3, 1, 24), 'Lighthouse page 2/3...')
+  // Terminals too narrow for the dots still never get a line wider than they are.
+  assert.equal(lighthouseProgress(loading, 3, 1, 5), 'Lig')
+  assert.equal(lighthouseProgress(loading, 3, 1, 3), 'L')
+  assert.equal(lighthouseProgress(loading, 3, 1, 2), '')
+  assert.equal(lighthouseProgress(loading, 3, 1, 1), '')
+  assert.equal(lighthouseProgress(loading, 3, 1, undefined), 'Lighthouse page 2/3 - Loading page...')
 })

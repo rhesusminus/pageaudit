@@ -1,6 +1,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { lighthouseFailed, runLighthouse, shortSummary, summarize } from '../src/lighthouse.js'
+import { EventEmitter } from 'node:events'
+import {
+  lighthouseFailed,
+  loadStatusEvents,
+  phaseOf,
+  runLighthouse,
+  shortSummary,
+  summarize
+} from '../src/lighthouse.js'
 
 const audit = (id, score, extra = {}) => ({ id, title: `Title ${id}`, score, scoreDisplayMode: 'binary', ...extra })
 
@@ -451,4 +459,55 @@ test('summarize: a saving that rounds to zero is no estimate', () => {
   assert.equal(only({ CLS: 0.0001, LCP: 0.2 }), undefined)
   assert.deepEqual(only({ CLS: 0.0004, INP: 40 }), { metrics: { inp: 40 } })
   assert.deepEqual(only({ CLS: 0.0006 }), { metrics: { cls: 0.001 } })
+})
+
+test('phaseOf: maps the messages that start a phase and leaves the rest in the current phase', () => {
+  assert.equal(phaseOf('Connecting to browser'), 'Preparing browser...')
+  assert.equal(phaseOf('Navigating to about:blank'), null)
+  assert.equal(phaseOf('Navigating to https://a.test/'), 'Loading page...')
+  assert.equal(phaseOf('Getting artifact: MetaElements'), 'Collecting page data...')
+  assert.equal(phaseOf('Analyzing and running audits...'), 'Analyzing and running audits...')
+  assert.equal(phaseOf('Auditing: Largest Contentful Paint'), 'Analyzing and running audits...')
+  assert.equal(phaseOf('Generating results...'), 'Generating results...')
+  for (const message of ['Getting browser version', 'Computing artifact: ProcessedTrace', 'Gather phase', undefined]) {
+    assert.equal(phaseOf(message), null)
+  }
+})
+
+// A Lighthouse that reports the given status messages while it runs, as the real one does through its logger.
+function reporting(events, messages, { fail = false } = {}) {
+  return {
+    events,
+    launch: async () => ({ port: 9222, kill: async () => {} }),
+    lighthouse: async () => {
+      for (const message of messages) events.emit('status', ['status', message])
+      if (fail) throw new Error('boom')
+      return { lhr: LHR }
+    }
+  }
+}
+
+test('runLighthouse: passes on each change of phase with the run, and stops listening afterwards', async () => {
+  const events = new EventEmitter()
+  const messages = ['Navigating to https://a.test/', 'Auditing: A', 'Auditing: B', 'Computing artifact: X']
+  const seen = []
+  await runLighthouse(['https://a.test/', 'https://b.test/'], {
+    ...reporting(events, messages),
+    runs: 2,
+    onStatus: (phase, run) => seen.push(`${run} ${phase}`)
+  })
+  const once = (run) => [`${run} Loading page...`, `${run} Analyzing and running audits...`]
+  assert.deepEqual(seen, [...once(1), ...once(2), ...once(1), ...once(2)])
+  assert.equal(events.listenerCount('status'), 0)
+})
+
+test('runLighthouse: stops listening for phases when every run fails', async () => {
+  const events = new EventEmitter()
+  const results = await runLighthouse(['https://a.test/'], reporting(events, ['Auditing: A'], { fail: true }))
+  assert.deepEqual(results, [{ error: 'boom' }])
+  assert.equal(events.listenerCount('status'), 0)
+})
+
+test('loadStatusEvents: finds the status emitter of the logger Lighthouse uses', async () => {
+  assert.ok((await loadStatusEvents()) instanceof EventEmitter)
 })
