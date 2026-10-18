@@ -15,8 +15,15 @@ const ABOUT =
   'A short form of the JSON report for a first read. Every count is complete, only lists are cut: a finding shows ' +
   `its ${MAX_VARIANTS} most common variants and ${MAX_URLS} pages of each, an audit its ${MAX_URLS} worst pages. ` +
   'A variant is one element (same selector) or value (same context) found on several pages, often one template ' +
-  'to fix. The full details of a page are in the report at report.path (relative to this file), under pages[] by url. coverage.notRun ' +
-  'lists the checks that did not run: their issue types are missing because nothing was looked for.'
+  'to fix. In a finding, pages counts the pages involved and hits the issues, where a site issue such as a ' +
+  'duplicate title is one hit however many pages it lists. summary counts issues, summary.health pages by their ' +
+  'worst issue. Lighthouse is the exception: the report keeps only the worst failing audits of each page, so ' +
+  'lighthouseAudits counts the pages among those, and pages[].omittedAudits says how many more a page had. ' +
+  'pages[].lighthouseWarnings counts the warnings of a run, such as an audit that crashed. The full details of a ' +
+  'page are in the report at report.path (relative to this file), under pages[] by url. Every page check runs ' +
+  'on every audited page that returned HTML, so an issue type that is missing passed. coverage.notRun lists the ' +
+  'checks that did not run: their issue types are missing because nothing was looked for. With --limit the first ' +
+  'URLs in input order are audited.'
 
 // The first `max` of a list under `key`, and under `moreKey` how many were left out, when any were.
 function capped(list, max, key, moreKey) {

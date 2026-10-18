@@ -29,7 +29,7 @@
       "required": ["pages", "errors", "warnings", "infos", "health"],
       "properties": {
         "pages": { "type": "integer", "minimum": 0 },
-        "errors": { "type": "integer", "minimum": 0 },
+        "errors": { "type": "integer", "minimum": 0, "description": "Issues, not pages." },
         "warnings": { "type": "integer", "minimum": 0 },
         "infos": { "type": "integer", "minimum": 0 },
         "health": {
@@ -92,7 +92,11 @@
         "why": { "type": "string" },
         "fix": { "type": "string" },
         "pages": { "type": "integer", "minimum": 1, "description": "Pages with this issue." },
-        "hits": { "type": "integer", "minimum": 1, "description": "Issues of this type in the report." },
+        "hits": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Issues of this type in the report. A site issue is one however many pages it lists."
+        },
         "variants": { "type": "array", "minItems": 1, "maxItems": 5, "items": { "$ref": "#/$defs/variant" } },
         "moreVariants": { "type": "integer", "minimum": 1 }
       }
