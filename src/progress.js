@@ -22,10 +22,11 @@ export function progressBar(fraction) {
 // the page being run, its phase and, with several runs, which run. Within a run the bar moves to where the phase
 // starts, which is approximate. The line is cut to the terminal width, since a spinner line that wraps leaves its first
 // half behind on every redraw, and the bar comes first so it is cut last. ora puts the spinner and a space in front.
+// Kept short enough that page 12/40 on run 2/3 shows its longest phase whole in an 80-column terminal.
 export function lighthouseProgress({ done, phase, run }, total, runs, columns) {
   const runsDone = done * runs + (phase ? run - 1 + phase.progress : 0)
-  const runText = runs > 1 ? ` (run ${run}/${runs})` : ''
-  const status = phase ? `page ${done + 1}/${total}${runText} - ${phase.text}` : `${done}/${total} pages...`
+  const runText = runs > 1 ? `, run ${run}/${runs}` : ''
+  const status = phase ? `page ${done + 1}/${total}${runText}: ${phase.text}` : `${done}/${total} pages...`
   const text = `Lighthouse ${progressBar(runsDone / (total * runs))} ${status}`
   return columns > 0 ? limit(text, columns - 2) : text
 }

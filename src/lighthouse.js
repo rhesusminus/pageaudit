@@ -125,13 +125,13 @@ async function loadDefaults() {
 // which is still preparation. The starts come from timing real runs and are only approximate: the page load and data
 // collection take most of a run, while the audits, which send most of the messages, take a few percent of it.
 const PHASES = [
-  ['Connecting to browser', 'Preparing browser...', 0.05],
+  ['Connecting to browser', 'Opening browser...', 0.05],
   ['Navigating to about:blank', null],
   ['Navigating to ', 'Loading page...', 0.2],
-  ['Getting artifact: ', 'Collecting page data...', 0.6],
-  ['Analyzing and running audits', 'Analyzing and running audits...', 0.95],
-  ['Auditing: ', 'Analyzing and running audits...', 0.95],
-  ['Generating results', 'Generating results...', 0.99]
+  ['Getting artifact: ', 'Gathering data...', 0.6],
+  ['Analyzing and running audits', 'Running audits...', 0.95],
+  ['Auditing: ', 'Running audits...', 0.95],
+  ['Generating results', 'Scoring results...', 0.99]
 ]
 
 // The phase a Lighthouse status message starts as { text, progress }, progress being how far into the run it starts

@@ -463,12 +463,12 @@ test('summarize: a saving that rounds to zero is no estimate', () => {
 
 test('phaseOf: maps the messages that start a phase, with where it starts, and leaves the rest in the current phase', () => {
   const starts = [
-    ['Connecting to browser', 'Preparing browser...'],
+    ['Connecting to browser', 'Opening browser...'],
     ['Navigating to https://a.test/', 'Loading page...'],
-    ['Getting artifact: MetaElements', 'Collecting page data...'],
-    ['Analyzing and running audits...', 'Analyzing and running audits...'],
-    ['Auditing: Largest Contentful Paint', 'Analyzing and running audits...'],
-    ['Generating results...', 'Generating results...']
+    ['Getting artifact: MetaElements', 'Gathering data...'],
+    ['Analyzing and running audits...', 'Running audits...'],
+    ['Auditing: Largest Contentful Paint', 'Running audits...'],
+    ['Generating results...', 'Scoring results...']
   ]
   const phases = starts.map(([message]) => phaseOf(message))
   assert.deepEqual(
@@ -514,7 +514,7 @@ test('runLighthouse: passes on each change of phase with the run, and stops list
     runs: 2,
     onStatus: (phase, run) => seen.push(`${run} ${phase.text}`)
   })
-  const once = (run) => [`${run} Loading page...`, `${run} Analyzing and running audits...`]
+  const once = (run) => [`${run} Loading page...`, `${run} Running audits...`]
   assert.deepEqual(seen, [...once(1), ...once(2), ...once(1), ...once(2)])
   assert.equal(events.listenerCount('status'), 0)
 })

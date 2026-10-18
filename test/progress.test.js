@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { phaseOf } from '../src/lighthouse.js'
 import { canSpin, createProgress, lighthouseProgress, progressBar } from '../src/progress.js'
 
 const TTY = { isTTY: true, columns: 80 }
@@ -125,18 +126,18 @@ test('lighthouseProgress: a bar over every run, then pages done or the running p
   )
   assert.equal(
     lighthouseProgress({ done: 1, phase: loading, run: 1 }, 4, 1, 80),
-    `Lighthouse ${progressBar(0.3)} page 2/4 - Loading page...`
+    `Lighthouse ${progressBar(0.3)} page 2/4: Loading page...`
   )
   // Page 2 of 4 with 2 runs each: 2 runs of page 1, 1 run of page 2 and a fifth of the second run, out of 8.
   assert.equal(
     lighthouseProgress({ done: 1, phase: loading, run: 2 }, 4, 2, 80),
-    `Lighthouse ${progressBar(3.2 / 8)} page 2/4 (run 2/2) - Loading page...`
+    `Lighthouse ${progressBar(3.2 / 8)} page 2/4, run 2/2: Loading page...`
   )
 })
 
 test('lighthouseProgress: cuts the line to the terminal width, the bar last', () => {
   const state = { done: 1, phase: { text: 'Loading page...', progress: 0.2 }, run: 1 }
-  const full = `Lighthouse ${progressBar(0.4)} page 2/3 - Loading page...`
+  const full = `Lighthouse ${progressBar(0.4)} page 2/3: Loading page...`
   assert.equal(lighthouseProgress(state, 3, 1, undefined), full)
   assert.equal(lighthouseProgress(state, 3, 1, 48), `Lighthouse ${progressBar(0.4)} page...`)
   // Terminals too narrow for the dots still never get a line wider than they are.
@@ -144,4 +145,12 @@ test('lighthouseProgress: cuts the line to the terminal width, the bar last', ()
   assert.equal(lighthouseProgress(state, 3, 1, 3), 'L')
   assert.equal(lighthouseProgress(state, 3, 1, 2), '')
   assert.equal(lighthouseProgress(state, 3, 1, 1), '')
+})
+
+test('lighthouseProgress: every phase fits whole in an 80-column terminal, up to page 12/40 on run 2/3', () => {
+  const messages = ['Connecting to browser', 'Navigating to https://a.test/', 'Getting artifact: A', 'Auditing: A']
+  for (const phase of [...messages, 'Generating results'].map(phaseOf)) {
+    const line = lighthouseProgress({ done: 11, phase, run: 2 }, 40, 3, 80)
+    assert.ok(line.endsWith(phase.text), line)
+  }
 })
