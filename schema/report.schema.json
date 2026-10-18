@@ -1,5 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/rhesusminus/pageaudit/main/schema/report.schema.json",
   "title": "pageaudit report",
   "description": "The JSON report written by pageaudit (--json, --out). schemaVersion goes up by one when a field is removed, renamed or changes its meaning. Adding an optional field does not change it.",
   "type": "object",
@@ -387,7 +388,7 @@
     },
     "score": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
     "lighthouse": {
-      "description": "A digest of one Lighthouse run, never the raw result.",
+      "description": "A summary of one Lighthouse run, never the raw result.",
       "type": "object",
       "additionalProperties": false,
       "required": ["scores", "metrics", "audits", "warnings"],

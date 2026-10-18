@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/rhesusminus/pageaudit/main/schema/digest.schema.json",
+  "title": "pageaudit digest",
+  "description": "The short form of the JSON report written by pageaudit --digest, for a model to read first. Counts are complete, lists are cut. digestVersion goes up by one when a field is removed, renamed or changes its meaning. Adding an optional field does not change it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["digestVersion", "about", "report", "summary", "skipped", "findings", "pages"],
+  "properties": {
+    "digestVersion": { "const": 1 },
+    "about": { "type": "string", "description": "How the digest was cut and how to read it, in a sentence or two." },
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "schemaVersion", "generatedAt"],
+      "properties": {
+        "path": {
+          "type": ["string", "null"],
+          "description": "Where the full report was written (--out), null when it was not."
+        },
+        "schemaVersion": { "type": "integer" },
+        "generatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "coverage": { "$ref": "report.schema.json#/$defs/coverage" },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pages", "errors", "warnings", "infos", "health"],
+      "properties": {
+        "pages": { "type": "integer", "minimum": 0 },
+        "errors": { "type": "integer", "minimum": 0 },
+        "warnings": { "type": "integer", "minimum": 0 },
+        "infos": { "type": "integer", "minimum": 0 },
+        "health": {
+          "description": "Pages by their worst issue, counting the site issues that list them.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["errors", "warnings", "clean"],
+          "properties": {
+            "errors": { "type": "integer", "minimum": 0 },
+            "warnings": { "type": "integer", "minimum": 0 },
+            "clean": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "scores": {
+      "description": "Mean Lighthouse score by category over the pages it ran for. Only present when it ran.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pages", "scores"],
+      "properties": {
+        "pages": { "type": "integer", "minimum": 1 },
+        "scores": { "type": "object", "additionalProperties": { "$ref": "report.schema.json#/$defs/score" } }
+      }
+    },
+    "skipped": {
+      "description": "The first inputs that were not audited.",
+      "type": "array",
+      "maxItems": 5,
+      "items": { "$ref": "report.schema.json#/$defs/skipped" }
+    },
+    "moreSkipped": { "type": "integer", "minimum": 1 },
+    "findings": {
+      "description": "One entry per issue type, page and site issues together, worst first and then on most pages.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "lighthouseAudits": {
+      "description": "Failing Lighthouse audits by id, on most pages first. Only present when one failed.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/lighthouseAudit" }
+    },
+    "pages": {
+      "description": "One line per audited page, in report order.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/page" }
+    }
+  },
+  "$defs": {
+    "urls": { "type": "array", "minItems": 1, "maxItems": 3, "items": { "type": "string" } },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "severity", "category", "pages", "hits", "variants"],
+      "properties": {
+        "type": { "type": "string" },
+        "severity": { "$ref": "report.schema.json#/$defs/severity" },
+        "category": { "$ref": "report.schema.json#/$defs/category" },
+        "title": { "type": "string" },
+        "why": { "type": "string" },
+        "fix": { "type": "string" },
+        "pages": { "type": "integer", "minimum": 1, "description": "Pages with this issue." },
+        "hits": { "type": "integer", "minimum": 1, "description": "Issues of this type in the report." },
+        "variants": { "type": "array", "minItems": 1, "maxItems": 5, "items": { "$ref": "#/$defs/variant" } },
+        "moreVariants": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "variant": {
+      "description": "The hits on one element (selector) or value (context), most pages first.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message", "context", "pages", "urls"],
+      "properties": {
+        "message": { "type": "string", "description": "The message of the first hit." },
+        "context": { "type": "string" },
+        "selector": { "type": "string" },
+        "html": { "type": "string" },
+        "actual": { "type": ["number", "string"] },
+        "expected": { "type": "string" },
+        "pages": { "type": "integer", "minimum": 1 },
+        "urls": { "$ref": "#/$defs/urls" }
+      }
+    },
+    "lighthouseAudit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "category", "title", "pages", "worstScore", "urls"],
+      "properties": {
+        "id": { "type": "string", "description": "Described in lighthouseAudits of the report." },
+        "category": { "enum": ["performance", "accessibility", "best-practices", "seo"] },
+        "title": { "type": "string" },
+        "pages": { "type": "integer", "minimum": 1 },
+        "worstScore": { "$ref": "report.schema.json#/$defs/score" },
+        "urls": { "$ref": "#/$defs/urls", "description": "The pages with the worst scores." }
+      }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "status", "errors", "warnings", "infos"],
+      "properties": {
+        "url": { "type": "string" },
+        "finalUrl": { "type": "string", "description": "Only when the page redirected." },
+        "status": { "type": ["integer", "null"] },
+        "errors": { "type": "integer", "minimum": 0 },
+        "warnings": { "type": "integer", "minimum": 0 },
+        "infos": { "type": "integer", "minimum": 0 },
+        "scores": { "type": "object", "additionalProperties": { "$ref": "report.schema.json#/$defs/score" } },
+        "omittedAudits": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Failing Lighthouse audits the report left out for this page."
+        },
+        "lighthouseWarnings": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Warnings of the Lighthouse run, listed in the report."
+        }
+      }
+    }
+  }
+}

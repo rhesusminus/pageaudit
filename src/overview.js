@@ -8,6 +8,7 @@ export function groupIssues(report) {
     const group = groups.get(issue.type) ?? {
       type: issue.type,
       severity: issue.severity,
+      category: issue.category,
       message: issue.message,
       hits: []
     }

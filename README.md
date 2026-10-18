@@ -348,6 +348,7 @@ src/
   concurrency.js        mapLimited() and hostThrottle(): a concurrency limit and a per-host delay
   lighthouse-limits.js  the good and poor bands of the Lighthouse metrics
   output.js             writeReportFile(): writes a report file without throwing
+  digest.js             buildDigest(): the short form of the report for a model to read first
   coverage.js           buildCoverage(): what the audit looked at and which checks did not run
   overview.js           views over a finished report: issues grouped by type, page health, average scores
   html/                 the customer-facing HTML report
@@ -413,6 +414,7 @@ test/
   lighthouse.test.js    trimming a Lighthouse result and running Chrome, with its failures
   lighthouse-issues.test.js  Lighthouse metrics and scores as issues
   report.test.js        the JSON report: summary, rules, ids and capped facts
+  digest.test.js        the digest: variants, caps and their counts, Lighthouse grouping, size
   coverage.test.js      what the audit looked at and why a check did not run
   terminal.test.js      terminal tables and wrapping
   severity.test.js      severity counting and ordering
