@@ -16,7 +16,7 @@
       "properties": {
         "path": {
           "type": ["string", "null"],
-          "description": "Where the full report was written (--out), null when it was not."
+          "description": "Where the full report was written (--out), relative to the digest file. Null when it was not."
         },
         "schemaVersion": { "type": "integer" },
         "generatedAt": { "type": "string", "format": "date-time" }

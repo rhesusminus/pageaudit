@@ -1,11 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { link, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { link, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import pkg from '../package.json' with { type: 'json' }
 import { run } from '../src/cli.js'
+import { buildDigest } from '../src/digest.js'
 import { SCHEMA_VERSION } from '../src/report.js'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
 
@@ -594,6 +595,20 @@ test('cli: --out writes the same JSON report to a file', async (t) => {
   assert.deepEqual(JSON.parse(await readFile(path, 'utf8')), JSON.parse(stdout))
 })
 
+test('cli: --digest writes the digest of the report, naming the report relative to itself', async (t) => {
+  const dir = await tempDir(t)
+  const [out, digestPath] = [join(dir, 'full', 'report.json'), join(dir, 'report.digest.json')]
+  await mkdir(join(dir, 'full'))
+  const args = [fixtureUrl('good.html'), fixtureUrl('bad-missing.html'), '--json', '--out', out, '--digest', digestPath]
+  const { stdout, stderr } = await runCli(t, args)
+  const digest = JSON.parse(await readFile(digestPath, 'utf8'))
+  assert.deepEqual(digest, buildDigest(JSON.parse(stdout), { reportPath: join('full', 'report.json') }))
+  assert.equal(stderr, `JSON report written to ${out}\nDigest written to ${digestPath}`)
+  const alone = join(dir, 'alone.json')
+  await runCli(t, [fixtureUrl('good.html'), '--json', '--digest', alone])
+  assert.equal(JSON.parse(await readFile(alone, 'utf8')).report.path, null)
+})
+
 test('cli: --out to an unwritable path exits 2 but still prints the report', async (t) => {
   const { code, stdout, stderr } = await runCli(t, [fixtureUrl('good.html'), '--json', '--out', '/no/such/dir/r.json'])
   assert.equal(code, 2)
@@ -682,6 +697,22 @@ test('cli: --out and --html naming the same file exit 2 before any page is fetch
   await assert.rejects(readFile(join(dir, 'r.json')), { code: 'ENOENT' })
 })
 
+test('cli: --digest naming a directory or the --out file exits 2 before any page is fetched', async (t) => {
+  const dir = await tempDir(t)
+  const fetchMock = mockFixtureFetch(t)
+  const errors = []
+  t.mock.method(console, 'error', (...a) => errors.push(a.join(' ')))
+  assert.equal(await run([fixtureUrl('good.html'), '--digest', dir, '--json']), 2)
+  assert.deepEqual(errors, [
+    `--digest needs a file path, but "${dir}" is a directory (for example ${dir}/report.digest.json)`
+  ])
+  errors.length = 0
+  const json = join(dir, 'r.json')
+  assert.equal(await run([fixtureUrl('good.html'), '--out', json, '--digest', json, '--json']), 2)
+  assert.deepEqual(errors, ['--out and --digest name the same file, give each report its own'])
+  assert.equal(fetchMock.mock.callCount(), 0)
+})
+
 test('cli: --out and --html naming two hard links to one file exit 2 and leave it as it was', async (t) => {
   const dir = await tempDir(t)
   const [json, html] = [join(dir, 'r.json'), join(dir, 'r.html')]
@@ -754,8 +785,8 @@ test('cli: an empty --out value is a usage error', async (t) => {
   assert.match(stderr, /--out needs a value/)
 })
 
-test('cli: empty --html, --title, --client and --logo values are usage errors', async (t) => {
-  for (const option of ['--html', '--title', '--client', '--logo']) {
+test('cli: empty --digest, --html, --title, --client and --logo values are usage errors', async (t) => {
+  for (const option of ['--digest', '--html', '--title', '--client', '--logo']) {
     const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), option, '', '--json'])
     assert.equal(code, 2)
     assert.match(stderr, new RegExp(`${option} needs a value`))

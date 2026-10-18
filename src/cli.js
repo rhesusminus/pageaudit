@@ -1,3 +1,4 @@
+import { dirname, relative, resolve } from 'node:path'
 import chalk from 'chalk'
 import { checkLinks } from './checks/site/links.js'
 import { checkRobotsTxt } from './checks/site/robots.js'
@@ -24,6 +25,7 @@ import { HELP, parseOptions, USAGE } from './options.js'
 import { reportPathProblems, writeReportFile } from './output.js'
 import { createProgress } from './progress.js'
 import { buildReport } from './report.js'
+import { buildDigest } from './digest.js'
 import { formatReport } from './terminal.js'
 import { checksFailed, DEFAULT_DELAY_MS, runAudit } from './runner.js'
 
@@ -151,19 +153,26 @@ async function checkRobotsAndSitemaps(pages, inputs, options, { progress, pace }
   }
 }
 
-// Writes the --out and --html files and says where each one went, on stderr so the JSON on stdout stays clean.
-// Returns false after printing why when one failed.
+// The --digest file names the full report relative to itself, so the two can be moved together.
+const reportPathFrom = (digest, out) => out && relative(dirname(resolve(digest)), resolve(out))
+
+// Writes the --out, --digest and --html files and says where each one went, on stderr so the JSON on stdout stays
+// clean. Returns false after printing why when one failed.
 async function writeFiles(options, report, { logo }) {
   const files = []
-  if (options.out) files.push(['JSON', options.out, `${JSON.stringify(report, null, 2)}\n`])
+  if (options.out) files.push(['JSON report', options.out, `${JSON.stringify(report, null, 2)}\n`])
+  if (options.digest) {
+    const digest = buildDigest(report, { reportPath: reportPathFrom(options.digest, options.out) })
+    files.push(['Digest', options.digest, `${JSON.stringify(digest, null, 2)}\n`])
+  }
   if (options.html) {
     const { title, client } = options.branding
-    files.push(['HTML', options.html, renderHtml(report, { title, client, logo })])
+    files.push(['HTML report', options.html, renderHtml(report, { title, client, logo })])
   }
   let ok = true
-  for (const [kind, path, content] of files) {
+  for (const [label, path, content] of files) {
     const failure = await writeReportFile(path, content)
-    console.error(failure ?? `${kind} report written to ${path}`)
+    console.error(failure ?? `${label} written to ${path}`)
     ok &&= !failure
   }
   return ok
@@ -185,6 +194,7 @@ async function loadLogo(path) {
 async function reportPathsUsable(options) {
   const problems = await reportPathProblems([
     ['--out', options.out],
+    ['--digest', options.digest],
     ['--html', options.html]
   ])
   if (problems.length) console.error(problems.join('\n'))

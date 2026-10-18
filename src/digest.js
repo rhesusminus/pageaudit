@@ -15,7 +15,7 @@ const ABOUT =
   'A short form of the JSON report for a first read. Every count is complete, only lists are cut: a finding shows ' +
   `its ${MAX_VARIANTS} most common variants and ${MAX_URLS} pages of each, an audit its ${MAX_URLS} worst pages. ` +
   'A variant is one element (same selector) or value (same context) found on several pages, often one template ' +
-  'to fix. The full details of a page are in the report at report.path, under pages[] by url. coverage.notRun ' +
+  'to fix. The full details of a page are in the report at report.path (relative to this file), under pages[] by url. coverage.notRun ' +
   'lists the checks that did not run: their issue types are missing because nothing was looked for.'
 
 // The first `max` of a list under `key`, and under `moreKey` how many were left out, when any were.
@@ -116,7 +116,7 @@ const pageLines = (pages) =>
 
 // A compact view of a finished report for a model to read first: issues grouped by type and by the element they
 // are about, Lighthouse audits grouped by id and one line per page. `reportPath` is where the full report was
-// written, or null. Only the page lines grow with the number of pages.
+// written, relative to the digest, or null. Only the page lines grow with the number of pages.
 export function buildDigest(report, { reportPath = null } = {}) {
   const pages = pagesWithSiteIssues(report)
   const scores = averageScores(report.pages)

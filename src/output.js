@@ -45,6 +45,9 @@ export function sameFile(a, b) {
   return destination(a) === destination(b)
 }
 
+// A file name to suggest when a report option names a directory.
+const EXAMPLE_NAMES = { '--out': 'report.json', '--digest': 'report.digest.json', '--html': 'report.html' }
+
 // Returns a message for each problem with the report options, or an empty list: a path that is a directory, or two
 // reports that would go to the same file. Both can only fail at the very end of the audit, so this is checked
 // before it starts.
@@ -56,7 +59,7 @@ export async function reportPathProblems(outputs) {
     const info = await stat(path).catch(() => null)
     if (info?.isDirectory())
       found.push(
-        `${option} needs a file path, but "${path}" is a directory (for example ${path.replace(/\/+$/, '') || '.'}/report${option === '--html' ? '.html' : '.json'})`
+        `${option} needs a file path, but "${path}" is a directory (for example ${path.replace(/\/+$/, '') || '.'}/${EXAMPLE_NAMES[option]})`
       )
     else files.push([option, path])
   }
