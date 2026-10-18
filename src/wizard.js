@@ -133,7 +133,8 @@ const CHECKS = {
 // The report files that can be written next to the terminal report.
 const REPORTS = {
   html: { label: 'HTML report', hint: 'one file to show a customer' },
-  json: { label: 'JSON report', hint: 'for scripts or Claude' }
+  json: { label: 'JSON report', hint: 'for scripts or Claude' },
+  digest: { label: 'Digest', hint: 'a short JSON summary for Claude to read first' }
 }
 
 // The trimmed answer to the client or logo question, or undefined when it was left out.
@@ -143,7 +144,7 @@ const optional = (value) => {
 }
 
 // The command line arguments that run the audit the answers describe.
-export function answersToArgs({ source, input, limit, checks = [], html, title, client, logo, json }) {
+export function answersToArgs({ source, input, limit, checks = [], html, title, client, logo, json, digest }) {
   const args = SOURCES[source].args(input)
   const max = limit?.trim()
   if (max && max !== NO_LIMIT) args.push('--limit', max)
@@ -157,6 +158,7 @@ export function answersToArgs({ source, input, limit, checks = [], html, title, 
     if (optional(logo)) args.push('--logo', optional(logo))
   }
   if (json?.trim()) args.push('--out', json.trim())
+  if (digest?.trim()) args.push('--digest', digest.trim())
   return args
 }
 
@@ -302,9 +304,10 @@ const htmlQuestions = (streams) => ({
       : undefined
 })
 
-// Both reports in one file would leave only the one written last.
-const checkJsonPath = (html) => (value) =>
-  checkReportPath(value) ?? (html && sameFile(value.trim(), html) ? 'The HTML report goes there' : undefined)
+// Two reports in one file would leave only the one written last. `taken` is [path, which report goes there] for each
+// report path already answered.
+const checkOwnPath = (taken) => (value) =>
+  checkReportPath(value) ?? taken.find(([path]) => path && sameFile(value.trim(), path))?.[1]
 
 const reportQuestions = (streams) => ({
   reports: () =>
@@ -318,7 +321,25 @@ const reportQuestions = (streams) => ({
   json: ({ reports, html }) =>
     reports.includes('json')
       ? askReportPath(
-          { message: 'Where should the JSON report go?', defaultPath: 'report.json', validate: checkJsonPath(html) },
+          {
+            message: 'Where should the JSON report go?',
+            defaultPath: 'report.json',
+            validate: checkOwnPath([[html, 'The HTML report goes there']])
+          },
+          streams
+        )
+      : undefined,
+  digest: ({ reports, html, json }) =>
+    reports.includes('digest')
+      ? askReportPath(
+          {
+            message: 'Where should the digest go?',
+            defaultPath: 'report.digest.json',
+            validate: checkOwnPath([
+              [html, 'The HTML report goes there'],
+              [json, 'The JSON report goes there']
+            ])
+          },
           streams
         )
       : undefined

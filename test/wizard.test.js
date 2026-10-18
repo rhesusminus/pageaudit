@@ -346,6 +346,7 @@ test('wizard: the report answers become their options, leaving out defaults and 
     'l.svg'
   ])
   assert.deepEqual(answersToArgs({ ...page, json: ' r.json ' }), ['https://a.test/', '--out', 'r.json'])
+  assert.deepEqual(answersToArgs({ ...page, digest: ' d.json ' }), ['https://a.test/', '--digest', 'd.json'])
   // "none" only stands for a left-out client or logo. As a path or a title it is what was typed.
   assert.deepEqual(answersToArgs({ ...page, ...html, html: 'none', title: 'none', json: 'none' }), [
     'https://a.test/',
@@ -365,18 +366,30 @@ test('wizard: the report answers become their options, leaving out defaults and 
   ])
 })
 
-test('wizard: asks for both report files, with their default paths', async (t) => {
+test('wizard: asks for every report file, with their default paths', async (t) => {
   const dir = tempDir(t)
   const cwd = process.cwd()
   process.chdir(dir)
   t.after(() => process.chdir(cwd))
-  assert.deepEqual(await ask(...ONE_PAGE, SPACE + DOWN + SPACE + ENTER, ENTER, ENTER, ENTER, ENTER, ENTER, RUN), [
+  const all = SPACE + DOWN + SPACE + DOWN + SPACE + ENTER
+  assert.deepEqual(await ask(...ONE_PAGE, all, ENTER, ENTER, ENTER, ENTER, ENTER, ENTER, RUN), [
     'https://a.test/',
     '--html',
     'report.html',
     '--out',
-    'report.json'
+    'report.json',
+    '--digest',
+    'report.digest.json'
   ])
+})
+
+test('wizard: the digest cannot take the path of the JSON report', async (t) => {
+  const dir = tempDir(t)
+  const [json, digest] = [join(dir, 'r.json'), join(dir, 'r.digest.json')]
+  const typed = [...ONE_PAGE, DOWN + SPACE + DOWN + SPACE + ENTER, `${json}\r`, `${json}\r`, `\u0015${digest}\r`]
+  const { args, shown } = await askShown(...typed, RUN)
+  assert.deepEqual(args, ['https://a.test/', '--out', json, '--digest', digest])
+  assert.match(shown, /The JSON report goes there/)
 })
 
 test('wizard: an answer of only spaces takes the default path', async (t) => {
