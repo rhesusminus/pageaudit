@@ -8,6 +8,7 @@ import { fromFile, parseUrlList } from '../src/input/file.js'
 import { fromSitemap, parseSitemap } from '../src/input/sitemap.js'
 import { normalize, resolveUrls } from '../src/input/resolve.js'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
+import { mockFetch } from './helpers/mock-fetch.js'
 
 const fixturePath = (name) => new URL(`./fixtures/${name}`, import.meta.url).pathname
 const values = (entries) => entries.map((e) => e.value)
@@ -158,11 +159,7 @@ test('sitemap: beforeHop is awaited before the index and every child sitemap', a
 
 test('sitemap: reads a gzipped sitemap file', async (t) => {
   const xml = readFileSync(fixturePath('sitemap.xml'))
-  t.mock.method(
-    globalThis,
-    'fetch',
-    async () => new Response(gzipSync(xml), { headers: { 'content-type': 'application/gzip' } })
-  )
+  mockFetch(t, async () => new Response(gzipSync(xml), { headers: { 'content-type': 'application/gzip' } }))
   assert.equal((await fromSitemap('https://x.test/sitemap.xml.gz')).entries.length, 3)
 })
 
@@ -338,7 +335,7 @@ test('sitemap: a child over 50 MB uncompressed, gzipped or not, is skipped but i
     '/big.xml': paddedUrlset(SITEMAP_LIMIT + 1),
     '/fits.xml.gz': gzipSync(paddedUrlset(SITEMAP_LIMIT))
   }
-  t.mock.method(globalThis, 'fetch', async (input) => new Response(bodies[new URL(input).pathname]))
+  mockFetch(t, async (input) => new Response(bodies[new URL(input).pathname]))
   const { entries, skipped, files } = await fromSitemap('https://a.test/root.xml')
   assert.deepEqual(values(entries), ['https://a.test/1'])
   assert.deepEqual(
@@ -362,7 +359,7 @@ test('sitemap: a child over 50 MB uncompressed, gzipped or not, is skipped but i
 test('sitemap: a gzipped file that grew past 50 MB when packed, but is 50 MB unpacked, is read', async (t) => {
   const packed = gzipSync(paddedUrlset(SITEMAP_LIMIT), { level: 0 })
   assert.ok(packed.length > SITEMAP_LIMIT)
-  t.mock.method(globalThis, 'fetch', async () => new Response(packed))
+  mockFetch(t, async () => new Response(packed))
   const { entries, skipped } = await fromSitemap('https://a.test/sitemap.xml.gz')
   assert.deepEqual([values(entries), skipped], [['https://a.test/1'], []])
 })
@@ -375,7 +372,7 @@ test('sitemap: a plain file whose connection drops just past 50 MB is still repo
       else controller.error(Object.assign(new TypeError('terminated'), { cause: { code: 'ECONNRESET' } }))
     }
   })
-  t.mock.method(globalThis, 'fetch', async () => new Response(body))
+  mockFetch(t, async () => new Response(body))
   const { skipped, files } = await fromSitemap('https://a.test/big.xml')
   assert.deepEqual(
     skipped.map(({ reason }) => reason),
@@ -388,7 +385,7 @@ test('sitemap: a plain file whose connection drops just past 50 MB is still repo
 })
 
 test('sitemap: a --sitemap over 50 MB uncompressed is skipped but its facts are kept', async (t) => {
-  t.mock.method(globalThis, 'fetch', async () => new Response(gzipSync(paddedUrlset(SITEMAP_LIMIT + 1))))
+  mockFetch(t, async () => new Response(gzipSync(paddedUrlset(SITEMAP_LIMIT + 1))))
   const { entries, skipped, files } = await fromSitemap('https://a.test/big.xml.gz')
   assert.deepEqual(entries, [])
   assert.deepEqual(skipped, [{ input: 'https://a.test/big.xml.gz', source: '--sitemap', reason: TOO_LARGE }])
@@ -402,7 +399,7 @@ test('sitemap: a --sitemap over 50 MB uncompressed is skipped but its facts are 
 // Returns the URLs requested, in order.
 function serveSitemaps(t, bodies) {
   const requests = []
-  t.mock.method(globalThis, 'fetch', async (input) => {
+  mockFetch(t, async (input) => {
     const url = new URL(input)
     requests.push(url.href)
     if (url.protocol === 'http:')

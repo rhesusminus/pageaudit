@@ -12,6 +12,7 @@ import { checkRobotsHeader, googleRules, mergeRobotsIssues } from '../src/checks
 import { fetchPage } from '../src/fetch.js'
 import { auditPage } from '../src/runner.js'
 import { loadRobots } from '../src/robots.js'
+import { mockFetch } from './helpers/mock-fetch.js'
 
 const types = (issues) => issues.map((i) => i.type)
 
@@ -44,7 +45,7 @@ test('X-Robots-Tag: other agents, harmless rules and no header give no issues', 
 })
 
 test('fetch: the X-Robots-Tag header is returned, repeated headers are joined', async (t) => {
-  t.mock.method(globalThis, 'fetch', async () => {
+  mockFetch(t, async () => {
     const headers = new Headers({ 'content-type': 'text/html' })
     headers.append('x-robots-tag', 'noindex')
     headers.append('x-robots-tag', 'nofollow')
@@ -54,11 +55,7 @@ test('fetch: the X-Robots-Tag header is returned, repeated headers are joined', 
 })
 
 const respond = (t, status, body = '') =>
-  t.mock.method(
-    globalThis,
-    'fetch',
-    async () => new Response(body, { status, headers: { 'content-type': 'text/plain' } })
-  )
+  mockFetch(t, async () => new Response(body, { status, headers: { 'content-type': 'text/plain' } }))
 
 test('loadRobots: a 200 is parsed, other 4xx mean no file, 5xx and 429 are unreachable', async (t) => {
   respond(t, 200, 'User-agent: *\nDisallow: /private')
@@ -77,7 +74,7 @@ test('loadRobots: a 200 is parsed, other 4xx mean no file, 5xx and 429 are unrea
 })
 
 test('loadRobots: beforeHop is awaited before every request, redirect hops included', async (t) => {
-  t.mock.method(globalThis, 'fetch', async (input) =>
+  mockFetch(t, async (input) =>
     String(input) === 'http://x.test/robots.txt'
       ? new Response(null, { status: 301, headers: { location: 'https://x.test/robots.txt' } })
       : new Response('User-agent: *\nAllow: /', { headers: { 'content-type': 'text/plain' } })
@@ -89,7 +86,7 @@ test('loadRobots: beforeHop is awaited before every request, redirect hops inclu
 })
 
 test('loadRobots: a network failure is a failed read with its reason', async (t) => {
-  t.mock.method(globalThis, 'fetch', async () => {
+  mockFetch(t, async () => {
     throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNRESET' } })
   })
   assert.deepEqual(await loadRobots('https://x.test'), { status: 'failed', reason: 'ECONNRESET' })
@@ -338,14 +335,10 @@ test('robots.txt check: origins are read at the same time and the issues keep th
 
 test('loadRobots: more than five redirects count as no file, a body that cannot be read is a failed read', async (t) => {
   let hops = 0
-  t.mock.method(
-    globalThis,
-    'fetch',
-    async () => new Response(null, { status: 301, headers: { location: `/r${++hops}` } })
-  )
+  mockFetch(t, async () => new Response(null, { status: 301, headers: { location: `/r${++hops}` } }))
   assert.deepEqual(await loadRobots('https://x.test'), { status: 'missing' })
   assert.equal(hops, 6)
-  t.mock.method(globalThis, 'fetch', async () => {
+  mockFetch(t, async () => {
     const body = new ReadableStream({ pull: (controller) => controller.error(new Error('reset')) })
     return new Response(body, { status: 200 })
   })

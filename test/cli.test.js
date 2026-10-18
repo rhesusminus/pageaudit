@@ -9,6 +9,7 @@ import { run } from '../src/cli.js'
 import { buildDigest } from '../src/digest.js'
 import { SCHEMA_VERSION } from '../src/report.js'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
+import { mockFetch } from './helpers/mock-fetch.js'
 
 const fixtureUrl = (name) => `${FIXTURE_HOST}/${name}`
 const fixturePath = (name) => new URL(`./fixtures/${name}`, import.meta.url).pathname
@@ -251,7 +252,7 @@ test('cli: --urls-file - reads the list from stdin', async (t) => {
 test('cli: a huge sitemap is read and --limit still applies to it', async (t) => {
   const urls = Array.from({ length: 150_000 }, (_, i) => `<url><loc>https://big.test/p/${i}</loc></url>`).join('')
   const xml = (body) => new Response(body, { headers: { 'content-type': 'application/xml' } })
-  t.mock.method(globalThis, 'fetch', async (input) => {
+  mockFetch(t, async (input) => {
     const { pathname } = new URL(input)
     if (pathname === '/index.xml')
       return xml('<sitemapindex><sitemap><loc>https://big.test/all.xml</loc></sitemap></sitemapindex>')
@@ -822,13 +823,15 @@ test('cli: pages that are not listed in a sitemap get no sitemap issues and allo
   assert.ok(report.site.every((issue) => issue.type !== 'blocked-by-robots'))
 })
 
-// Answers requests from a map of path to body and counts them. Other paths are 404.
+// Answers requests from a map of path to body, or to a function that returns the Response, and counts them. Other
+// paths are 404.
 function mockSite(t, files) {
   const requests = []
-  t.mock.method(globalThis, 'fetch', async (input) => {
+  mockFetch(t, async (input) => {
     const { pathname } = new URL(input)
     requests.push(pathname)
     if (!(pathname in files)) return new Response('Not found', { status: 404 })
+    if (typeof files[pathname] === 'function') return files[pathname]()
     const type = pathname.endsWith('.xml') ? 'application/xml' : pathname.endsWith('.txt') ? 'text/plain' : 'text/html'
     return new Response(files[pathname], { headers: { 'content-type': type } })
   })
@@ -992,13 +995,10 @@ test('cli: --check-links does not report orphan pages when a sitemap page could 
   mockSite(t, {
     '/robots.txt': 'User-agent: *\nAllow: /',
     '/s.xml': '<urlset><url><loc>https://a.test/a</loc></url><url><loc>https://a.test/b</loc></url></urlset>',
-    '/a': page('<a href="/b">B</a>')
+    '/a': page('<a href="/b">B</a>'),
+    // A server error: the links of /b, maybe one to /a, are unknown.
+    '/b': () => new Response('down', { status: 503 })
   })
-  // /b answers 404 here, so swap in a server error for it: its links, maybe one to /a, are unknown.
-  const fetch = globalThis.fetch
-  t.mock.method(globalThis, 'fetch', async (input, init) =>
-    new URL(input).pathname === '/b' ? new Response('down', { status: 503 }) : fetch(input, init)
-  )
   const { report } = await runCliWithMock(t, ['--sitemap', 'https://a.test/s.xml', '--check-links'])
   assert.equal(report.summary.pages, 2)
   assert.ok(report.site.every((issue) => issue.type !== 'orphan-page'))
@@ -1052,7 +1052,7 @@ test('cli: --delay spaces every request to a host: sitemaps, pages, redirect hop
   }
   const redirects = { '/old': '/new', '/moved': '/b' }
   const starts = []
-  t.mock.method(globalThis, 'fetch', async (input) => {
+  mockFetch(t, async (input) => {
     const { pathname } = new URL(input)
     starts.push({ pathname, at: performance.now() })
     if (redirects[pathname]) return new Response(null, { status: 301, headers: { location: redirects[pathname] } })

@@ -8,6 +8,9 @@ const MAX_REDIRECTS = 10
 // The encodings Googlebot accepts. Node's fetch decodes all three but only asks for gzip and deflate itself,
 // so a server that only offers brotli would otherwise look like it does not compress.
 const ACCEPT_ENCODING = 'gzip, deflate, br'
+// Googlebot sends no Accept-Language. Node's fetch sends "*" when the header is missing, and some sites answer that
+// with a redirect to a random translation, so an empty list, no language preferred, is sent instead.
+const ACCEPT_LANGUAGE = ''
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
 
 export class FetchError extends Error {
@@ -110,7 +113,12 @@ export async function request(
       const res = await fetch(current, {
         redirect: 'manual',
         signal,
-        headers: { accept, 'accept-encoding': ACCEPT_ENCODING, 'user-agent': USER_AGENT }
+        headers: {
+          accept,
+          'accept-encoding': ACCEPT_ENCODING,
+          'accept-language': ACCEPT_LANGUAGE,
+          'user-agent': USER_AGENT
+        }
       })
       spent += Date.now() - started
       const location = res.headers.get('location')
