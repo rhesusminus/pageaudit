@@ -17,7 +17,8 @@ import { fromSitemap } from './input/sitemap.js'
 import { cachedRobotsLoader, loadRobots } from './robots.js'
 import { lighthouseFailed, runLighthouse, shortSummary } from './lighthouse.js'
 import { hostThrottle } from './concurrency.js'
-import { checkLinkTargets, linksComplete, MAX_LINK_CHECKS } from './links.js'
+import { buildCoverage, orphansSkipped } from './coverage.js'
+import { checkLinkTargets } from './links.js'
 import { lighthouseIssues } from './lighthouse-issues.js'
 import { HELP, parseOptions, USAGE } from './options.js'
 import { reportPathProblems, writeReportFile } from './output.js'
@@ -152,12 +153,12 @@ async function checkRobotsAndSitemaps(pages, inputs, options, { progress, pace }
 
 // Writes the --out and --html files and says where each one went, on stderr so the JSON on stdout stays clean.
 // Returns false after printing why when one failed.
-async function writeFiles(options, report, { logo, totalUrls }) {
+async function writeFiles(options, report, { logo }) {
   const files = []
   if (options.out) files.push(['JSON', options.out, `${JSON.stringify(report, null, 2)}\n`])
   if (options.html) {
     const { title, client } = options.branding
-    files.push(['HTML', options.html, renderHtml(report, { title, client, logo, totalUrls })])
+    files.push(['HTML', options.html, renderHtml(report, { title, client, logo })])
   }
   let ok = true
   for (const [kind, path, content] of files) {
@@ -190,12 +191,8 @@ async function reportPathsUsable(options) {
   return problems.length === 0
 }
 
-// Orphan pages can only be told apart when the audit followed every link of a whole sitemap: with a --limit cut, a
-// sitemap file that was not read or a link whose destination is unknown, linked pages would look orphaned.
-const findsOrphans = (options, inputs, links) =>
-  options.sitemaps.length > 0 && inputs.sitemapsComplete && inputs.urls.length === inputs.total && linksComplete(links)
-
-// Requests every internal link target the audit has not seen yet, then checks the links.
+// Requests every internal link target the audit has not seen yet, then checks the links. Returns the issues and
+// the outcome of the link checks.
 async function checkInternalLinks(pages, inputs, options, { progress, pace }) {
   const spinner = progress.start('Checking links...')
   const targets = await checkLinkTargets(pages, {
@@ -205,24 +202,28 @@ async function checkInternalLinks(pages, inputs, options, { progress, pace }) {
   })
   spinner.stop()
   if (targets.unchecked) {
+    // Orphan pages are only looked for with a --sitemap, so only then does the cap stop it.
+    const note = options.sitemaps.length ? ', so orphan pages were not looked for' : ''
     console.error(
-      `Checked ${MAX_LINK_CHECKS} link targets, ${targets.unchecked} linked from fewer pages were not checked, so orphan pages were not looked for.`
+      `Checked ${targets.checked} link targets, ${targets.unchecked} linked from fewer pages were not checked${note}.`
     )
   }
-  return checkLinks(pages, targets.outcomes, {
-    orphans: findsOrphans(options, inputs, targets),
-    listed: inputs.listed
-  })
+  const orphans = orphansSkipped(options, inputs, targets) === null
+  const issues = checkLinks(pages, targets.outcomes, { orphans, listed: inputs.listed })
+  return { issues, targets }
 }
 
-// The cross-page issues: duplicates, robots.txt, sitemaps and, with --check-links, internal links.
+// The cross-page issues: duplicates, robots.txt, sitemaps and, with --check-links, internal links. `links` is the
+// outcome of the link checks, undefined without --check-links.
 async function checkAllPages(pages, inputs, options, session) {
-  return [
+  const site = [
     ...checkSite(pages),
     ...(await checkRobotsAndSitemaps(pages, inputs, options, session)),
-    ...checkSitemapEntries(pages, inputs.listed),
-    ...(options.checkLinks ? await checkInternalLinks(pages, inputs, options, session) : [])
+    ...checkSitemapEntries(pages, inputs.listed)
   ]
+  if (!options.checkLinks) return { site }
+  const { issues, targets } = await checkInternalLinks(pages, inputs, options, session)
+  return { site: [...site, ...issues], links: targets }
 }
 
 export async function run(argv, { stdin = process.stdin, lighthouse = runLighthouse } = {}) {
@@ -263,10 +264,13 @@ export async function run(argv, { stdin = process.stdin, lighthouse = runLightho
     chosen: inputs.marked,
     runs: options.lighthouseRuns
   })
-  const site = await checkAllPages(pages, inputs, options, session)
-  const report = buildReport({ pages, site, skipped: inputs.skipped })
+  const { site, links } = await checkAllPages(pages, inputs, options, session)
+  // A page Lighthouse was tried on has a lighthouse block, null when the run failed.
+  const lighthouseRan = pages.some((page) => page.lighthouse !== undefined)
+  const coverage = buildCoverage(options, inputs, { links, lighthouseRan })
+  const report = buildReport({ pages, site, skipped: inputs.skipped, coverage })
   console.log(json ? JSON.stringify(report, null, 2) : formatReport(report, process.stdout.columns))
-  if (!(await writeFiles(options, report, { logo, totalUrls: inputs.total }))) return 2
+  if (!(await writeFiles(options, report, { logo }))) return 2
 
   const { errors, warnings } = report.summary
   return errors > 0 || (options.failOn === 'warning' && warnings > 0) ? 1 : 0

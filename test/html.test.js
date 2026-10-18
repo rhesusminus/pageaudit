@@ -262,7 +262,8 @@ test('renderHtml: only http(s) addresses become links, whatever the report says'
 
 test('renderHtml: mentions skipped inputs and a --limit that cut the list', () => {
   const skipped = [{ input: 'ftp://x', source: 'urls.txt:3', reason: 'not an http or https URL' }]
-  const out = renderHtml(wrap([page('https://a.test/', [])], [], skipped), { totalUrls: 5 })
+  const limited = { ...wrap([page('https://a.test/', [])], [], skipped), coverage: { urls: { found: 5, audited: 1 } } }
+  const out = renderHtml(limited)
   assert.match(out, /Audited 1 page out of 5 found/)
   assert.match(out, /1 address could not be used and was skipped/)
   assert.match(out, /ftp:\/\/x/)

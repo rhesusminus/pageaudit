@@ -63,7 +63,7 @@ export const SCHEMA_VERSION = 1
 
 // The JSON report, which doubles as the data handed to Claude. `facts` is null for
 // pages that returned no HTML.
-export function buildReport({ pages, site, skipped = [], now = new Date() }) {
+export function buildReport({ pages, site, skipped = [], coverage, now = new Date() }) {
   const issues = [...pages.flatMap((page) => page.issues), ...site]
   const totals = countSeverities(issues)
   const { blocks, notes } = hoistAuditNotes(pages)
@@ -82,6 +82,8 @@ export function buildReport({ pages, site, skipped = [], now = new Date() }) {
     })),
     site: withSiteIds(site),
     skipped,
+    // What was looked at and what was left out. Always present in a report from the CLI.
+    ...(coverage ? { coverage } : {}),
     rules: reportRules(issues),
     ...(Object.keys(notes).length > 0 ? { lighthouseAudits: notes } : {}),
     summary: { pages: pages.length, ...totals }

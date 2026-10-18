@@ -4,6 +4,7 @@ import { link, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
+import pkg from '../package.json' with { type: 'json' }
 import { run } from '../src/cli.js'
 import { SCHEMA_VERSION } from '../src/report.js'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
@@ -68,6 +69,26 @@ const GOOD_FACTS = {
   hreflang: []
 }
 
+// The coverage of a run with no option that changes what is collected. The tests run with --delay 0.
+const PLAIN_COVERAGE = {
+  tool: { name: 'pageaudit', version: pkg.version },
+  settings: {
+    limit: null,
+    concurrency: 3,
+    delay: 0,
+    sitemaps: [],
+    lighthouse: false,
+    lighthousePages: 0,
+    lighthouseRuns: null,
+    checkLinks: false
+  },
+  urls: { found: 1, audited: 1 },
+  notRun: [
+    { check: 'lighthouse', reason: 'not asked for (--lighthouse or --lighthouse-page)' },
+    { check: 'links', reason: 'not asked for (--check-links)' }
+  ]
+}
+
 test('cli: good.html has no issues, exposes its facts and exits 0', async (t) => {
   const { code, report } = await runJson(t, [fixtureUrl('good.html')])
   assert.equal(code, 0)
@@ -88,6 +109,7 @@ test('cli: good.html has no issues, exposes its facts and exits 0', async (t) =>
     site: [],
     rules: {},
     skipped: [],
+    coverage: PLAIN_COVERAGE,
     summary: { pages: 1, errors: 0, warnings: 0, infos: 0 }
   })
 })
@@ -341,6 +363,18 @@ test('cli: --help prints the options and exits 0', async (t) => {
 })
 
 const fakeLighthouse = (results) => async (urls) => results.slice(0, urls.length)
+
+test('cli: --lighthouse with no page that returned HTML says in the coverage that it did not run', async (t) => {
+  const lighthouse = async () => assert.fail('Lighthouse ran without a page to run on')
+  const { report } = await runJson(t, [fixtureUrl('missing-page'), '--lighthouse'], { lighthouse })
+  const notRun = { check: 'lighthouse', reason: 'no page it was asked for returned HTML' }
+  assert.deepEqual(report.coverage.notRun[0], notRun)
+  // Another page returned HTML, but Lighthouse was only asked for the one that did not.
+  const mixed = await runJson(t, [fixtureUrl('good.html'), '--lighthouse-page', fixtureUrl('missing-page')], {
+    lighthouse
+  })
+  assert.deepEqual(mixed.report.coverage.notRun[0], notRun)
+})
 
 test('cli: --lighthouse attaches a summary to pages that returned HTML', async (t) => {
   const summary = { scores: { seo: 90 }, metrics: {}, audits: [], warnings: [] }
@@ -901,16 +935,25 @@ test('cli: --check-links reports orphan pages only when a whole sitemap was audi
       '<sitemapindex><sitemap><loc>https://a.test/s.xml</loc></sitemap><sitemap><loc>https://a.test/gone.xml</loc></sitemap></sitemapindex>'
   })
   const orphans = (report) => report.site.filter((issue) => issue.type === 'orphan-page').map((issue) => issue.urls)
+  // Why the report has no orphan pages, when the check did not run.
+  const notRun = ({ coverage }) => coverage.notRun.find((entry) => entry.check === 'orphan-page')?.reason
   const whole = await runCliWithMock(t, ['--sitemap', 'https://a.test/s.xml', '--check-links'])
   assert.deepEqual(orphans(whole.report), [['https://a.test/b']])
+  assert.equal(notRun(whole.report), undefined)
+  assert.deepEqual(whole.report.coverage.links, { checked: 0, unchecked: 0, complete: true })
+  assert.deepEqual(whole.report.coverage.urls, { found: 3, audited: 3, sitemapsComplete: true })
   const cut = await runCliWithMock(t, ['--sitemap', 'https://a.test/s.xml', '--check-links', '--limit', '2'])
   assert.deepEqual(orphans(cut.report), [])
+  assert.equal(notRun(cut.report), 'only 2 of 3 URLs were audited')
   const listed = await runCliWithMock(t, ['https://a.test/', 'https://a.test/b', '--check-links'])
   assert.deepEqual(orphans(listed.report), [])
+  assert.equal(notRun(listed.report), 'needs a --sitemap, the list of pages that should be linked')
   // The index lists a sitemap that cannot be read, so pages linking to /b may be missing from the audit.
   const incomplete = await runCliWithMock(t, ['--sitemap', 'https://a.test/index.xml', '--check-links'])
   assert.equal(incomplete.report.summary.pages, 3)
   assert.deepEqual(orphans(incomplete.report), [])
+  assert.equal(notRun(incomplete.report), 'a sitemap file could not be read, so pages may be missing from the list')
+  assert.equal(incomplete.report.coverage.urls.sitemapsComplete, false)
 })
 
 test('cli: --check-links does not report orphan pages when a sitemap page could not be read', async (t) => {
@@ -928,6 +971,11 @@ test('cli: --check-links does not report orphan pages when a sitemap page could 
   const { report } = await runCliWithMock(t, ['--sitemap', 'https://a.test/s.xml', '--check-links'])
   assert.equal(report.summary.pages, 2)
   assert.ok(report.site.every((issue) => issue.type !== 'orphan-page'))
+  assert.deepEqual(report.coverage.notRun, [
+    { check: 'lighthouse', reason: 'not asked for (--lighthouse or --lighthouse-page)' },
+    { check: 'orphan-page', reason: 'where some links lead, or which links some pages have, is not known' }
+  ])
+  assert.equal(report.coverage.links.complete, false)
 })
 
 test('cli: --check-links reads the links of a sitemap page nested deeper than Chrome parses', async (t) => {

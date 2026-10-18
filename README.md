@@ -348,6 +348,7 @@ src/
   concurrency.js        mapLimited() and hostThrottle(): a concurrency limit and a per-host delay
   lighthouse-limits.js  the good and poor bands of the Lighthouse metrics
   output.js             writeReportFile(): writes a report file without throwing
+  coverage.js           buildCoverage(): what the audit looked at and which checks did not run
   overview.js           views over a finished report: issues grouped by type, page health, average scores
   html/                 the customer-facing HTML report
     render.js           renderHtml(): the whole document
@@ -412,6 +413,7 @@ test/
   lighthouse.test.js    trimming a Lighthouse result and running Chrome, with its failures
   lighthouse-issues.test.js  Lighthouse metrics and scores as issues
   report.test.js        the JSON report: summary, rules, ids and capped facts
+  coverage.test.js      what the audit looked at and why a check did not run
   terminal.test.js      terminal tables and wrapping
   severity.test.js      severity counting and ordering
   html.test.js          HTML report: sections, escaping, self-containment, advice coverage
@@ -459,6 +461,7 @@ The JSON report is meant to be handed to a human or an LLM for prioritizing fixe
   pages: [{ url, finalUrl, status, redirects: [{ url, status, location }], issues: [...], facts, lighthouse }],
   site: [...],                    // site issues
   skipped: [{ input, source, reason }],
+  coverage: { tool, settings, urls, links, notRun: [{ check, reason }] },
   rules: { [type]: { title, why, fix } },
   lighthouseAudits: { [id]: { description, learnMore } },
   summary: { pages, errors, warnings, infos }
@@ -466,6 +469,8 @@ The JSON report is meant to be handed to a human or an LLM for prioritizing fixe
 ```
 
 `lighthouse` is only present on pages Lighthouse ran for, and `lighthouseAudits` only when an audit is described.
+
+`coverage` says what the audit looked at, so a model can tell "not found" from "not looked for": the pageaudit version, the `settings` that change what is collected (with the defaults filled in), how many URLs were `found` and `audited` (and whether every sitemap file was read), with `--check-links` how many link targets were `checked` and how many were left past the cap, and `notRun`, the checks that did not run with the reason. `lighthouse` and `links` are listed when they were not asked for, and `orphan-page` when the audit could not tell orphan pages apart, such as after a `--limit` cut.
 
 `status` and `finalUrl` are `null` when the page could not be fetched at all.
 
