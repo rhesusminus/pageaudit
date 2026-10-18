@@ -10,20 +10,26 @@ const MAX_SKIPPED = 5
 // schema/digest.schema.json.
 export const DIGEST_VERSION = 1
 
-// Read first by a model, so the digest says itself how it was cut.
+// Read first by a model, so the digest says itself what it is for and how it was cut.
 const ABOUT =
-  'A short form of the JSON report for a first read. Every count is complete, only lists are cut: a finding shows ' +
-  `its ${MAX_VARIANTS} most common variants and ${MAX_URLS} pages of each, an audit its ${MAX_URLS} worst pages. ` +
+  'A short form of the JSON report, for triage: it lists the problems the checks detected, not the content of ' +
+  'the pages, so judging content, intent or navigation needs the page facts in the full report. ' +
+  'Every count is complete, only lists are cut: a finding shows its ' +
+  `${MAX_VARIANTS} most common variants and ${MAX_URLS} pages of each, an audit its ${MAX_URLS} worst pages. ` +
   'A variant is one element (same selector) or value (same context) found on several pages, often one template ' +
-  'to fix. In a finding, pages counts the pages involved and hits the issues, where a site issue such as a ' +
-  'duplicate title is one hit however many pages it lists. summary counts issues, summary.health pages by their ' +
-  'worst issue. Lighthouse is the exception: the report keeps only the worst failing audits of each page, so ' +
+  'to fix. The most common variant is not always the most important one. In a finding, pages counts the pages ' +
+  'involved and hits the issues, where a site issue such as a duplicate title is one hit however many pages it ' +
+  'lists. summary counts issues, summary.health pages by their worst issue. Lighthouse counts are the one ' +
+  'exception to complete counts: the report keeps only the worst failing audits of each page, so ' +
   'lighthouseAudits counts the pages among those, and pages[].omittedAudits says how many more a page had. ' +
-  'pages[].lighthouseWarnings counts the warnings of a run, such as an audit that crashed. The full details of a ' +
-  'page are in the report at report.path (relative to this file), under pages[] by url. Every page check runs ' +
-  'on every audited page that returned HTML, so an issue type that is missing passed. coverage.notRun lists the ' +
-  'checks that did not run: their issue types are missing because nothing was looked for. With --limit the first ' +
-  'URLs in input order are audited.'
+  'pages[].lighthouseWarnings counts the warnings of a run, such as an audit that crashed. Page checks run on ' +
+  'every page that answered 200 with HTML. A page they could not inspect, or inspected only in part, has an ' +
+  'issue saying so (http-status, not-html, fetch-failed, ' +
+  'check-failed, html-too-large). Elsewhere, an issue type that is missing means the checks found nothing. ' +
+  'coverage.notRun lists the checks that did not run: their issue types are missing because nothing was looked ' +
+  'for. With --limit the first URLs in input order are audited. The full details of a page are in the report at ' +
+  'report.path (relative to this file), under pages[] by url. If report.path is null, the full report was not ' +
+  'written and the details are not available.'
 
 // The first `max` of a list under `key`, and under `moreKey` how many were left out, when any were.
 function capped(list, max, key, moreKey) {

@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { adviceFor } from '../src/advice.js'
 import { buildDigest } from '../src/digest.js'
 import { buildReport } from '../src/report.js'
 import { auditLine, lhBlock } from './helpers/report-pages.js'
@@ -193,4 +194,13 @@ test('buildDigest: a page line says how many Lighthouse audits and warnings the 
     buildReport({ pages: [page('https://a.test/', [], { lighthouse: lhBlock([]) })], site: [] })
   )
   assert.deepEqual(Object.keys(quiet.pages[0]), ['url', 'status', 'errors', 'warnings', 'infos', 'scores'])
+})
+
+test('buildDigest: the about text names the issues that mark a page the checks could not fully inspect', () => {
+  const { about } = buildDigest(buildReport({ pages: [], site: [] }))
+  // A renamed type would leave the model looking for an issue that no longer exists.
+  for (const type of ['http-status', 'not-html', 'fetch-failed', 'check-failed', 'html-too-large']) {
+    assert.ok(about.includes(type), type)
+    assert.ok(adviceFor(type), type)
+  }
 })
