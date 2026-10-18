@@ -60,7 +60,7 @@ Link-following crawling is not supported.
 | `--json`                  |         | Print the JSON report. Also the default when stdout is not a TTY.                                                                                                                                                   |
 | `-h`, `--help`            |         | Show the options.                                                                                                                                                                                                   |
 
-Each request has a 15 s timeout (covering redirects and the body), follows up to 10 redirects and sends `User-Agent: pageaudit/<version> (+https://github.com/rhesusminus/pageaudit)`.
+Each request has a 15 s timeout (covering redirects and the body), follows up to 10 redirects and sends `User-Agent: pageaudit/<version> (+https://github.com/rhesusminus/pageaudit)`. Googlebot sends no `Accept-Language`, so pageaudit sends an empty one: Node's `fetch` would otherwise send `*`, and some sites answer that with a redirect to a random translation.
 
 ### Output
 

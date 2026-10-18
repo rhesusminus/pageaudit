@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { createServer } from 'node:http'
 import { fetchPage, request, USER_AGENT } from '../src/fetch.js'
 import { mockFetch } from './helpers/mock-fetch.js'
 
@@ -166,6 +167,19 @@ test('fetch: asks for the encodings Googlebot accepts', async (t) => {
   const requests = serve(t, { 'https://x.test/': html() })
   await fetchPage('https://x.test/')
   assert.equal(requests[0].init.headers['accept-encoding'], 'gzip, deflate, br')
+})
+
+// Node's fetch fills in its own Accept-Language, so only a real request shows what reaches the server.
+test('fetch: sends an empty Accept-Language instead of the "*" Node fetch would add', async (t) => {
+  let received
+  const server = createServer((req, res) => {
+    received = req.headers['accept-language']
+    res.writeHead(200, { 'content-type': 'text/html' }).end('<title>ok</title>')
+  })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  t.after(() => server.close())
+  await fetchPage(`http://127.0.0.1:${server.address().port}/`)
+  assert.equal(received, '')
 })
 
 test('fetch: returns the checked headers that were sent and the body size in bytes', async (t) => {
