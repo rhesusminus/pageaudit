@@ -119,23 +119,27 @@ async function loadDefaults() {
   return { lighthouse, launch, events }
 }
 
-// The status messages that start a phase worth showing, by prefix, in the order Lighthouse sends them. Everything
-// else (config steps, the machine benchmark, one message per gatherer and per audit, internal computations) keeps the
-// phase it falls in. Lighthouse also opens about:blank before the page itself, which is still preparation.
+// The status messages that start a phase worth showing, by prefix, in the order Lighthouse sends them, with how far
+// into a run the phase starts. Everything else (config steps, the machine benchmark, one message per gatherer and per
+// audit, internal computations) keeps the phase it falls in. Lighthouse also opens about:blank before the page itself,
+// which is still preparation. The starts come from timing real runs and are only approximate: the page load and data
+// collection take most of a run, while the audits, which send most of the messages, take a few percent of it.
 const PHASES = [
-  ['Connecting to browser', 'Preparing browser...'],
+  ['Connecting to browser', 'Preparing browser...', 0.05],
   ['Navigating to about:blank', null],
-  ['Navigating to ', 'Loading page...'],
-  ['Getting artifact: ', 'Collecting page data...'],
-  ['Analyzing and running audits', 'Analyzing and running audits...'],
-  ['Auditing: ', 'Analyzing and running audits...'],
-  ['Generating results', 'Generating results...']
+  ['Navigating to ', 'Loading page...', 0.2],
+  ['Getting artifact: ', 'Collecting page data...', 0.6],
+  ['Analyzing and running audits', 'Analyzing and running audits...', 0.95],
+  ['Auditing: ', 'Analyzing and running audits...', 0.95],
+  ['Generating results', 'Generating results...', 0.99]
 ]
 
-// The phase a Lighthouse status message starts, or null for a message that stays in the current phase.
+// The phase a Lighthouse status message starts as { text, progress }, progress being how far into the run it starts
+// (0 to 1), or null for a message that stays in the current phase.
 export function phaseOf(message) {
   if (typeof message !== 'string') return null
-  return PHASES.find(([prefix]) => message.startsWith(prefix))?.[1] ?? null
+  const [, text, progress] = PHASES.find(([prefix]) => message.startsWith(prefix)) ?? []
+  return text ? { text, progress } : null
 }
 
 async function runOnce(url, { lighthouse, port }) {
@@ -190,8 +194,8 @@ function phaseReporter(onStatus) {
   return {
     listener: ([, message]) => {
       const phase = phaseOf(message)
-      if (!phase || phase === shown) return
-      shown = phase
+      if (!phase || phase.text === shown) return
+      shown = phase.text
       onStatus(phase, run)
     },
     onRun: (n) => {
@@ -204,8 +208,9 @@ function phaseReporter(onStatus) {
 // Runs Lighthouse for every URL, one at a time in a single Chrome: parallel runs
 // compete for the CPU and skew each other's performance numbers. Never throws, each
 // entry is { summary } or { error }, in input order. `runs` is how many times each page is run. `onStatus(phase, run)`
-// is called when the current page enters a new phase, with the run it is on. `launch`, `lighthouse`, `events` (the
-// emitter of Lighthouse's status messages) and `load` can be injected so tests do not need Chrome.
+// is called when the current page enters a new phase, with the run it is on. The phase is { text, progress } as from
+// phaseOf. `launch`, `lighthouse`, `events` (the emitter of Lighthouse's status messages) and `load` can be injected so
+// tests do not need Chrome.
 export async function runLighthouse(
   urls,
   { launch, lighthouse, events, load = loadDefaults, onProgress = () => {}, onStatus = () => {}, runs = 1 } = {}

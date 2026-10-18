@@ -194,14 +194,26 @@ async function auditUrls(urls, options, { startSpinner, pace }) {
 // Lighthouse loads the page in Chrome, so it also runs on a page whose HTML the static checks could not process.
 const returnedHtml = (page) => page.facts !== null || checksFailed(page)
 
-// The Lighthouse spinner line: pages done or, once a page reports its phase, the page being run, its phase and, with
-// several runs, which run. Cut to the terminal width, since a spinner line that wraps leaves its first half behind on
-// every redraw. ora puts the spinner and a space in front of it.
+const BAR_WIDTH = 20
+
+// A bar and percent for a fraction from 0 to 1. Both round down, so they reach the end only when the work is done,
+// and the percent is padded so the text after it does not move as it grows. The bar is filled from the whole percent,
+// so the two always agree, and the epsilon keeps a fraction like 1.2 / 3 from rounding down to 39%.
+export function progressBar(fraction) {
+  const percent = Math.floor(fraction * 100 + 1e-9)
+  const filled = Math.floor((percent * BAR_WIDTH) / 100)
+  return `[${'█'.repeat(filled)}${'░'.repeat(BAR_WIDTH - filled)}] ${String(percent).padStart(3)}%`
+}
+
+// The Lighthouse spinner line: a bar over every run of every page, then pages done or, once a page reports its phase,
+// the page being run, its phase and, with several runs, which run. Within a run the bar moves to where the phase
+// starts, which is approximate. The line is cut to the terminal width, since a spinner line that wraps leaves its first
+// half behind on every redraw, and the bar comes first so it is cut last. ora puts the spinner and a space in front.
 export function lighthouseProgress({ done, phase, run }, total, runs, columns) {
+  const runsDone = done * runs + (phase ? run - 1 + phase.progress : 0)
   const runText = runs > 1 ? ` (run ${run}/${runs})` : ''
-  const text = phase
-    ? `Lighthouse page ${done + 1}/${total}${runText} - ${phase}`
-    : `Lighthouse ${done}/${total} pages...`
+  const status = phase ? `page ${done + 1}/${total}${runText} - ${phase.text}` : `${done}/${total} pages...`
+  const text = `Lighthouse ${progressBar(runsDone / (total * runs))} ${status}`
   return columns > 0 ? limit(text, columns - 2) : text
 }
 
@@ -224,6 +236,8 @@ async function addLighthouse(pages, startSpinner, runner, { all, chosen, runs })
   const targets = pages.filter((page) => returnedHtml(page) && (all || isPicked(page)))
   const urls = [...new Set(targets.map((page) => page.finalUrl))]
   if (!urls.length) return
+  // Unset until here, so the warning above can tell whether it was given. The bar counts the runs too.
+  runs ??= 1
   const state = { done: 0, phase: null, run: 1 }
   const spinner = startSpinner(lighthouseProgress(state, urls.length, runs, process.stderr.columns))
   const show = (change) => {

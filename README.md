@@ -131,7 +131,7 @@ Every issue, page or site, has an `id`, a `type`, a `message` and a `context`. W
 
 ### Lighthouse
 
-With `--lighthouse`, each page that returned HTML is also audited by [Lighthouse](https://github.com/GoogleChrome/lighthouse) (the `lighthouse` and `chrome-launcher` npm packages) in a headless Chrome. Pages run one at a time in a single Chrome, because parallel runs skew each other's performance numbers, so expect several seconds per page. It is off by default, which keeps the plain run fast and free of any browser dependency.
+With `--lighthouse`, each page that returned HTML is also audited by [Lighthouse](https://github.com/GoogleChrome/lighthouse) (the `lighthouse` and `chrome-launcher` npm packages) in a headless Chrome. Pages run one at a time in a single Chrome, because parallel runs skew each other's performance numbers, so expect several seconds per page. In a terminal the spinner shows a rough progress bar over every run of every page, with the page, run and phase it is on. It is off by default, which keeps the plain run fast and free of any browser dependency.
 
 The JSON report gets a `lighthouse` object on each audited page instead of the full Lighthouse result, which is far too large to read or hand to a model:
 

@@ -461,15 +461,33 @@ test('summarize: a saving that rounds to zero is no estimate', () => {
   assert.deepEqual(only({ CLS: 0.0006 }), { metrics: { cls: 0.001 } })
 })
 
-test('phaseOf: maps the messages that start a phase and leaves the rest in the current phase', () => {
-  assert.equal(phaseOf('Connecting to browser'), 'Preparing browser...')
-  assert.equal(phaseOf('Navigating to about:blank'), null)
-  assert.equal(phaseOf('Navigating to https://a.test/'), 'Loading page...')
-  assert.equal(phaseOf('Getting artifact: MetaElements'), 'Collecting page data...')
-  assert.equal(phaseOf('Analyzing and running audits...'), 'Analyzing and running audits...')
-  assert.equal(phaseOf('Auditing: Largest Contentful Paint'), 'Analyzing and running audits...')
-  assert.equal(phaseOf('Generating results...'), 'Generating results...')
-  for (const message of ['Getting browser version', 'Computing artifact: ProcessedTrace', 'Gather phase', undefined]) {
+test('phaseOf: maps the messages that start a phase, with where it starts, and leaves the rest in the current phase', () => {
+  const starts = [
+    ['Connecting to browser', 'Preparing browser...'],
+    ['Navigating to https://a.test/', 'Loading page...'],
+    ['Getting artifact: MetaElements', 'Collecting page data...'],
+    ['Analyzing and running audits...', 'Analyzing and running audits...'],
+    ['Auditing: Largest Contentful Paint', 'Analyzing and running audits...'],
+    ['Generating results...', 'Generating results...']
+  ]
+  const phases = starts.map(([message]) => phaseOf(message))
+  assert.deepEqual(
+    phases.map((phase) => phase.text),
+    starts.map(([, text]) => text)
+  )
+  // In the order Lighthouse sends them, each phase starts no earlier than the one before, and within the run.
+  const progress = phases.map((phase) => phase.progress)
+  assert.ok(
+    progress.every((at, i) => at > 0 && at < 1 && (i === 0 || at >= progress[i - 1])),
+    `${progress}`
+  )
+  for (const message of [
+    'Navigating to about:blank',
+    'Getting browser version',
+    'Computing artifact: ProcessedTrace',
+    'Gather phase',
+    undefined
+  ]) {
     assert.equal(phaseOf(message), null)
   }
 })
@@ -494,7 +512,7 @@ test('runLighthouse: passes on each change of phase with the run, and stops list
   await runLighthouse(['https://a.test/', 'https://b.test/'], {
     ...reporting(events, messages),
     runs: 2,
-    onStatus: (phase, run) => seen.push(`${run} ${phase}`)
+    onStatus: (phase, run) => seen.push(`${run} ${phase.text}`)
   })
   const once = (run) => [`${run} Loading page...`, `${run} Analyzing and running audits...`]
   assert.deepEqual(seen, [...once(1), ...once(2), ...once(1), ...once(2)])
