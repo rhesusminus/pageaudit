@@ -1,6 +1,4 @@
-import { parseArgs } from 'node:util'
 import chalk from 'chalk'
-import ora from 'ora'
 import { checkLinks } from './checks/site/links.js'
 import { checkRobotsTxt } from './checks/site/robots.js'
 import { checkSite } from './checks/site/index.js'
@@ -11,7 +9,7 @@ import {
   checkSitemapHosts
 } from './checks/site/sitemap.js'
 import { readLogo } from './html/logo.js'
-import { DEFAULT_TITLE, renderHtml } from './html/render.js'
+import { renderHtml } from './html/render.js'
 import { fromArgs } from './input/args.js'
 import { fromFile } from './input/file.js'
 import { resolveUrls } from './input/resolve.js'
@@ -21,103 +19,12 @@ import { lighthouseFailed, runLighthouse, shortSummary } from './lighthouse.js'
 import { hostThrottle } from './concurrency.js'
 import { checkLinkTargets, linksComplete, MAX_LINK_CHECKS } from './links.js'
 import { lighthouseIssues } from './lighthouse-issues.js'
-import { OPTIONS } from './options.js'
+import { HELP, parseOptions, USAGE } from './options.js'
 import { reportPathProblems, writeReportFile } from './output.js'
-import { limit } from './text.js'
+import { createProgress } from './progress.js'
 import { buildReport } from './report.js'
 import { formatReport } from './terminal.js'
-import { checksFailed, DEFAULT_CONCURRENCY, DEFAULT_DELAY_MS, runAudit } from './runner.js'
-
-const MAX_LIGHTHOUSE_RUNS = 9
-
-const USAGE = `Usage: pageaudit [url...] [--urls-file <path>] [--sitemap <url>] [options]
-Run "pageaudit --help" for all options.`
-
-const HELP = `Usage: pageaudit [url...] [--urls-file <path>] [--sitemap <url>] [options]
-
-Audits one or more pages for basic SEO and HTML issues. URLs from arguments,
-files and sitemaps are merged and deduplicated.
-
-Options:
-  --urls-file <path>   read URLs from a file, one per line, # for comments ("-" reads stdin)
-  --sitemap <url>      read URLs from a sitemap, following a sitemap index one level deep
-  --limit <n>          audit at most n pages
-  --concurrency <n>    pages fetched at the same time (default ${DEFAULT_CONCURRENCY})
-  --delay <ms>         minimum time between requests to the same host (default ${DEFAULT_DELAY_MS})
-  --lighthouse         also run Lighthouse (needs Chrome) on every page that returned HTML, one at a time
-  --lighthouse-page <url>
-                       run Lighthouse with full detail on this page (added to the audit if missing, never cut by
-                       --limit). A URL in a --urls-file can be followed by "lighthouse" to do the same.
-                       With these and no --lighthouse, only those pages run. With --lighthouse too, the others
-                       get a short summary.
-  --lighthouse-runs <n>
-                       run Lighthouse n times per page (1 to ${MAX_LIGHTHOUSE_RUNS}, default 1) and keep the median run, since single runs vary
-  --check-links        also check where the internal links of the audited pages lead: broken links, redirects,
-                       and with a whole --sitemap audited, pages no other page links to
-  --fail-on <level>    exit 1 on any "error" (default) or on any "warning" or error
-  --out <path>         also write the JSON report to a file, for example to hand to Claude
-  --html <path>        also write a report for customers as one self-contained HTML file
-  --title <text>       report title in the HTML report (default "${DEFAULT_TITLE}")
-  --client <name>      client name shown in the HTML report
-  --logo <file>        logo for the HTML report (png, jpg, gif, webp or svg, at most 512 KB)
-  --json               print the report as JSON (default when stdout is not a TTY)
-  -h, --help           show this help
-
---urls-file, --sitemap and --lighthouse-page can be given more than once.
-Run with no arguments in a terminal to be asked what to audit, shown the command and asked whether to run it.`
-
-// ora sizes its line clearing as ceil(width / columns), so a TTY that reports
-// 0 columns (Docker -t, some CI terminals) makes spinner.stop() loop forever.
-export function canSpin(stream) {
-  return Boolean(stream.isTTY) && stream.columns > 0
-}
-
-function integer(name, value, min, max = Infinity) {
-  if (value === undefined) return undefined
-  if (!/^\d+$/.test(value) || Number(value) < min || Number(value) > max) {
-    const range = max === Infinity ? `at least ${min}` : `from ${min} to ${max}`
-    throw new Error(`--${name} must be a whole number ${range}, got "${value}"`)
-  }
-  return Number(value)
-}
-
-// An empty value, such as --out "", is almost always a shell variable that was not set.
-function requireValues(values, names) {
-  for (const name of names) {
-    if (values[name] === '') throw new Error(`--${name} needs a value`)
-  }
-}
-
-function parseOptions(argv) {
-  const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: OPTIONS })
-  requireValues(values, ['out', 'html', 'title', 'client', 'logo'])
-  if (values['lighthouse-page']?.includes('')) throw new Error('--lighthouse-page needs a value')
-  const failOn = values['fail-on'] ?? 'error'
-  if (failOn !== 'error' && failOn !== 'warning') {
-    throw new Error(`--fail-on must be "error" or "warning", got "${failOn}"`)
-  }
-  if (!values.html && (values.title || values.client || values.logo)) {
-    throw new Error('--title, --client and --logo only apply together with --html')
-  }
-  return {
-    help: values.help,
-    urls: positionals,
-    files: values['urls-file'] ?? [],
-    sitemaps: values.sitemap ?? [],
-    limit: integer('limit', values.limit, 1),
-    concurrency: integer('concurrency', values.concurrency, 1),
-    delay: integer('delay', values.delay, 0),
-    failOn,
-    lighthouse: values.lighthouse,
-    lighthousePages: values['lighthouse-page'] ?? [],
-    lighthouseRuns: integer('lighthouse-runs', values['lighthouse-runs'], 1, MAX_LIGHTHOUSE_RUNS),
-    checkLinks: values['check-links'],
-    out: values.out,
-    html: values.html,
-    branding: { title: values.title, client: values.client, logo: values.logo },
-    json: values.json
-  }
-}
+import { checksFailed, DEFAULT_DELAY_MS, runAudit } from './runner.js'
 
 // Collects entries from every input. Only the inputs themselves are fatal (a file
 // that cannot be read, a sitemap that cannot be fetched); bad URLs are skipped.
@@ -133,7 +40,7 @@ async function readInputs(options, stdin, { spinner, pace }) {
   for (const path of options.files) for (const entry of await fromFile(path, { stdin })) entries.push(entry)
   // A sitemap given twice is followed once, so its skipped files are not reported twice.
   for (const url of new Set(options.sitemaps)) {
-    if (spinner) spinner.text = `Reading sitemap ${url}`
+    spinner.update(`Reading sitemap ${url}`)
     const sitemap = await fromSitemap(url, { beforeHop: pace, cache })
     for (const entry of sitemap.entries) entries.push(entry)
     for (const skip of sitemap.skipped) skipped.push(skip)
@@ -145,15 +52,15 @@ async function readInputs(options, stdin, { spinner, pace }) {
 }
 
 // Resolves the URLs to audit. Returns { inputs } or { exitCode } when reading the inputs failed.
-async function loadInputs(options, stdin, { startSpinner, pace }) {
-  const spinner = options.sitemaps.length || options.files.includes('-') ? startSpinner('Reading URLs') : null
+async function loadInputs(options, stdin, { progress, pace }) {
+  const reading = options.sitemaps.length || options.files.includes('-')
+  const spinner = reading ? progress.start('Reading URLs') : progress.silent
   try {
     const inputs = await readInputs(options, stdin, { spinner, pace })
-    spinner?.stop()
+    spinner.stop()
     return { inputs }
   } catch (err) {
-    spinner?.fail(err.message)
-    if (!spinner) console.error(err.message)
+    spinner.fail(err.message)
     return { exitCode: 2 }
   }
 }
@@ -177,52 +84,27 @@ function announceInputs({ urls, skipped, total, sitemapFiles }, options) {
   return true
 }
 
-async function auditUrls(urls, options, { startSpinner, pace }) {
-  const progress = (done) => `Auditing ${done}/${urls.length} pages...`
-  const spinner = startSpinner(progress(0))
+async function auditUrls(urls, options, { progress, pace }) {
+  const text = (done) => `Auditing ${done}/${urls.length} pages...`
+  const spinner = progress.start(text(0))
   const pages = await runAudit(urls, {
     concurrency: options.concurrency,
     pace,
-    onProgress: (done) => {
-      if (spinner) spinner.text = progress(done)
-    }
+    onProgress: (done) => spinner.update(text(done))
   })
-  spinner?.stop()
+  spinner.stop()
   return pages
 }
 
 // Lighthouse loads the page in Chrome, so it also runs on a page whose HTML the static checks could not process.
 const returnedHtml = (page) => page.facts !== null || checksFailed(page)
 
-const BAR_WIDTH = 20
-
-// A bar and percent for a fraction from 0 to 1. Both round down, so they reach the end only when the work is done,
-// and the percent is padded so the text after it does not move as it grows. The bar is filled from the whole percent,
-// so the two always agree, and the epsilon keeps a fraction like 1.2 / 3 from rounding down to 39%.
-export function progressBar(fraction) {
-  const percent = Math.floor(fraction * 100 + 1e-9)
-  const filled = Math.floor((percent * BAR_WIDTH) / 100)
-  return `[${'█'.repeat(filled)}${'░'.repeat(BAR_WIDTH - filled)}] ${String(percent).padStart(3)}%`
-}
-
-// The Lighthouse spinner line: a bar over every run of every page, then pages done or, once a page reports its phase,
-// the page being run, its phase and, with several runs, which run. Within a run the bar moves to where the phase
-// starts, which is approximate. The line is cut to the terminal width, since a spinner line that wraps leaves its first
-// half behind on every redraw, and the bar comes first so it is cut last. ora puts the spinner and a space in front.
-export function lighthouseProgress({ done, phase, run }, total, runs, columns) {
-  const runsDone = done * runs + (phase ? run - 1 + phase.progress : 0)
-  const runText = runs > 1 ? ` (run ${run}/${runs})` : ''
-  const status = phase ? `page ${done + 1}/${total}${runText} - ${phase.text}` : `${done}/${total} pages...`
-  const text = `Lighthouse ${progressBar(runsDone / (total * runs))} ${status}`
-  return columns > 0 ? limit(text, columns - 2) : text
-}
-
 // Runs Lighthouse once per distinct final URL (several inputs can redirect to the same
 // page) and attaches the outcome to every page that ended up there. `all` is --lighthouse and `chosen` the pages
 // picked with --lighthouse-page or a marker, by the URL as given. Picked pages get the full detail, also when
 // another page lands on the same final URL. Without any picked page every page does, and with some the others only
 // get the short summary.
-async function addLighthouse(pages, startSpinner, runner, { all, chosen, runs }) {
+async function addLighthouse(pages, progress, runner, { all, chosen, runs }) {
   if (!all && chosen.length === 0) {
     if (runs) console.error('--lighthouse-runs has no effect without --lighthouse or a page picked for Lighthouse.')
     return
@@ -238,18 +120,9 @@ async function addLighthouse(pages, startSpinner, runner, { all, chosen, runs })
   if (!urls.length) return
   // Unset until here, so the warning above can tell whether it was given. The bar counts the runs too.
   runs ??= 1
-  const state = { done: 0, phase: null, run: 1 }
-  const spinner = startSpinner(lighthouseProgress(state, urls.length, runs, process.stderr.columns))
-  const show = (change) => {
-    Object.assign(state, change)
-    if (spinner) spinner.text = lighthouseProgress(state, urls.length, runs, process.stderr.columns)
-  }
-  const results = await runner(urls, {
-    runs,
-    onProgress: (done) => show({ done, phase: null, run: 1 }),
-    onStatus: (phase, run) => show({ phase, run })
-  })
-  spinner?.stop()
+  const { onProgress, onStatus, stop } = progress.lighthouse(urls.length, runs)
+  const results = await runner(urls, { runs, onProgress, onStatus })
+  stop()
   for (const page of targets) {
     const result = results[urls.indexOf(page.finalUrl)]
     const detailed = picked.size === 0 || isPicked(page)
@@ -261,10 +134,10 @@ async function addLighthouse(pages, startSpinner, runner, { all, chosen, runs })
 
 // Reads the robots.txt files of the audited sites and checks them and the sitemaps against them, with a spinner
 // because a slow host can take a while. Each robots.txt is read once for all checks.
-async function checkRobotsAndSitemaps(pages, inputs, options, { startSpinner, pace }) {
+async function checkRobotsAndSitemaps(pages, inputs, options, { progress, pace }) {
   const load = cachedRobotsLoader((origin) => loadRobots(origin, { beforeHop: pace }))
   const loaded = pages.some((page) => page.status === 200 && page.finalUrl)
-  const spinner = loaded || inputs.sitemapFiles.length ? startSpinner('Reading robots.txt...') : null
+  const spinner = loaded || inputs.sitemapFiles.length ? progress.start('Reading robots.txt...') : progress.silent
   try {
     return [
       ...(await checkRobotsTxt(pages, { load })),
@@ -273,7 +146,7 @@ async function checkRobotsAndSitemaps(pages, inputs, options, { startSpinner, pa
       ...(options.sitemaps.length ? [] : await checkSitemapDeclared(pages, { load }))
     ]
   } finally {
-    spinner?.stop()
+    spinner.stop()
   }
 }
 
@@ -323,17 +196,14 @@ const findsOrphans = (options, inputs, links) =>
   options.sitemaps.length > 0 && inputs.sitemapsComplete && inputs.urls.length === inputs.total && linksComplete(links)
 
 // Requests every internal link target the audit has not seen yet, then checks the links.
-async function checkInternalLinks(pages, inputs, options, { startSpinner, pace }) {
-  const progress = (done, total) => `Checking links ${done}/${total}...`
-  const spinner = startSpinner('Checking links...')
+async function checkInternalLinks(pages, inputs, options, { progress, pace }) {
+  const spinner = progress.start('Checking links...')
   const targets = await checkLinkTargets(pages, {
     concurrency: options.concurrency,
     pace,
-    onProgress: (done, total) => {
-      if (spinner) spinner.text = progress(done, total)
-    }
+    onProgress: (done, total) => spinner.update(`Checking links ${done}/${total}...`)
   })
-  spinner?.stop()
+  spinner.stop()
   if (targets.unchecked) {
     console.error(
       `Checked ${MAX_LINK_CHECKS} link targets, ${targets.unchecked} linked from fewer pages were not checked, so orphan pages were not looked for.`
@@ -378,18 +248,17 @@ export async function run(argv, { stdin = process.stdin, lighthouse = runLightho
   if (logo === undefined) return 2
 
   const json = options.json ?? !process.stdout.isTTY
-  const spin = !json && canSpin(process.stderr)
-  const startSpinner = (text) => (spin ? ora({ text, stream: process.stderr }).start() : null)
+  const progress = createProgress({ enabled: !json, stream: process.stderr })
   // One spacing for every request of the run, so --delay holds across sitemaps, pages, redirect hops, robots.txt
   // and link checks alike.
-  const session = { startSpinner, pace: hostThrottle(options.delay ?? DEFAULT_DELAY_MS) }
+  const session = { progress, pace: hostThrottle(options.delay ?? DEFAULT_DELAY_MS) }
 
   const { inputs, exitCode } = await loadInputs(options, stdin, session)
   if (exitCode) return exitCode
   if (!announceInputs(inputs, options)) return 2
 
   const pages = await auditUrls(inputs.urls, options, session)
-  await addLighthouse(pages, startSpinner, lighthouse, {
+  await addLighthouse(pages, progress, lighthouse, {
     all: options.lighthouse,
     chosen: inputs.marked,
     runs: options.lighthouseRuns

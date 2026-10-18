@@ -4,7 +4,7 @@ import { link, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
-import { canSpin, lighthouseProgress, progressBar, run } from '../src/cli.js'
+import { run } from '../src/cli.js'
 import { SCHEMA_VERSION } from '../src/report.js'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
 
@@ -338,14 +338,6 @@ test('cli: --help prints the options and exits 0', async (t) => {
   for (const option of ['--urls-file', '--sitemap', '--limit', '--concurrency', '--delay', '--fail-on', '--json']) {
     assert.match(stdout, new RegExp(option))
   }
-})
-
-test('cli: spinner is only enabled on a TTY that reports columns', () => {
-  assert.equal(canSpin({ isTTY: true, columns: 80 }), true)
-  assert.equal(canSpin({ isTTY: true, columns: 0 }), false)
-  assert.equal(canSpin({ isTTY: true }), false)
-  assert.equal(canSpin({ isTTY: false, columns: 80 }), false)
-  assert.equal(canSpin({}), false)
 })
 
 const fakeLighthouse = (results) => async (urls) => results.slice(0, urls.length)
@@ -1001,44 +993,4 @@ test('cli: --delay spaces every request to a host: sitemaps, pages, redirect hop
     gaps.every((gap) => gap >= 38),
     `gaps ${gaps.join(', ')}`
   )
-})
-
-test('progressBar: fills 20 cells and rounds down, so it is full only when done', () => {
-  assert.equal(progressBar(0), '[░░░░░░░░░░░░░░░░░░░░]   0%')
-  assert.equal(progressBar(0.4), '[████████░░░░░░░░░░░░]  40%')
-  assert.equal(progressBar(0.999), '[███████████████████░]  99%')
-  assert.equal(progressBar(1), '[████████████████████] 100%')
-})
-
-test('lighthouseProgress: a bar over every run, then pages done or the running page with its phase and run', () => {
-  const loading = { text: 'Loading page...', progress: 0.2 }
-  assert.equal(
-    lighthouseProgress({ done: 0, phase: null, run: 1 }, 4, 1, 80),
-    `Lighthouse ${progressBar(0)} 0/4 pages...`
-  )
-  assert.equal(
-    lighthouseProgress({ done: 1, phase: null, run: 1 }, 4, 1, 80),
-    `Lighthouse ${progressBar(0.25)} 1/4 pages...`
-  )
-  assert.equal(
-    lighthouseProgress({ done: 1, phase: loading, run: 1 }, 4, 1, 80),
-    `Lighthouse ${progressBar(0.3)} page 2/4 - Loading page...`
-  )
-  // Page 2 of 4 with 2 runs each: 2 runs of page 1, 1 run of page 2 and a fifth of the second run, out of 8.
-  assert.equal(
-    lighthouseProgress({ done: 1, phase: loading, run: 2 }, 4, 2, 80),
-    `Lighthouse ${progressBar(3.2 / 8)} page 2/4 (run 2/2) - Loading page...`
-  )
-})
-
-test('lighthouseProgress: cuts the line to the terminal width, the bar last', () => {
-  const state = { done: 1, phase: { text: 'Loading page...', progress: 0.2 }, run: 1 }
-  const full = `Lighthouse ${progressBar(0.4)} page 2/3 - Loading page...`
-  assert.equal(lighthouseProgress(state, 3, 1, undefined), full)
-  assert.equal(lighthouseProgress(state, 3, 1, 48), `Lighthouse ${progressBar(0.4)} page...`)
-  // Terminals too narrow for the dots still never get a line wider than they are.
-  assert.equal(lighthouseProgress(state, 3, 1, 5), 'Lig')
-  assert.equal(lighthouseProgress(state, 3, 1, 3), 'L')
-  assert.equal(lighthouseProgress(state, 3, 1, 2), '')
-  assert.equal(lighthouseProgress(state, 3, 1, 1), '')
 })
