@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { mockFetch } from './mock-fetch.js'
 
 const FIXTURES = new URL('../fixtures/', import.meta.url)
 export const FIXTURE_HOST = 'https://fixtures.test'
@@ -38,7 +39,7 @@ const GENERATED = {
 // and /redirect-twice (301 to /redirect-once), /server-error (500). Unknown names answer 404, and
 // other origins fail like a DNS error (ENOTFOUND).
 export function mockFixtureFetch(t) {
-  return t.mock.method(globalThis, 'fetch', async (input) => {
+  return mockFetch(t, async (input) => {
     const url = new URL(input)
     if (url.origin !== FIXTURE_HOST) {
       throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ENOTFOUND' } })

@@ -1,11 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { fetchPage, request, USER_AGENT } from '../src/fetch.js'
+import { mockFetch } from './helpers/mock-fetch.js'
 
 const fetchHtml = async (url) => (await fetchPage(url)).html
 
 const respond = (t, body, contentType) =>
-  t.mock.method(globalThis, 'fetch', async () => new Response(body, { headers: { 'content-type': contentType } }))
+  mockFetch(t, async () => new Response(body, { headers: { 'content-type': contentType } }))
 
 // "Café" encoded as ISO-8859-1 (0xE9), which is invalid UTF-8.
 const latin1 = (html) => Uint8Array.from(html, (c) => c.charCodeAt(0))
@@ -117,14 +118,14 @@ test('request: a body of exactly the limit is read whole', async (t) => {
 })
 
 test('fetch: a cause with a message but no code is surfaced', async (t) => {
-  t.mock.method(globalThis, 'fetch', async () => {
+  mockFetch(t, async () => {
     throw new TypeError('fetch failed', { cause: new Error('bad port') })
   })
   await assert.rejects(fetchHtml('http://x.test:6000/'), /Could not fetch http:\/\/x\.test:6000\/: bad port/)
 })
 
 test('fetch: a cause with a code prefers the code', async (t) => {
-  t.mock.method(globalThis, 'fetch', async () => {
+  mockFetch(t, async () => {
     throw new TypeError('fetch failed', {
       cause: Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' })
     })
@@ -135,7 +136,7 @@ test('fetch: a cause with a code prefers the code', async (t) => {
 // Answers each request from a map of URL -> Response factory and records the requests.
 function serve(t, routes) {
   const requests = []
-  t.mock.method(globalThis, 'fetch', async (input, init) => {
+  mockFetch(t, async (input, init) => {
     requests.push({ url: String(input), init })
     const route = routes[String(input)]
     if (!route) throw new TypeError('fetch failed', { cause: { code: 'ENOTFOUND' } })
@@ -219,7 +220,7 @@ test('fetch: follows redirects and records every hop', async (t) => {
 
 test('request: beforeHop is awaited before every request of a redirect chain', async (t) => {
   const fetched = []
-  t.mock.method(globalThis, 'fetch', async (input) => {
+  mockFetch(t, async (input) => {
     fetched.push(String(input))
     return String(input).endsWith('/a') ? redirect('https://x.test/b')() : html()()
   })
@@ -248,7 +249,7 @@ test('fetchPage: beforeHop is awaited before every request, redirect hops includ
 })
 
 test('request: waiting in beforeHop does not count toward the timeout', async (t) => {
-  t.mock.method(globalThis, 'fetch', async (input, init) => {
+  mockFetch(t, async (input, init) => {
     if (init.signal.aborted) throw init.signal.reason
     return html()()
   })
@@ -259,7 +260,7 @@ test('request: waiting in beforeHop does not count toward the timeout', async (t
 
 test('request: the time of every hop counts toward one timeout', async (t) => {
   // Each hop takes 40 ms against a 60 ms budget: the first fits, the second runs out with 20 ms left.
-  t.mock.method(globalThis, 'fetch', async (input, init) => {
+  mockFetch(t, async (input, init) => {
     await new Promise((resolve) => setTimeout(resolve, 40))
     if (init.signal.aborted) throw init.signal.reason
     return String(input).endsWith('/a') ? redirect('https://x.test/b')() : html()()
