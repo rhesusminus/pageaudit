@@ -4,7 +4,7 @@ import { link, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
-import { canSpin, lighthouseProgress, run } from '../src/cli.js'
+import { canSpin, lighthouseProgress, progressBar, run } from '../src/cli.js'
 import { SCHEMA_VERSION } from '../src/report.js'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
 
@@ -515,11 +515,14 @@ test('cli: --lighthouse-runs without any Lighthouse run says it has no effect', 
   assert.match(stderr, /--lighthouse-runs has no effect/)
 })
 
-test('cli: --lighthouse-runs reaches the runner and must be a number from 1 to 9', async (t) => {
+test('cli: --lighthouse-runs reaches the runner, 1 without it, and must be a number from 1 to 9', async (t) => {
   let runs
   const lighthouse = async (list, options) => ((runs = options.runs), list.map(() => ({ summary: detailedSummary })))
   await runJson(t, [fixtureUrl('good.html'), '--lighthouse', '--lighthouse-runs', '3'], { lighthouse })
   assert.equal(runs, 3)
+  // The progress bar divides by the runs, so they are a number also when not given.
+  await runJson(t, [fixtureUrl('good.html'), '--lighthouse'], { lighthouse })
+  assert.equal(runs, 1)
   for (const bad of ['0', '10', 'x']) {
     const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), '--lighthouse-runs', bad])
     assert.equal(code, 2)
@@ -1000,16 +1003,42 @@ test('cli: --delay spaces every request to a host: sitemaps, pages, redirect hop
   )
 })
 
-test('lighthouseProgress: pages done, then the running page with its phase and run, cut to the terminal width', () => {
-  assert.equal(lighthouseProgress({ done: 0, phase: null, run: 1 }, 3, 1, 80), 'Lighthouse 0/3 pages...')
-  const loading = { done: 1, phase: 'Loading page...', run: 1 }
-  assert.equal(lighthouseProgress(loading, 3, 1, 80), 'Lighthouse page 2/3 - Loading page...')
-  assert.equal(lighthouseProgress({ ...loading, run: 2 }, 3, 3, 80), 'Lighthouse page 2/3 (run 2/3) - Loading page...')
-  assert.equal(lighthouseProgress(loading, 3, 1, 24), 'Lighthouse page 2/3...')
+test('progressBar: fills 20 cells and rounds down, so it is full only when done', () => {
+  assert.equal(progressBar(0), '[░░░░░░░░░░░░░░░░░░░░]   0%')
+  assert.equal(progressBar(0.4), '[████████░░░░░░░░░░░░]  40%')
+  assert.equal(progressBar(0.999), '[███████████████████░]  99%')
+  assert.equal(progressBar(1), '[████████████████████] 100%')
+})
+
+test('lighthouseProgress: a bar over every run, then pages done or the running page with its phase and run', () => {
+  const loading = { text: 'Loading page...', progress: 0.2 }
+  assert.equal(
+    lighthouseProgress({ done: 0, phase: null, run: 1 }, 4, 1, 80),
+    `Lighthouse ${progressBar(0)} 0/4 pages...`
+  )
+  assert.equal(
+    lighthouseProgress({ done: 1, phase: null, run: 1 }, 4, 1, 80),
+    `Lighthouse ${progressBar(0.25)} 1/4 pages...`
+  )
+  assert.equal(
+    lighthouseProgress({ done: 1, phase: loading, run: 1 }, 4, 1, 80),
+    `Lighthouse ${progressBar(0.3)} page 2/4 - Loading page...`
+  )
+  // Page 2 of 4 with 2 runs each: 2 runs of page 1, 1 run of page 2 and a fifth of the second run, out of 8.
+  assert.equal(
+    lighthouseProgress({ done: 1, phase: loading, run: 2 }, 4, 2, 80),
+    `Lighthouse ${progressBar(3.2 / 8)} page 2/4 (run 2/2) - Loading page...`
+  )
+})
+
+test('lighthouseProgress: cuts the line to the terminal width, the bar last', () => {
+  const state = { done: 1, phase: { text: 'Loading page...', progress: 0.2 }, run: 1 }
+  const full = `Lighthouse ${progressBar(0.4)} page 2/3 - Loading page...`
+  assert.equal(lighthouseProgress(state, 3, 1, undefined), full)
+  assert.equal(lighthouseProgress(state, 3, 1, 48), `Lighthouse ${progressBar(0.4)} page...`)
   // Terminals too narrow for the dots still never get a line wider than they are.
-  assert.equal(lighthouseProgress(loading, 3, 1, 5), 'Lig')
-  assert.equal(lighthouseProgress(loading, 3, 1, 3), 'L')
-  assert.equal(lighthouseProgress(loading, 3, 1, 2), '')
-  assert.equal(lighthouseProgress(loading, 3, 1, 1), '')
-  assert.equal(lighthouseProgress(loading, 3, 1, undefined), 'Lighthouse page 2/3 - Loading page...')
+  assert.equal(lighthouseProgress(state, 3, 1, 5), 'Lig')
+  assert.equal(lighthouseProgress(state, 3, 1, 3), 'L')
+  assert.equal(lighthouseProgress(state, 3, 1, 2), '')
+  assert.equal(lighthouseProgress(state, 3, 1, 1), '')
 })
