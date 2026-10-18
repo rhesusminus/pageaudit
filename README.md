@@ -348,10 +348,11 @@ src/
   concurrency.js        mapLimited() and hostThrottle(): a concurrency limit and a per-host delay
   lighthouse-limits.js  the good and poor bands of the Lighthouse metrics
   output.js             writeReportFile(): writes a report file without throwing
+  overview.js           views over a finished report: issues grouped by type, page health, average scores
   html/                 the customer-facing HTML report
     render.js           renderHtml(): the whole document
     sections.js         cover, summary, what to fix, pages and method sections
-    model.js            grouping issues, page health, average scores, metric bands
+    model.js            site-wide issues, the verdict and metric bands
     detail.js           collapsed evidence: the element behind an issue, Lighthouse items and the less visible facts
     format.js           category names, plurals and links shared by the sections
     styles.js           the stylesheet (light, dark and print)

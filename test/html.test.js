@@ -3,15 +3,8 @@ import assert from 'node:assert/strict'
 import { readdir, readFile } from 'node:fs/promises'
 import { ADVICE } from '../src/advice.js'
 import { escapeHtml, markup, raw } from '../src/html/escape.js'
-import {
-  averageScores,
-  groupIssues,
-  metricBand,
-  pageHealth,
-  pagesWithSiteIssues,
-  siteWideIssues,
-  verdict
-} from '../src/html/model.js'
+import { metricBand, siteWideIssues, verdict } from '../src/html/model.js'
+import { averageScores, groupIssues, pageHealth, pagesWithSiteIssues } from '../src/overview.js'
 import { renderHtml } from '../src/html/render.js'
 import { buildReport } from '../src/report.js'
 
