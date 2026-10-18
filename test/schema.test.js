@@ -189,7 +189,8 @@ test('schema: the digest of a report with every kind of page, issue and Lighthou
 })
 
 test('schema: a digest that cut its lists matches it', () => {
-  // Seven pages, each with a missing alt on its own element, so the finding has more variants than it shows.
+  // Seven pages, each with a missing alt on its own element and its own message, so the finding has more messages
+  // and variants than it shows.
   const pages = Array.from({ length: 7 }, (_, i) => {
     const url = `https://a.test/${i}`
     const issue = {
@@ -198,7 +199,7 @@ test('schema: a digest that cut its lists matches it', () => {
       severity: 'error',
       category: 'accessibility',
       source: 'https://www.w3.org/WAI/tutorials/images/',
-      message: 'Image missing alt attribute',
+      message: `Image ${i} missing alt attribute`,
       context: '<img>',
       selector: `#i${i}`
     }
@@ -207,7 +208,7 @@ test('schema: a digest that cut its lists matches it', () => {
   const skipped = Array.from({ length: 7 }, (_, i) => ({ input: `x${i}`, source: 'argument', reason: 'not a URL' }))
   const digest = buildDigest(buildReport({ pages, site: [], skipped }))
   assert.deepEqual(checkDigest(digest), [])
-  assert.deepEqual([digest.findings[0].moreVariants, digest.moreSkipped], [2, 2])
+  assert.deepEqual([digest.findings[0].moreMessages, digest.findings[0].moreVariants, digest.moreSkipped], [4, 2, 2])
 })
 
 test('schema: Lighthouse output built by the real code matches, with the summary fields the schema lists', async (t) => {

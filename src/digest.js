@@ -3,6 +3,7 @@ import { averageScores, groupIssues, pageHealth, pagesWithSiteIssues } from './o
 import { limit, MAX_URL } from './text.js'
 
 const MAX_VARIANTS = 5
+const MAX_MESSAGES = 3
 const MAX_URLS = 3
 const MAX_SKIPPED = 5
 
@@ -15,7 +16,9 @@ const ABOUT =
   'A short form of the JSON report, for triage: it lists the problems the checks detected, not the content of ' +
   'the pages, so judging content, intent or navigation needs the page facts in the full report. ' +
   'Every count is complete, only lists are cut: a finding shows its ' +
-  `${MAX_VARIANTS} most common variants and ${MAX_URLS} pages of each, an audit its ${MAX_URLS} worst pages. ` +
+  `${MAX_MESSAGES} most common messages, its ${MAX_VARIANTS} most common variants and ${MAX_URLS} pages of each, ` +
+  `an audit its ${MAX_URLS} worst pages. A message shared by many pages is one pattern, even when each page has ` +
+  'its own element. ' +
   'A variant is one element (same selector) or value (same context) found on several pages, often one template ' +
   'to fix. The most common variant is not always the most important one. In a finding, pages counts the pages ' +
   'involved and hits the issues, where a site issue such as a duplicate title is one hit however many pages it ' +
@@ -41,29 +44,36 @@ function capped(list, max, key, moreKey) {
 // a long URL. They are grouped whole and only cut for display, with the cap URLs get, so the digest stays small.
 const shown = (text) => limit(text, MAX_URL)
 
+// Hits grouped by `keyOf`, each group with its first hit and the pages it is on, most pages first.
+function groupHits(hits, keyOf) {
+  const groups = new Map()
+  for (const hit of hits) {
+    const key = keyOf(hit)
+    const group = groups.get(key) ?? { hit, urls: new Set() }
+    for (const url of hit.urls) group.urls.add(url)
+    groups.set(key, group)
+  }
+  return [...groups.values()].sort((a, b) => b.urls.size - a.urls.size)
+}
+
 // The hits of one issue type split by the element or value they are about, most pages first. Hits on the same
 // selector with the same context are one variant, so a template element repeated on every page is one line.
-function variants(hits) {
-  const byKey = new Map()
-  for (const hit of hits) {
-    const key = `${hit.selector ?? ''}\u0000${hit.context}`
-    const variant = byKey.get(key) ?? { hit, urls: new Set() }
-    for (const url of hit.urls) variant.urls.add(url)
-    byKey.set(key, variant)
-  }
-  return [...byKey.values()]
-    .sort((a, b) => b.urls.size - a.urls.size)
-    .map(({ hit, urls }) => ({
-      message: shown(hit.message),
-      context: shown(hit.context),
-      ...(hit.selector ? { selector: shown(hit.selector) } : {}),
-      ...(hit.html ? { html: hit.html } : {}),
-      ...(hit.actual === undefined ? {} : { actual: typeof hit.actual === 'string' ? shown(hit.actual) : hit.actual }),
-      ...(hit.expected === undefined ? {} : { expected: hit.expected }),
-      pages: urls.size,
-      urls: [...urls].slice(0, MAX_URLS)
-    }))
-}
+const variants = (hits) =>
+  groupHits(hits, (hit) => `${hit.selector ?? ''}\u0000${hit.context}`).map(({ hit, urls }) => ({
+    message: shown(hit.message),
+    context: shown(hit.context),
+    ...(hit.selector ? { selector: shown(hit.selector) } : {}),
+    ...(hit.html ? { html: hit.html } : {}),
+    ...(hit.actual === undefined ? {} : { actual: typeof hit.actual === 'string' ? shown(hit.actual) : hit.actual }),
+    ...(hit.expected === undefined ? {} : { expected: hit.expected }),
+    pages: urls.size,
+    urls: [...urls].slice(0, MAX_URLS)
+  }))
+
+// The distinct messages of one issue type, most pages first. Where every element is different, such as a heading
+// level skipped in the text of each blog post, the message still shows that it is one pattern across the pages.
+const messages = (hits) =>
+  groupHits(hits, (hit) => hit.message).map(({ hit, urls }) => ({ message: shown(hit.message), pages: urls.size }))
 
 function findings(report) {
   return groupIssues(report).map((group) => {
@@ -75,6 +85,7 @@ function findings(report) {
       ...(rule ? { title: rule.title, why: rule.why, fix: rule.fix } : {}),
       pages: group.urls.length,
       hits: group.hits.length,
+      ...capped(messages(group.hits), MAX_MESSAGES, 'messages', 'moreMessages'),
       ...capped(variants(group.hits), MAX_VARIANTS, 'variants', 'moreVariants')
     }
   })

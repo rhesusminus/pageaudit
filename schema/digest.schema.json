@@ -83,7 +83,7 @@
     "finding": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "severity", "category", "pages", "hits", "variants"],
+      "required": ["type", "severity", "category", "pages", "hits", "messages", "variants"],
       "properties": {
         "type": { "type": "string" },
         "severity": { "$ref": "report.schema.json#/$defs/severity" },
@@ -97,6 +97,19 @@
           "minimum": 1,
           "description": "Issues of this type in the report. A site issue is one however many pages it lists."
         },
+        "messages": {
+          "description": "The distinct messages, on most pages first. One message on many pages is one pattern, even when each page has its own element.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["message", "pages"],
+            "properties": { "message": { "type": "string" }, "pages": { "type": "integer", "minimum": 1 } }
+          }
+        },
+        "moreMessages": { "type": "integer", "minimum": 1 },
         "variants": { "type": "array", "minItems": 1, "maxItems": 5, "items": { "$ref": "#/$defs/variant" } },
         "moreVariants": { "type": "integer", "minimum": 1 }
       }

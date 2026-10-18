@@ -204,3 +204,30 @@ test('buildDigest: the about text names the issues that mark a page the checks c
     assert.ok(adviceFor(type), type)
   }
 })
+
+test('buildDigest: one message on a different element of every page is one pattern, while the variants stay split', () => {
+  const heading = (url, i, message = 'Heading level skipped: <h3> after <h1>') => ({
+    url,
+    type: 'skipped-heading-level',
+    severity: 'warning',
+    category: 'accessibility',
+    source: 'https://www.w3.org/WAI/tutorials/page-structure/headings/',
+    message,
+    context: `<h3>Post ${i}</h3>`,
+    selector: `#post-${i}`
+  })
+  const pages = Array.from({ length: 6 }, (_, i) => page(`https://a.test/${i}`, [heading(`https://a.test/${i}`, i)]))
+  const [finding] = buildDigest(buildReport({ pages, site: [] })).findings
+  assert.deepEqual(finding.messages, [{ message: 'Heading level skipped: <h3> after <h1>', pages: 6 }])
+  assert.equal(finding.moreMessages, undefined)
+  assert.deepEqual([finding.variants.length, finding.moreVariants], [5, 1])
+  const mixed = ['<h3> after <h1>', '<h4> after <h2>', '<h5> after <h3>', '<h6> after <h4>'].map((skip, i) =>
+    page(`https://a.test/m${i}`, [heading(`https://a.test/m${i}`, i, `Heading level skipped: ${skip}`)])
+  )
+  const [several] = buildDigest(buildReport({ pages: [...pages, ...mixed], site: [] })).findings
+  assert.deepEqual(
+    several.messages.map((m) => m.pages),
+    [7, 1, 1]
+  )
+  assert.equal(several.moreMessages, 1)
+})
