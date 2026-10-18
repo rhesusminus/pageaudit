@@ -25,7 +25,7 @@ npm test
 
 The `pageaudit` bin is declared in `package.json`, so `npm link` makes it available as `pageaudit`.
 
-Run with no arguments in a terminal, `pageaudit` asks what to audit: page URLs (several separated by spaces), a sitemap or a URL file, for a sitemap or file how many pages at most, which extra checks to run (Lighthouse and internal links) and which report files to write: the HTML report with its title, client and logo, and the JSON report. A report path must be a file in a folder that exists, and an existing file is only replaced after asking. Answers are checked as they are entered, so a bad URL, a file that cannot be read or a wrong limit is asked again. It then shows the command for the audit, quoted and wrapped to the terminal width with `\` so it can be pasted into a shell or a script, and asks whether to run it now. Yes runs the audit as that command would, with the same output and exit code. No exits 0 without sending a request, so the command can be run later. Ctrl+C at any question exits 130. Without a terminal on stdin and stdout, as in scripts and CI, no arguments is still a usage error.
+Run with no arguments in a terminal, `pageaudit` asks what to audit: page URLs (several separated by spaces), a sitemap or a URL file, for a sitemap or file how many pages at most, which extra checks to run (Lighthouse and internal links) and which report files to write: the HTML report with its title, client and logo, the JSON report and the digest. A report path must be a file in a folder that exists, and an existing file is only replaced after asking. Answers are checked as they are entered, so a bad URL, a file that cannot be read or a wrong limit is asked again. It then shows the command for the audit, quoted and wrapped to the terminal width with `\` so it can be pasted into a shell or a script, and asks whether to run it now. Yes runs the audit as that command would, with the same output and exit code. No exits 0 without sending a request, so the command can be run later. Ctrl+C at any question exits 130. Without a terminal on stdin and stdout, as in scripts and CI, no arguments is still a usage error.
 
 ### Inputs
 
@@ -52,6 +52,7 @@ Link-following crawling is not supported.
 | `--lighthouse-page <url>` |         | Run Lighthouse with full detail on this page. Can be repeated. The page is added to the audit if missing and `--limit` never drops it. In a `--urls-file`, a URL followed by `lighthouse` does the same. See below. |
 | `--lighthouse-runs <n>`   | 1       | Run Lighthouse `n` times per page (1 to 9) and keep the median run, since single runs vary. See below.                                                                                                              |
 | `--out <path>`            |         | Also write the JSON report to a file, for example to hand to Claude. Exits 2 if the file cannot be written.                                                                                                         |
+| `--digest <path>`         |         | Also write a short form of the JSON report for Claude to read first, useful on a large audit. See "Using the output with Claude". Exits 2 if the file cannot be written.                                            |
 | `--html <path>`           |         | Also write a report for customers as one self-contained HTML file. See below.                                                                                                                                       |
 | `--title <text>`          |         | Report title in the HTML report (default `Website audit`). Needs `--html`.                                                                                                                                          |
 | `--client <name>`         |         | Client name in the HTML report. Needs `--html`.                                                                                                                                                                     |
@@ -109,6 +110,27 @@ node bin/pageaudit.js --sitemap https://example.com/sitemap.xml --limit 20 --lig
 ```
 
 Then, in Claude Code: "read report.json and summarize the SEO and usability problems, most important first". Each page carries the issues the checks found, the Lighthouse summary and a `facts` object with what is on the page, so a suggestion can refer to the real title or headings. `facts` is `null` for pages that returned no HTML or whose HTML the checks could not process. Free text is capped to keep the file small: heading text and the Open Graph title, description and type at 120 characters (URLs at 2000), the page title, description and `h1s` at 300 characters, with at most 10 `h1s` and 40 headings. `generatedAt` is the time of the audit.
+
+**Digest.** The report grows by 10 to 15 KB per page, most of it the page `facts`, so beyond a few dozen pages it is more than a model reads well in one go: a 100-page audit of a real site made a 1.3 MB report. Most of the issues in it are the same problem repeated on pages that share a template. `--digest` also writes a short form of the report for Claude to read first, and the report stays complete next to it:
+
+```sh
+node bin/pageaudit.js --sitemap https://example.com/sitemap.xml --lighthouse --out report.json --digest report.digest.json
+```
+
+Then: "read report.digest.json, rank the problems most important first and look up the details in report.json by url and type where you need them". The digest holds:
+
+| Field               | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `about`             | One paragraph on how the digest was cut and how to read it, for the model                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `report`            | `path` of the full report relative to the digest (`null` without `--out`), its `schemaVersion` and `generatedAt`                                                                                                                                                                                                                                                                                                                                                                                            |
+| `coverage`          | The same as in the report                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `summary`, `scores` | The report totals, the pages by their worst issue (counting the site issues that list them, as in the HTML report) and the average Lighthouse scores                                                                                                                                                                                                                                                                                                                                                        |
+| `skipped`           | The first 5 inputs that were not audited, and `moreSkipped`                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `findings`          | One entry per issue type, page and site issues together, worst first: `title`, `why` and `fix`, how many `pages` and `hits`, the 3 most common `messages` with their page counts (one message on many pages is one pattern, even when each page has its own element), and up to 5 `variants`. A variant is one element (same selector) or value (same context) with its message, markup, measurement, how many pages it is on and the first 3 of them. A logo without alt text on every page is one variant |
+| `lighthouseAudits`  | The failing Lighthouse audits by id, on most pages first, with the worst score and the 3 worst pages. Inputs that redirect to one page count once                                                                                                                                                                                                                                                                                                                                                           |
+| `pages`             | One line per audited page: status, issue counts, `finalUrl` when it redirected, and with Lighthouse the scores, `omittedAudits` and the number of `lighthouseWarnings`                                                                                                                                                                                                                                                                                                                                      |
+
+Counts are never cut, only lists, and `moreMessages` and `moreVariants` say how many were left out. The one exception is Lighthouse: the report already keeps only the worst failing audits of each page, so `lighthouseAudits` counts pages among those. Text from the page, such as a long URL, is cut at 2000 characters. The digest is for triage: it lists the problems the checks found, not the page content, so judging content, intent or navigation still needs the `facts` in the full report, and without `--out` there is no full report to look in. A missing issue type means nothing was found only on pages the checks could inspect: a page that answered with an error, was not HTML, could not be fetched, made a check fail or was cut at 2 MB has an issue saying so. Only `pages` grows with the number of pages, at about 150 bytes each, and the digest of that 100-page audit was 44 KB. The shape is described in [`schema/digest.schema.json`](schema/digest.schema.json), and `digestVersion` follows the same rules as `schemaVersion`.
 
 **Schema.** The shape of the JSON report is described in [`schema/report.schema.json`](schema/report.schema.json) (JSON Schema, draft 2020-12), and every report starts with `schemaVersion`. The version goes up by one when a field is removed, renamed or changes its meaning, and stays the same when an optional field is added, so a script can check it before reading the rest. The tests validate reports from every kind of fixture against the schema, with no extra properties allowed, so the schema cannot drift from the code. Page issues name their page in `url` and site issues name theirs in `urls`, which the schema keeps apart as `pageIssue` and `siteIssue`. Both have an `id`.
 
@@ -348,10 +370,13 @@ src/
   concurrency.js        mapLimited() and hostThrottle(): a concurrency limit and a per-host delay
   lighthouse-limits.js  the good and poor bands of the Lighthouse metrics
   output.js             writeReportFile(): writes a report file without throwing
+  digest.js             buildDigest(): the short form of the report for a model to read first
+  coverage.js           buildCoverage(): what the audit looked at and which checks did not run
+  overview.js           views over a finished report: issues grouped by type, page health, average scores
   html/                 the customer-facing HTML report
     render.js           renderHtml(): the whole document
     sections.js         cover, summary, what to fix, pages and method sections
-    model.js            grouping issues, page health, average scores, metric bands
+    model.js            site-wide issues, the verdict and metric bands
     detail.js           collapsed evidence: the element behind an issue, Lighthouse items and the less visible facts
     format.js           category names, plurals and links shared by the sections
     styles.js           the stylesheet (light, dark and print)
@@ -411,6 +436,8 @@ test/
   lighthouse.test.js    trimming a Lighthouse result and running Chrome, with its failures
   lighthouse-issues.test.js  Lighthouse metrics and scores as issues
   report.test.js        the JSON report: summary, rules, ids and capped facts
+  digest.test.js        the digest: variants, caps and their counts, Lighthouse grouping, size
+  coverage.test.js      what the audit looked at and why a check did not run
   terminal.test.js      terminal tables and wrapping
   severity.test.js      severity counting and ordering
   html.test.js          HTML report: sections, escaping, self-containment, advice coverage
@@ -458,6 +485,7 @@ The JSON report is meant to be handed to a human or an LLM for prioritizing fixe
   pages: [{ url, finalUrl, status, redirects: [{ url, status, location }], issues: [...], facts, lighthouse }],
   site: [...],                    // site issues
   skipped: [{ input, source, reason }],
+  coverage: { tool, settings, urls, links, notRun: [{ check, reason }] },
   rules: { [type]: { title, why, fix } },
   lighthouseAudits: { [id]: { description, learnMore } },
   summary: { pages, errors, warnings, infos }
@@ -465,6 +493,8 @@ The JSON report is meant to be handed to a human or an LLM for prioritizing fixe
 ```
 
 `lighthouse` is only present on pages Lighthouse ran for, and `lighthouseAudits` only when an audit is described.
+
+`coverage` says what the audit looked at, so a model can tell "not found" from "not looked for": the pageaudit version, the `settings` that change what is collected (with the defaults filled in), how many URLs were `found` and `audited` (and whether every sitemap file was read), with `--check-links` how many link targets were `checked` and how many were left past the cap, and `notRun`, the checks that did not run with the reason. `lighthouse` and `links` are listed when they were not asked for, and `orphan-page` when the audit could not tell orphan pages apart, such as after a `--limit` cut.
 
 `status` and `finalUrl` are `null` when the page could not be fetched at all.
 

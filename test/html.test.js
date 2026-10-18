@@ -3,15 +3,8 @@ import assert from 'node:assert/strict'
 import { readdir, readFile } from 'node:fs/promises'
 import { ADVICE } from '../src/advice.js'
 import { escapeHtml, markup, raw } from '../src/html/escape.js'
-import {
-  averageScores,
-  groupIssues,
-  metricBand,
-  pageHealth,
-  pagesWithSiteIssues,
-  siteWideIssues,
-  verdict
-} from '../src/html/model.js'
+import { metricBand, siteWideIssues, verdict } from '../src/html/model.js'
+import { averageScores, groupIssues, pageHealth, pagesWithSiteIssues } from '../src/overview.js'
 import { renderHtml } from '../src/html/render.js'
 import { buildReport } from '../src/report.js'
 
@@ -269,7 +262,8 @@ test('renderHtml: only http(s) addresses become links, whatever the report says'
 
 test('renderHtml: mentions skipped inputs and a --limit that cut the list', () => {
   const skipped = [{ input: 'ftp://x', source: 'urls.txt:3', reason: 'not an http or https URL' }]
-  const out = renderHtml(wrap([page('https://a.test/', [])], [], skipped), { totalUrls: 5 })
+  const limited = { ...wrap([page('https://a.test/', [])], [], skipped), coverage: { urls: { found: 5, audited: 1 } } }
+  const out = renderHtml(limited)
   assert.match(out, /Audited 1 page out of 5 found/)
   assert.match(out, /1 address could not be used and was skipped/)
   assert.match(out, /ftp:\/\/x/)

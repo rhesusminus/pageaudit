@@ -14,6 +14,7 @@ export const OPTIONS = {
   'lighthouse-runs': { type: 'string' },
   'check-links': { type: 'boolean' },
   out: { type: 'string' },
+  digest: { type: 'string' },
   html: { type: 'string' },
   title: { type: 'string' },
   client: { type: 'string' },
@@ -51,6 +52,7 @@ Options:
                        and with a whole --sitemap audited, pages no other page links to
   --fail-on <level>    exit 1 on any "error" (default) or on any "warning" or error
   --out <path>         also write the JSON report to a file, for example to hand to Claude
+  --digest <path>      also write a short form of the JSON report, for Claude to read first on a large audit
   --html <path>        also write a report for customers as one self-contained HTML file
   --title <text>       report title in the HTML report (default "${DEFAULT_TITLE}")
   --client <name>      client name shown in the HTML report
@@ -79,7 +81,7 @@ function requireValues(values, names) {
 
 export function parseOptions(argv) {
   const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: OPTIONS })
-  requireValues(values, ['out', 'html', 'title', 'client', 'logo'])
+  requireValues(values, ['out', 'digest', 'html', 'title', 'client', 'logo'])
   if (values['lighthouse-page']?.includes('')) throw new Error('--lighthouse-page needs a value')
   const failOn = values['fail-on'] ?? 'error'
   if (failOn !== 'error' && failOn !== 'warning') {
@@ -102,6 +104,7 @@ export function parseOptions(argv) {
     lighthouseRuns: integer('lighthouse-runs', values['lighthouse-runs'], 1, MAX_LIGHTHOUSE_RUNS),
     checkLinks: values['check-links'],
     out: values.out,
+    digest: values.digest,
     html: values.html,
     branding: { title: values.title, client: values.client, logo: values.logo },
     json: values.json

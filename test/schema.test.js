@@ -5,7 +5,8 @@ import Ajv2020 from 'ajv/dist/2020.js'
 import addFormats from 'ajv-formats'
 import { run } from '../src/cli.js'
 import { runLighthouse } from '../src/lighthouse.js'
-import { SCHEMA_VERSION } from '../src/report.js'
+import { buildDigest, DIGEST_VERSION } from '../src/digest.js'
+import { buildReport, SCHEMA_VERSION } from '../src/report.js'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
 
 const schema = JSON.parse(await readFile(new URL('../schema/report.schema.json', import.meta.url), 'utf8'))
@@ -13,15 +14,23 @@ const schema = JSON.parse(await readFile(new URL('../schema/report.schema.json',
 const ajv = new Ajv2020({ strict: true, allowUnionTypes: true, allErrors: true })
 addFormats(ajv)
 const validate = ajv.compile(schema)
+const errorsOf = (validator) => (validator.errors ?? []).map((e) => `${e.instancePath || '/'} ${e.message}`)
 const check = (report) => {
   validate(report)
-  return (validate.errors ?? []).map((e) => `${e.instancePath || '/'} ${e.message}`)
+  return errorsOf(validate)
+}
+// The digest schema refers to the report schema for the parts they share.
+const digestSchema = JSON.parse(await readFile(new URL('../schema/digest.schema.json', import.meta.url), 'utf8'))
+const validateDigest = ajv.compile(digestSchema)
+const checkDigest = (digest) => {
+  validateDigest(digest)
+  return errorsOf(validateDigest)
 }
 
 const url = (name) => `${FIXTURE_HOST}/${name}`
 
 // Lighthouse through the real runLighthouse with a fake Chrome and a result with every optional field, so the
-// digest is built by the code and not by hand. `behave(n)` says what the nth run does: a score, or 'fail'.
+// summary is built by the code and not by hand. `behave(n)` says what the nth run does: a score, or 'fail'.
 const FAILING = Array.from({ length: 12 }, (_, i) => `audit-${i}`)
 
 const audit = (id, extra = {}) => ({ id, title: id, score: 0, scoreDisplayMode: 'binary', ...extra })
@@ -166,14 +175,50 @@ test('schema: a report with every kind of page, issue and Lighthouse level match
   assert.ok(report.lighthouseAudits)
 })
 
-test('schema: Lighthouse output built by the real code matches, with the digest fields the schema lists', async (t) => {
+test('schema: the digest of a report with every kind of page, issue and Lighthouse level matches it', async (t) => {
   const report = await fullReport(t)
-  const digest = report.pages.find((p) => p.lighthouse?.audits[0]?.items).lighthouse
-  assert.equal(digest.runs, 2)
-  assert.ok(digest.scoreSpread.performance)
-  assert.equal(digest.lcpElement.selector, 'main > img')
-  assert.ok(digest.omittedAudits > 0)
-  const audit = digest.audits.find((a) => a.id === 'unused-css')
+  const digest = buildDigest(report, { reportPath: 'report.json' })
+  assert.deepEqual(checkDigest(digest), [])
+  assert.equal(digestSchema.properties.digestVersion.const, DIGEST_VERSION)
+  // The digest must actually contain what the schema describes, or this test proves little.
+  assert.ok(digest.coverage && digest.scores && digest.lighthouseAudits.length > 0)
+  assert.ok(digest.findings.flatMap((f) => f.variants).some((v) => v.selector && v.html))
+  assert.ok(digest.findings.flatMap((f) => f.variants).some((v) => v.actual !== undefined && v.expected))
+  assert.ok(digest.pages.some((p) => p.status === null) && digest.pages.some((p) => p.finalUrl && p.scores))
+  assert.ok(digest.skipped.length > 0)
+})
+
+test('schema: a digest that cut its lists matches it', () => {
+  // Seven pages, each with a missing alt on its own element and its own message, so the finding has more messages
+  // and variants than it shows.
+  const pages = Array.from({ length: 7 }, (_, i) => {
+    const url = `https://a.test/${i}`
+    const issue = {
+      url,
+      type: 'missing-alt',
+      severity: 'error',
+      category: 'accessibility',
+      source: 'https://www.w3.org/WAI/tutorials/images/',
+      message: `Image ${i} missing alt attribute`,
+      context: '<img>',
+      selector: `#i${i}`
+    }
+    return { url, finalUrl: url, status: 200, redirects: [], issues: [issue], facts: null }
+  })
+  const skipped = Array.from({ length: 7 }, (_, i) => ({ input: `x${i}`, source: 'argument', reason: 'not a URL' }))
+  const digest = buildDigest(buildReport({ pages, site: [], skipped }))
+  assert.deepEqual(checkDigest(digest), [])
+  assert.deepEqual([digest.findings[0].moreMessages, digest.findings[0].moreVariants, digest.moreSkipped], [4, 2, 2])
+})
+
+test('schema: Lighthouse output built by the real code matches, with the summary fields the schema lists', async (t) => {
+  const report = await fullReport(t)
+  const summary = report.pages.find((p) => p.lighthouse?.audits[0]?.items).lighthouse
+  assert.equal(summary.runs, 2)
+  assert.ok(summary.scoreSpread.performance)
+  assert.equal(summary.lcpElement.selector, 'main > img')
+  assert.ok(summary.omittedAudits > 0)
+  const audit = summary.audits.find((a) => a.id === 'unused-css')
   assert.deepEqual(Object.keys(audit.savings).toSorted(), ['bytes', 'metrics', 'ms'])
   assert.deepEqual(Object.keys(audit.savings.metrics).toSorted(), ['cls', 'lcp'])
   assert.deepEqual(Object.keys(audit.items[0]).toSorted(), [

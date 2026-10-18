@@ -1,6 +1,7 @@
 import pkg from '../../package.json' with { type: 'json' }
 import { markup, raw } from './escape.js'
-import { averageScores, groupIssues, pageHealth, pagesWithSiteIssues, siteWideIssues, verdict } from './model.js'
+import { averageScores, groupIssues, pageHealth, pagesWithSiteIssues } from '../overview.js'
+import { siteWideIssues, verdict } from './model.js'
 import { cover, fixesSection, healthSection, methodSection, pagesSection } from './sections.js'
 import { CSS } from './styles.js'
 
@@ -11,14 +12,12 @@ export const DEFAULT_TITLE = 'Website audit'
 
 // Renders the report as one self-contained HTML document: inline CSS, no external
 // requests, readable offline and printable to PDF. `logo` is a data URI.
-export function renderHtml(
-  report,
-  { title = DEFAULT_TITLE, client = null, logo = null, totalUrls = report.pages.length, timeZone } = {}
-) {
+export function renderHtml(report, { title = DEFAULT_TITLE, client = null, logo = null, timeZone } = {}) {
   const pages = pagesWithSiteIssues(report)
   const health = pageHealth(pages)
   const scores = averageScores(report.pages)
   const groups = groupIssues(report)
+  const totalUrls = report.coverage?.urls.found ?? report.pages.length
   const heading = client ? `${title} - ${client}` : title
   return markup`<!doctype html>
     <html lang="en">

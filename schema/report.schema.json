@@ -1,5 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/rhesusminus/pageaudit/main/schema/report.schema.json",
   "title": "pageaudit report",
   "description": "The JSON report written by pageaudit (--json, --out). schemaVersion goes up by one when a field is removed, renamed or changes its meaning. Adding an optional field does not change it.",
   "type": "object",
@@ -19,6 +20,7 @@
       "type": "array",
       "items": { "$ref": "#/$defs/skipped" }
     },
+    "coverage": { "$ref": "#/$defs/coverage" },
     "rules": {
       "description": "What each issue type that occurs in the report means, by type.",
       "type": "object",
@@ -43,6 +45,101 @@
         "input": { "type": "string" },
         "source": { "type": "string", "description": "Where the input came from, such as argument or urls.txt:8." },
         "reason": { "type": "string" }
+      }
+    },
+    "coverage": {
+      "description": "What the audit looked at and what it left out, so a missing issue can be told apart from a check that did not run. Always written by the CLI.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "settings", "urls", "notRun"],
+      "properties": {
+        "tool": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version"],
+          "properties": { "name": { "type": "string" }, "version": { "type": "string" } }
+        },
+        "settings": {
+          "description": "The options that change what was collected, with the defaults filled in.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "limit",
+            "concurrency",
+            "delay",
+            "sitemaps",
+            "lighthouse",
+            "lighthousePages",
+            "lighthouseRuns",
+            "checkLinks"
+          ],
+          "properties": {
+            "limit": { "type": ["integer", "null"], "minimum": 1 },
+            "concurrency": { "type": "integer", "minimum": 1 },
+            "delay": { "type": "integer", "minimum": 0, "description": "Milliseconds between requests to a host." },
+            "sitemaps": { "type": "array", "items": { "type": "string" } },
+            "lighthouse": { "type": "boolean", "description": "--lighthouse: every page that returned HTML." },
+            "lighthousePages": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Pages picked for Lighthouse with --lighthouse-page or a urls file marker."
+            },
+            "lighthouseRuns": {
+              "type": ["integer", "null"],
+              "minimum": 1,
+              "description": "Runs per page. Null when Lighthouse did not run."
+            },
+            "checkLinks": { "type": "boolean" }
+          }
+        },
+        "urls": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["found", "audited"],
+          "properties": {
+            "found": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Distinct URLs from every input, before --limit."
+            },
+            "audited": { "type": "integer", "minimum": 0 },
+            "sitemapsComplete": {
+              "type": "boolean",
+              "description": "False when a sitemap file could not be read or was not followed. Only with --sitemap."
+            }
+          }
+        },
+        "links": {
+          "description": "The link targets requested by --check-links. Only present with it.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["checked", "unchecked", "complete"],
+          "properties": {
+            "checked": { "type": "integer", "minimum": 0 },
+            "unchecked": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Targets past the cap, the ones linked from the fewest pages."
+            },
+            "complete": {
+              "type": "boolean",
+              "description": "True when every link of every audited page was followed to a known destination."
+            }
+          }
+        },
+        "notRun": {
+          "description": "Checks that did not run, or not in full. Their issue types are missing from the report for that reason.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["check", "reason"],
+            "properties": {
+              "check": { "enum": ["lighthouse", "links", "orphan-page"] },
+              "reason": { "type": "string" }
+            }
+          }
+        }
       }
     },
     "rule": {
@@ -291,7 +388,7 @@
     },
     "score": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
     "lighthouse": {
-      "description": "A digest of one Lighthouse run, never the raw result.",
+      "description": "A summary of one Lighthouse run, never the raw result.",
       "type": "object",
       "additionalProperties": false,
       "required": ["scores", "metrics", "audits", "warnings"],

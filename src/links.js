@@ -50,7 +50,8 @@ async function fetchOutcome(url, { request, timeout, beforeHop }) {
 // Finds out where every internal link target leads: { status, finalUrl, redirects } or { failed: reason }, by URL.
 // Requests use the same concurrency as the audit, and `pace(url)`, the per-host spacing the whole run shares, is
 // awaited before each of them, redirect hops included.
-// `unchecked` counts the targets past `max`, and `unread` the audited pages whose own links could not all be read.
+// `checked` counts the targets requested, `unchecked` the ones past `max`, and `unread` the audited pages whose own
+// links could not all be read.
 export async function checkLinkTargets(
   pages,
   {
@@ -72,7 +73,12 @@ export async function checkLinkTargets(
     return outcome
   })
   checked.forEach(({ url }, i) => outcomes.set(url, results[i]))
-  return { outcomes, unchecked: unknown.length - checked.length, unread: pages.filter(linksUnread).length }
+  return {
+    outcomes,
+    checked: checked.length,
+    unchecked: unknown.length - checked.length,
+    unread: pages.filter(linksUnread).length
+  }
 }
 
 // An outcome that leaves open where a link leads, or which links an audited page has: a failed request, or a 429 or
