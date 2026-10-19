@@ -209,7 +209,10 @@ function runsText(runs, scoreSpread) {
 }
 
 // Scores, core metrics and the worst failing audits of one page's Lighthouse run.
-export function formatLighthouse({ scores, runs, scoreSpread, metrics, audits, omittedAudits = 0 }, columns) {
+export function formatLighthouse(
+  { scores, runs, scoreSpread, metrics, lcpElement, audits, omittedAudits = 0 },
+  columns
+) {
   const scoreLine = Object.entries(scores)
     .map(([id, score]) => `${id} ${score === null ? chalk.dim('n/a') : scoreColor(score)(String(score))}`)
     .join('  ')
@@ -230,6 +233,7 @@ export function formatLighthouse({ scores, runs, scoreSpread, metrics, audits, o
     `  Lighthouse: ${scoreLine}`,
     runsLine && chalk.dim(indented(runsLine, columns)),
     chalk.dim(`  ${metricText(metrics)}`),
+    lcpElement && chalk.dim(indented(`Largest element on screen: ${lcpElement.selector}`, columns)),
     audits.length ? table.toString() : '',
     more
   ]

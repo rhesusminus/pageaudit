@@ -375,3 +375,22 @@ test('formatLighthouse: the runs line is wrapped and indented at 80 columns', ()
     assert.match(line, /^ {2}\S/)
   }
 })
+
+test('formatLighthouse: names the largest element on screen after the metrics', () => {
+  const lcpElement = { selector: 'main#main > section > div > p', snippet: '<p>' }
+  const text = stripVTControlCharacters(formatLighthouse(lhBlock([], { lcpElement }), 100))
+  assert.match(text, /FCP .*\n {2}Largest element on screen: main#main > section > div > p$/m)
+  assert.doesNotMatch(text, /<p>/)
+  assert.doesNotMatch(stripVTControlCharacters(formatLighthouse(lhBlock([]), 100)), /Largest element/)
+})
+
+test('formatLighthouse: a long largest-element selector is wrapped and indented at 80 columns', () => {
+  const selector = 'body > div.page-wrapper > main#content > section.hero-banner > div.container > picture > img'
+  const text = stripVTControlCharacters(formatLighthouse(lhBlock([], { lcpElement: { selector, snippet: null } }), 80))
+  const lines = text.split('\n').filter((line) => /Largest|picture|img/.test(line))
+  assert.equal(lines.length, 2)
+  for (const line of lines) {
+    assert.ok(line.length <= 80, line)
+    assert.match(line, /^ {2}\S/)
+  }
+})
