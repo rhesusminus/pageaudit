@@ -153,6 +153,12 @@ test('markdown: page text that Markdown would read as markup is escaped, code is
   assert.equal(body('<p><a href="/x">An [unfinished label</a></p>'), '[An \\[unfinished label](https://a.test/x)')
 })
 
+test('markdown: entities written as text and alt text are escaped like the rest of the page text', () => {
+  assert.equal(body('<p>&amp;copy; &amp;#169; AT&amp;T</p>'), '\\&copy; \\&#169; AT&T')
+  assert.equal(body('<p><img alt="*literal* &lt;b&gt;"></p>'), '\\*literal\\* \\<b>')
+  assert.equal(body('<p><img src="a.png" alt="[x] *y*"></p>'), '![\\[x\\] \\*y\\*](https://a.test/dir/a.png)')
+})
+
 test('markdown: an element named like an Object method is walked into like any unknown element', () => {
   assert.equal(
     body('<main><p>Before</p><constructor>Content</constructor><toString>More</toString><p>After</p></main>'),

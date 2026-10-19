@@ -26,10 +26,10 @@ const clean = (text) =>
 const escapeLineStart = (line) =>
   line.replace(/^(\d+)([.)]\s)/, '$1\\$2').replace(/^(#{1,6}\s|[-+*]\s|>|-{3,}$|={3,}$)/, '\\$1')
 
-// Page text with a backslash before what Markdown would read as markup: emphasis, code, links and HTML. An
+// Page text with a backslash before what Markdown would read as markup: emphasis, code, links, HTML and entities. An
 // underscore inside a word, as in snake_case, is left alone, since it is not emphasis there.
 const escapeText = (text) =>
-  text.replace(/[\\`*[\]<]/g, '\\$&').replace(/(?<![\p{L}\p{N}])_|_(?![\p{L}\p{N}])/gu, '\\_')
+  text.replace(/[\\`*[\]<]|&(?=#?\w+;)/g, '\\$&').replace(/(?<![\p{L}\p{N}])_|_(?![\p{L}\p{N}])/gu, '\\_')
 
 // The paragraphs of a run of text as Markdown. Two line breaks in a row end a paragraph, as on pages that use <br><br>
 // instead of <p>, and a single one stays a line break.
@@ -61,7 +61,7 @@ const linkTarget = (url) => url.replaceAll('(', '%28').replaceAll(')', '%29')
 
 function image(node, ctx) {
   const alt = attr(node, 'alt')
-  const shownAlt = (alt ?? '').replace(/\s+/g, ' ').trim().replace(/[[\]]/g, '\\$&')
+  const shownAlt = escapeText((alt ?? '').replace(/\s+/g, ' ').trim())
   const src = imageSrc((attr(node, 'src') ?? '').trim(), ctx.base)
   if (!src) return shownAlt
   // An image with no alt attribute at all is a different finding from one with alt="".
