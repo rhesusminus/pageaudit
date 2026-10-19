@@ -159,10 +159,11 @@ test('formatIssueTable: a message word longer than the column is split, not cut 
 })
 
 test('formatSiteTable: a message word longer than the column is split, not cut off', () => {
-  const issues = [{ ...site[0], message: LONG_WORD_MESSAGE, context: 'https://a.test: no header' }]
+  const message = `Header ${'X-Content-Type-Options-'.repeat(3)}nosniff is missing`
+  const issues = [{ ...site[0], message, context: 'https://a.test: no header', urls: ['https://a.test/'] }]
   const plain = plainColored(() => formatSiteTable(issues, 80))
   assert.doesNotMatch(plain, /…/)
-  const text = `${LONG_WORD_MESSAGE} https://a.test: no header`
+  const text = `${message} https://a.test: no header Pages: https://a.test/`
   assert.equal(columnText(plain, 3).replaceAll(' ', ''), text.replaceAll(' ', ''))
   assert.deepEqual([...tableWidths(plain)], [80])
 })
@@ -184,16 +185,11 @@ test('formatIssueTable: short contexts get a narrow column and the issue the res
   }
 })
 
-test('formatSiteTable: short URLs get a narrow column and the issue the rest', () => {
-  const issues = [{ ...site[0], urls: ['https://a.test/', 'https://a.test/about'] }]
-  const plain = plainColored(() => formatSiteTable(issues, 100))
-  assert.deepEqual(columnWidthsOf(plain), [10, 15, 100 - 5 - 25 - 22, 22])
-  assert.deepEqual(columnText(plain, 4).split(' '), issues[0].urls)
-})
-
-test('formatSiteTable: long URLs share the width by weight and wrap', () => {
-  const plain = plainColored(() => formatSiteTable(site, 114))
-  assert.deepEqual(columnWidthsOf(plain), [10, 15, 38, 46])
+test('formatSiteTable: the issue takes all the width the severity and category leave', () => {
+  for (const columns of [80, 114]) {
+    const plain = plainColored(() => formatSiteTable(site, columns))
+    assert.deepEqual(columnWidthsOf(plain), [10, 15, columns - 4 - 25])
+  }
 })
 
 test('formatIssueTable: lists errors first, then warnings, then infos', () => {
@@ -239,18 +235,21 @@ test('formatPagesTable: long URLs wrap inside the URL column', () => {
   assert.equal(cells.join(''), url)
 })
 
-test('formatSiteTable: lists every page involved, one per line', () => {
+test('formatSiteTable: lists every page involved under the issue, one per line', () => {
   const plain = plainColored(() => formatSiteTable(site, 90))
   assert.deepEqual([...tableWidths(plain)], [90])
-  const pagesColumn = plain
+  const issueColumn = plain
     .split('\n')
     .filter((l) => l.startsWith('│'))
     .slice(1)
-    .map((l) => l.split('│')[4].trim())
-  assert.equal(pagesColumn[0], 'https://a.test/warn')
-  assert.equal(pagesColumn.slice(1).join(''), site[0].urls[1])
-  assert.match(plain, /Same title on 2 pages/)
-  assert.match(plain, /<title>T<\/title>/)
+    .map((l) => l.split('│')[3].trim())
+  assert.deepEqual(issueColumn.slice(0, 4), [
+    'Same title on 2 pages',
+    '<title>T</title>',
+    'Pages:',
+    'https://a.test/warn'
+  ])
+  assert.equal(issueColumn.slice(4).join(''), site[0].urls[1])
 })
 
 test('formatReport: details only for pages with issues, clean pages collapsed, site section and totals last', () => {

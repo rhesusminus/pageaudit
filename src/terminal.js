@@ -167,17 +167,12 @@ export function formatIssueTable(issues, columns) {
   return table.toString()
 }
 
+// The pages go under the issue instead of in a column of their own: side by side, the message, its context and the
+// URLs all wrapped every few words at 80 columns.
 export function formatSiteTable(issues, columns) {
-  const pages = {
-    weight: 46,
-    max: fit(
-      'Pages',
-      issues.flatMap((issue) => issue.urls)
-    )
-  }
-  const widths = columnWidths(columns, [{ width: 10 }, { width: 15 }, { weight: 38 }, pages])
+  const widths = columnWidths(columns, [{ width: 10 }, { width: 15 }, { weight: 1 }])
   const table = new Table({
-    head: ['Severity', 'Category', 'Issue', 'Pages'],
+    head: ['Severity', 'Category', 'Issue'],
     colWidths: widths,
     style: { head: [] }
   })
@@ -185,8 +180,12 @@ export function formatSiteTable(issues, columns) {
     table.push([
       COLORS[issue.severity](issue.severity),
       chalk.dim(issue.category),
-      `${wrap(issue.message, widths[2])}\n${chalk.dim(wrap(issue.context, widths[2]))}`,
-      issue.urls.map((url) => wrap(url, widths[3])).join('\n')
+      [
+        wrap(issue.message, widths[2]),
+        chalk.dim(wrap(issue.context, widths[2])),
+        chalk.dim('Pages:'),
+        ...issue.urls.map((url) => wrap(url, widths[2]))
+      ].join('\n')
     ])
   }
   return table.toString()
