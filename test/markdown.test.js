@@ -90,6 +90,35 @@ test('markdown: a layout table is read cell by cell, so an article laid out in o
   assert.equal(body('<table role="presentation"><tr><td>A</td><td>B</td></tr></table>'), 'A\n\nB')
 })
 
+test('markdown: a caption comes before its table, and spanning cells fill every place they cover', () => {
+  const html =
+    '<table><caption>Prices exclude tax.</caption><tr><th>Plan</th><th>Monthly</th><th>Yearly</th></tr><tr><td>Basic</td><td colspan="2">Free</td></tr><tr><td rowspan="2">Pro</td><td>10</td><td>100</td></tr><tr><td>12</td><td>120</td></tr></table>'
+  assert.equal(
+    body(html),
+    [
+      '*Prices exclude tax.*',
+      '',
+      '| Plan | Monthly | Yearly |',
+      '| --- | --- | --- |',
+      '| Basic | Free | Free |',
+      '| Pro | 10 | 100 |',
+      '| Pro | 12 | 120 |'
+    ].join('\n')
+  )
+  assert.equal(body('<table role="presentation"><caption>Layout</caption><tr><td>A</td></tr></table>'), '*Layout*\n\nA')
+})
+
+test('markdown: a table far larger than its cells is read cell by cell instead of growing with its square', () => {
+  const wide = `<tr>${'<td>x</td>'.repeat(200)}</tr>`
+  const html = `<table>${wide}${'<tr><td>y</td></tr>'.repeat(200)}</table>`
+  const md = body(html)
+  assert.ok(md.length < 3000, `${md.length} characters`)
+  assert.equal(
+    body('<table><tr><td colspan="1000" rowspan="0">big</td><td>b</td></tr><tr><td>c</td></tr></table>'),
+    'big\n\nb\n\nc'
+  )
+})
+
 test('markdown: preformatted code is fenced with its language, longer than any fence inside', () => {
   assert.equal(
     body('<pre class="language-js"><code>const a = 1\n\n  return a\n</code></pre>'),

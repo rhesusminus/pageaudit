@@ -165,24 +165,62 @@ const holds = (node, names) =>
 const STRUCTURE = new Set(['table', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
 
 // A table used to lay out the page rather than to hold data: marked as presentation, a single cell, or with a cell
-// that holds a heading, another table or more than one paragraph. Its cells are read as the blocks they hold, in order, since
-// one table row per line would run a whole article together.
+// that holds a heading, another table or more than one paragraph.
 const layoutTable = (node, cells, ctx) =>
   ['presentation', 'none'].includes(attr(node, 'role')) ||
   cells.length < 2 ||
   cells.some((cell) => holds(cell, STRUCTURE) || blocks(cell.children, ctx).length > 1)
 
+// How many columns and rows a cell covers, within the limits HTML sets: colspan up to 1000, rowspan up to 65534 and
+// never past the last row, which a rowspan of 0 runs to.
+function span(cell, rowsLeft) {
+  const number = (name, max) => Math.min(Math.max(Number.parseInt(attr(cell, name), 10) || 1, 1), max)
+  const rows = attr(cell, 'rowspan')?.trim() === '0' ? rowsLeft : number('rowspan', 65534)
+  return { cols: number('colspan', 1000), rows: Math.min(rows, rowsLeft) }
+}
+
+// The text of each cell placed in its row and column, a spanning cell repeated in every place it covers, so each
+// value stays under its own header. A grid much larger than the cells it holds, from spans or very uneven rows,
+// is null: written out it could grow with the square of the table.
+function cellGrid(rowCells, ctx) {
+  const limit = Math.max(64, 4 * rowCells.flat().length)
+  const spans = rowCells.map((cells, r) => cells.map((cell) => span(cell, rowCells.length - r)))
+  if (spans.flat().reduce((sum, { cols, rows }) => sum + cols * rows, 0) > limit) return null
+  const grid = rowCells.map(() => [])
+  rowCells.forEach((cells, r) => {
+    let column = 0
+    cells.forEach((cell, i) => {
+      while (grid[r][column] !== undefined) column++
+      const text = oneLine(cell, ctx).replaceAll('|', '\\|')
+      const { cols, rows } = spans[r][i]
+      for (let down = 0; down < rows; down++) {
+        for (let across = 0; across < cols; across++) grid[r + down][column + across] = text
+      }
+      column += cols
+    })
+  })
+  const width = Math.max(...grid.map((row) => row.length))
+  if (width * grid.length > limit) return null
+  return grid.map((row) => Array.from({ length: width }, (_, column) => row[column] ?? ''))
+}
+
+function pipeTable([head, ...body]) {
+  const line = (row) => `| ${row.join(' | ')} |`
+  return [line(head), `|${' --- |'.repeat(head.length)}`, ...body.map(line)].join('\n')
+}
+
+// A data table as a pipe table, a layout table as the blocks its cells hold, in order, since one table row per line
+// would run a whole article together. A caption comes first, as browsers show it.
 function table(node, ctx) {
-  const grid = rows(node).map(cellsOf)
-  if (layoutTable(node, grid.flat(), ctx)) return grid.flat().flatMap((cell) => blocks(cell.children, ctx))
-  const cells = grid
-    .map((row) => row.map((cell) => oneLine(cell, ctx).replaceAll('|', '\\|')))
+  const caption = (node.children ?? [])
+    .filter((child) => isElement(child) && child.name === 'caption')
+    .flatMap((child) => labelled(child, ctx, '*'))
+  const rowCells = rows(node)
+    .map(cellsOf)
     .filter((row) => row.length)
-  if (!cells.length) return []
-  const width = Math.max(...cells.map((row) => row.length))
-  const line = (row) => `| ${[...row, ...Array(width - row.length).fill('')].join(' | ')} |`
-  const [head, ...body] = cells
-  return [[line(head), `|${' --- |'.repeat(width)}`, ...body.map(line)].join('\n')]
+  const cells = rowCells.flat()
+  const grid = layoutTable(node, cells, ctx) ? null : cellGrid(rowCells, ctx)
+  return [...caption, ...(grid ? [pipeTable(grid)] : cells.flatMap((cell) => blocks(cell.children, ctx)))]
 }
 
 const quote = (node, ctx) => {
