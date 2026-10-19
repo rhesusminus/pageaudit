@@ -1,7 +1,6 @@
 import chalk from 'chalk'
 import Table from 'cli-table3'
 import stringWidth from 'string-width'
-import wrapAnsi from 'wrap-ansi'
 import { compareSeverity, worstFirst } from './severity.js'
 
 // The report as tables for the terminal, sized to its width.
@@ -48,10 +47,59 @@ const fit = (heading, texts) =>
     .flatMap((text) => text.split('\n'))
     .reduce((widest, line) => Math.max(widest, stringWidth(line)), 0) + CELL_PADDING
 
-// Wraps by display width ourselves: cli-table3's character wrapping counts ANSI
-// escape codes as width and clips wide characters instead of wrapping them. Lines
-// break at spaces, and only a word longer than the column is split.
-const wrap = (text, width) => wrapAnsi(text, width - CELL_PADDING, { hard: true })
+const graphemes = new Intl.Segmenter()
+
+// Splits a word after each of these, so a URL or an attribute breaks where a reader expects.
+const BREAK_AFTER = /(?<=[/?&=_-])/
+
+// Wraps plain text to lines of at most `width` columns, by display width. Lines break at spaces, and a word that does
+// not fit on the line moves to the next one whole. Only a word wider than a line is split: after a / ? & = _ or -
+// where it can, anywhere where it cannot, and then on a line of its own, never leaving a letter or two at the end of
+// the line before.
+export function wrapText(text, width) {
+  return text
+    .split('\n')
+    .map((line) => wrapLine(line, width))
+    .join('\n')
+}
+
+function wrapLine(line, width) {
+  const rows = []
+  let row = ''
+  const fits = (text) => stringWidth(text) <= width
+  const next = () => {
+    if (row) rows.push(row)
+    row = ''
+  }
+  for (const word of line.split(' ').filter(Boolean)) {
+    if (fits(word)) {
+      if (row && !fits(`${row} ${word}`)) next()
+      row = row ? `${row} ${word}` : word
+      continue
+    }
+    let separator = row ? ' ' : ''
+    for (const part of word.split(BREAK_AFTER)) {
+      if (!fits(row + separator + part)) {
+        next()
+        separator = ''
+      }
+      if (fits(part)) row += separator + part
+      else {
+        for (const { segment } of graphemes.segment(part)) {
+          if (!fits(row + segment)) next()
+          row += segment
+        }
+      }
+      separator = ''
+    }
+  }
+  next()
+  return rows.join('\n')
+}
+
+// Wraps by display width ourselves: cli-table3's character wrapping counts ANSI escape codes as width and clips wide
+// characters instead of wrapping them. Takes plain text, so color the wrapped lines.
+const wrap = (text, width) => wrapText(text, width - CELL_PADDING)
 
 const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`
 
@@ -103,7 +151,7 @@ export function formatIssueTable(issues, columns) {
       COLORS[issue.severity](issue.severity),
       chalk.dim(issue.category),
       wrap(issue.message, widths[2]),
-      wrap(chalk.dim(issue.context ?? ''), widths[3])
+      chalk.dim(wrap(issue.context ?? '', widths[3]))
     ])
   }
   return table.toString()
@@ -127,7 +175,7 @@ export function formatSiteTable(issues, columns) {
     table.push([
       COLORS[issue.severity](issue.severity),
       chalk.dim(issue.category),
-      `${wrap(issue.message, widths[2])}\n${wrap(chalk.dim(issue.context), widths[2])}`,
+      `${wrap(issue.message, widths[2])}\n${chalk.dim(wrap(issue.context, widths[2]))}`,
       issue.urls.map((url) => wrap(url, widths[3])).join('\n')
     ])
   }
