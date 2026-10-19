@@ -345,3 +345,33 @@ test('formatLighthouse: counts the audits left out by the cap in the "more" line
   const withShown = stripVTControlCharacters(formatLighthouse(lhBlock(audits.slice(0, 3)), 100))
   assert.doesNotMatch(withShown, /more/)
 })
+
+test('formatLighthouse: with several runs, names the run and the scores that moved', () => {
+  const scoreSpread = { performance: [88, 98], seo: [100, 100], pwa: null }
+  const text = stripVTControlCharacters(formatLighthouse(lhBlock([], { runs: 3, scoreSpread }), 100))
+  assert.match(text, /^ {2}Middle of 3 runs; scores ranged: performance 88-98$/m)
+  assert.doesNotMatch(text, /seo 100-100|pwa/)
+})
+
+test('formatLighthouse: says when the scores did not move between runs', () => {
+  const block = lhBlock([], { runs: 2, scoreSpread: { seo: [50, 50] } })
+  const text = stripVTControlCharacters(formatLighthouse(block, 100))
+  assert.match(text, /Middle of 2 runs; the scores did not change/)
+})
+
+test('formatLighthouse: a single run has no runs line', () => {
+  const text = stripVTControlCharacters(formatLighthouse(lhBlock([]), 100))
+  assert.doesNotMatch(text, /runs/)
+})
+
+test('formatLighthouse: the runs line is wrapped and indented at 80 columns', () => {
+  const ids = ['performance', 'accessibility', 'best-practices', 'seo']
+  const scoreSpread = Object.fromEntries(ids.map((id) => [id, [10, 99]]))
+  const text = stripVTControlCharacters(formatLighthouse(lhBlock([], { runs: 5, scoreSpread }), 80))
+  const lines = text.split('\n').filter((line) => /runs|seo 10-99/.test(line))
+  assert.equal(lines.length, 2)
+  for (const line of lines) {
+    assert.ok(line.length <= 80, line)
+    assert.match(line, /^ {2}\S/)
+  }
+})
