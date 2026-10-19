@@ -2,7 +2,7 @@
 
 > **Note:** this project is my testing ground for agentic coding. It was planned and built together with an AI coding agent (Claude Code), from plans written in a chat (in `docs/`, starting with `docs/seo-harness-plan.md`) through implementation, tests and git workflow. Treat it as an experiment, not a polished product.
 
-A small Node.js CLI that fetches one or more pages, parses the static HTML and reports basic SEO/HTML issues: images, meta tags, headings and the HTTP response of each page, plus cross-page checks such as duplicate titles.
+A small Node.js CLI that fetches one or more pages, parses the static HTML and reports basic SEO/HTML issues: images, meta tags, headings and the HTTP response of each page, plus cross-page checks such as duplicate titles. Lighthouse and checking where internal links lead are opt-in. Besides the terminal report it can write a JSON report, a short digest of it and the content of each page as Markdown for Claude to read, and an HTML report for customers.
 
 ## Usage
 
@@ -72,7 +72,7 @@ In a terminal a spinner shows `Auditing 12/40 pages...` on stderr (skipped for J
 3. A `Site` section with the cross-page issues.
 4. A final line such as `40 pages, 6 errors, 19 warnings, 3 infos`.
 
-With `--out` or `--html`, a line on stderr then says where each report file was written, such as `HTML report written to report.html`, in JSON output too.
+With `--out`, `--digest`, `--html` or `--content`, a line on stderr then says where each report file was written, such as `HTML report written to report.html` or `Page content written to content (40 files)`, in JSON output too.
 
 Tables follow the terminal width (80 to 114 columns).
 
@@ -85,7 +85,7 @@ Tables follow the terminal width (80 to 114 columns).
 | 2    | Usage error, an unreadable input, an output file that cannot be written, or no URL to audit |
 | 130  | The questions asked when run with no arguments were cancelled (Ctrl+C or Esc)               |
 
-A page that cannot be fetched or returns an error status is an error on that page (exit 1), not a reason to stop. A sitemap that was read but lists no URL to audit is still checked, so that run exits 0 or 1. An unreadable input is a URL file, sitemap or `--logo` that cannot be read. An `--out` or `--html` path that is a directory, `--out` and `--html` naming the same file, or a `--content` folder that is a file, cannot be made or is a report's path, exits 2 before any page is fetched, and a report or content file that cannot be written exits 2 even after a complete audit.
+A page that cannot be fetched or returns an error status is an error on that page (exit 1), not a reason to stop. A sitemap that was read but lists no URL to audit is still checked, so that run exits 0 or 1. An unreadable input is a URL file, sitemap or `--logo` that cannot be read. An `--out`, `--digest` or `--html` path that is a directory, two of them naming the same file, or a `--content` folder that is a file, cannot be made or is a report's path, exits 2 before any page is fetched, and a report or content file that cannot be written exits 2 even after a complete audit.
 
 ### HTML report
 
@@ -362,9 +362,12 @@ Judgment calls that are not straight from those pages:
 ## Architecture
 
 ```
-bin/pageaudit.js        entry point, calls run() (or with no arguments asks for the setup) and sets the exit code
+bin/pageaudit.js        entry point, calls main() and sets the exit code
 src/
-  cli.js                arg parsing, spinner, wires the pipeline together
+  main.js               main(): runs the wizard when there are no arguments in a terminal, then run()
+  cli.js                run(): wires the pipeline together and writes the report files
+  options.js            parseOptions(), the option list and the --help text
+  progress.js           the spinner and the Lighthouse progress bar on stderr
   wizard.js             askArgs(): the questions asked when run with no arguments in a terminal, turned into arguments
   input/
     args.js             URLs from CLI arguments
@@ -434,6 +437,7 @@ src/
   terminal.js           formatReport(): the report as tables for the terminal
 schema/
   report.schema.json    JSON Schema of the JSON report
+  digest.schema.json    JSON Schema of the digest
 test/
   schema.test.js        reports from the fixtures against the schema, and drift checks
   input.test.js         URL files, sitemaps and normalization, against fixtures
@@ -458,8 +462,12 @@ test/
   headers.test.js       response header checks and the Content-Security-Policy parser
   links.test.js         link targets, the per-host throttle and the link checks
   cli.test.js           run() end to end with --json against the fixtures
-  fixtures/             HTML pages, sitemap.xml, sitemap-index.xml and urls.txt
+  main.test.js          main(): when the wizard runs and how its answer becomes the exit code
+  wizard.test.js        the wizard's answer checks, the arguments and the shown command
+  progress.test.js      the spinner guard and the Lighthouse progress bar
+  fixtures/             HTML pages, sitemaps, robots.txt and urls.txt
   helpers/fixture-fetch.js   mocked fetch that serves the fixtures
+  helpers/mock-fetch.js      replaces globalThis.fetch for one test
   helpers/report-pages.js    audited pages and site issues for the report and terminal tests
 docs/seo-harness-plan.md     the original v1 plan
 docs/pageaudit-v2-plan.md    the v2 (multi-page) plan
@@ -467,7 +475,7 @@ docs/pageaudit-v3-lighthouse-plan.md          the v3 (Lighthouse) plan
 docs/pageaudit-v4-page-data-html-report.md    the v4 (page data and HTML report) plan
 ```
 
-Pipeline: inputs -> `resolveUrls` -> `runAudit` (`fetchPage` -> `checkResponse` -> `parse` -> `checkHtml` per page) -> `checkSite`, `checkRobotsTxt`, `checkSitemapEntries` and, with `--check-links`, `checkLinkTargets` -> `checkLinks` -> `buildReport` -> table or JSON.
+Pipeline: inputs -> `resolveUrls` -> `runAudit` (`fetchPage` -> `checkResponse` -> `parse` -> `checkHtml` per page, and with `--content` `pageMarkdown` written as each page finishes) -> `checkSite`, `checkRobotsTxt`, `checkSitemapEntries` and, with `--check-links`, `checkLinkTargets` -> `checkLinks` -> `buildReport` -> table or JSON, and the `--out`, `--digest` (`buildDigest`) and `--html` (`renderHtml`) files.
 
 `fetchPage(url, { timeout, beforeHop })` returns `{ url, finalUrl, status, redirects, contentType, html, truncated, robotsHeader, headers, bodyBytes }` and only throws for network failures. `html` holds at most the first 2 MiB of the body (`HTML_MAX_BYTES`), and `truncated` is true when there was more. `beforeHop(url)` is awaited before every request of the redirect chain, so the per-host `--delay` also spaces redirect hops. It is the only thing the runner needs from the network layer, so a headless browser can replace it without touching the checks or the runner, as long as it returns the same shape and calls `beforeHop` the same way.
 
@@ -513,7 +521,7 @@ The JSON report is meant to be handed to a human or an LLM for prioritizing fixe
 
 ## Testing
 
-Tests use the built-in `node:test` runner with no extra dependencies. `npm test` runs `node --test test/*.test.js`, so helpers in `test/helpers/` are not run as tests. Nothing touches the network.
+Tests use the built-in `node:test` runner with no extra dependencies. `npm test` runs `node --test test/*.test.js`, so helpers in `test/helpers/` are not run as tests. Nothing touches the network. `npm run lint` runs ESLint and checks the Prettier formatting, and a husky pre-commit hook runs both on the staged files.
 
 - Unit tests cover each rule firing, not firing and the length boundaries.
 - HTML fixtures cover the positive and negative cases: `good.html` has no issues, `duplicate.html` shares its title, description and h1 with `good.html`, the `bad-*.html` files (`overlong`, `missing`, `canonical`, `images`, `empty`, `markup`, `hreflang`) trigger the remaining rules, and `hreflang.html` and `hreflang-fi.html` are a language pair with a missing return link and a `noindex` alternate. `noindex.html`, `noindex-header.html` and `blocked.html` feed the indexing, robots.txt and sitemap checks, `sitemap-quality.xml` lists them for the sitemap checks, and `rich.html` carries every kind of metadata for the signals tests. Several bad files are needed because some rules are mutually exclusive, for example a title cannot be both missing and too long.
@@ -530,4 +538,4 @@ Tests use the built-in `node:test` runner with no extra dependencies. `npm test`
 
 ## Workflow
 
-Work is done on `feature/*`, `fix/*` or `docs/*` branches and merged into `main`.
+Work is done on `feat/*`, `fix/*`, `docs/*`, `refactor/*` or `test/*` branches and merged into `main` through pull requests.
