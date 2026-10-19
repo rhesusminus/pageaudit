@@ -1,12 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { parse } from '../src/parse.js'
-import { jsonLdSummary, pageAuthor, pageDates } from '../src/checks/page/authorship.js'
+import { pageAuthorship } from '../src/checks/page/authorship.js'
 import { lastmodByPage } from '../src/input/sitemap.js'
 
 const ldJson = (...values) =>
   values.map((value) => `<script type="application/ld+json">${JSON.stringify(value)}</script>`).join('')
 const page = (head) => parse(`<html><head>${head}</head><body><p>x</p></body></html>`)
+const jsonLdSummary = ($) => pageAuthorship($).jsonLd
 
 const node = (fields) => ({
   types: [],
@@ -108,32 +109,58 @@ test('jsonLd: nodes, names, sameAs and text are capped, invalid blocks and untyp
   assert.equal(summary.at(-1).name, 'n8')
 })
 
+test('jsonLd: an author reference to a node without a @type is resolved, but the node is not listed', () => {
+  const $ = page(
+    ldJson({
+      '@graph': [
+        { '@type': 'Article', author: { '@id': '#writer' } },
+        { '@id': '#writer', name: 'Alice' }
+      ]
+    })
+  )
+  assert.deepEqual(jsonLdSummary($), [node({ types: ['Article'], authors: ['Alice'] })])
+})
+
+test('jsonLd: the dates and author of an article after the node cap are still found', () => {
+  const things = Array.from({ length: 10 }, (_, i) => ({ '@type': 'Thing', name: `n${i}` }))
+  const article = { '@type': 'Article', author: 'Alice', datePublished: '2026-01-01' }
+  const { jsonLd, dates, author } = pageAuthorship(page(ldJson({ '@graph': [...things, article] })))
+  assert.equal(jsonLd.length, 10)
+  assert.deepEqual([dates.published, author], ['2026-01-01', 'Alice'])
+})
+
+test('jsonLd: a list inside a list is not text, however deep it goes', () => {
+  const deep = '['.repeat(20000) + '"x"' + ']'.repeat(20000)
+  const $ = page(`<script type="application/ld+json">{"@type":"Article","headline":${deep},"name":"Name"}</script>`)
+  assert.equal(jsonLdSummary($)[0].name, 'Name')
+  assert.equal(
+    pageAuthorship(page(ldJson({ '@type': 'Article', headline: [['nested'], 'flat'] }))).jsonLd[0].name,
+    'flat'
+  )
+})
+
 test('dates: JSON-LD first, then the article and og tags, and the Last-Modified header as sent', () => {
   const tags =
     '<meta property="article:published_time" content="2025-01-01"><meta property="og:updated_time" content="2025-06-01">'
-  const fromTags = page(tags)
-  assert.deepEqual(pageDates(fromTags, jsonLdSummary(fromTags), 'Mon, 19 Oct 2026 10:00:00 GMT'), {
+  assert.deepEqual(pageAuthorship(page(tags), 'Mon, 19 Oct 2026 10:00:00 GMT').dates, {
     published: '2025-01-01',
     modified: '2025-06-01',
     lastModified: 'Mon, 19 Oct 2026 10:00:00 GMT'
   })
   const both = page(tags + ldJson({ '@type': 'WebPage' }, { '@type': 'Article', datePublished: '2026-03-02' }))
-  assert.deepEqual(pageDates(both, jsonLdSummary(both), null), {
+  assert.deepEqual(pageAuthorship(both).dates, {
     published: '2026-03-02',
     modified: '2025-06-01',
     lastModified: null
   })
-  const none = page('')
-  assert.deepEqual(pageDates(none, [], null), { published: null, modified: null, lastModified: null })
+  assert.deepEqual(pageAuthorship(page('')).dates, { published: null, modified: null, lastModified: null })
 })
 
 test('author: the author meta tag wins, else the first JSON-LD node with authors', () => {
   const graph = ldJson({ '@type': 'WebPage' }, { '@type': 'Article', author: ['A', 'B'] })
-  const fromJsonLd = page(graph)
-  assert.equal(pageAuthor(fromJsonLd, jsonLdSummary(fromJsonLd)), 'A, B')
-  const fromMeta = page(`<meta name="author" content="Maija">${graph}`)
-  assert.equal(pageAuthor(fromMeta, jsonLdSummary(fromMeta)), 'Maija')
-  assert.equal(pageAuthor(page(''), []), null)
+  assert.equal(pageAuthorship(page(graph)).author, 'A, B')
+  assert.equal(pageAuthorship(page(`<meta name="author" content="Maija">${graph}`)).author, 'Maija')
+  assert.equal(pageAuthorship(page('')).author, null)
 })
 
 test('sitemap lastmod: by page key from urlset files only, the first one wins', () => {

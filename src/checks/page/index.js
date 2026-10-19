@@ -1,6 +1,6 @@
 import { collapseWhitespace } from '../../text.js'
 import { checkA11y } from './a11y.js'
-import { jsonLdSummary, pageAuthor, pageDates } from './authorship.js'
+import { pageAuthorship } from './authorship.js'
 import { checkHeadings } from './headings.js'
 import { checkHreflang } from './hreflang.js'
 import { checkHygiene } from './hygiene.js'
@@ -42,7 +42,7 @@ export function extractFacts($, finalUrl, { robotsHeader = null, lastModified = 
     .map((el) => ($(el).attr('href') ?? '').trim())
     .find(Boolean)
   const base = baseUrl($, finalUrl)
-  const jsonLd = jsonLdSummary($)
+  const { jsonLd, dates, author } = pageAuthorship($, lastModified)
   return {
     title: collapseWhitespace(titleElement($).text()) || null,
     description: descriptionValues($).find(Boolean) ?? null,
@@ -58,7 +58,7 @@ export function extractFacts($, finalUrl, { robotsHeader = null, lastModified = 
     ...extractSignals($, base, finalUrl, robotsHeader),
     jsonLd,
     // sitemapLastmod is filled in once the audit knows which sitemap listed the page, see addSitemapDates().
-    dates: { ...pageDates($, jsonLd, lastModified), sitemapLastmod: null },
-    author: pageAuthor($, jsonLd)
+    dates: { ...dates, sitemapLastmod: null },
+    author
   }
 }
