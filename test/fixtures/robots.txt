@@ -1,4 +1,10 @@
 User-agent: *
+Content-Signal: search=yes, ai-train=no
 Disallow: /blocked.html
+
+User-agent: GPTBot
+User-agent: OAI-SearchBot
+Disallow: /blocked.html
+Disallow: /ai-blocked.html
 
 Sitemap: https://fixtures.test/sitemap.xml

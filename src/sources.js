@@ -29,6 +29,10 @@ export const SOURCES = {
   javascriptSeo: 'https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics',
   robotsTxt: 'https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt',
   sitemaps: 'https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap',
+  openaiBots: 'https://developers.openai.com/api/docs/bots',
+  anthropicBots:
+    'https://support.claude.com/en/articles/8896518-does-anthropic-crawl-data-from-the-web-and-how-can-site-owners-block-the-crawler',
+  perplexityBots: 'https://docs.perplexity.ai/guides/bots',
   formLabels: 'https://www.w3.org/WAI/tutorials/forms/labels/',
   linkPurpose: 'https://www.w3.org/WAI/WCAG22/Understanding/link-purpose-in-context.html',
   landmarks: 'https://www.w3.org/WAI/ARIA/apg/practices/landmark-regions/',

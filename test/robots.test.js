@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import robotsParser from 'robots-parser'
-import { checkRobotsTxt } from '../src/checks/site/robots.js'
+import { aiCrawlerAccess, checkRobotsTxt, contentSignal } from '../src/checks/site/robots.js'
 import {
   checkSitemapDeclared,
   checkSitemapEntries,
@@ -12,6 +12,9 @@ import { checkRobotsHeader, googleRules, mergeRobotsIssues } from '../src/checks
 import { fetchPage } from '../src/fetch.js'
 import { auditPage } from '../src/runner.js'
 import { loadRobots } from '../src/robots.js'
+import { SOURCES } from '../src/sources.js'
+import { buildDigest } from '../src/digest.js'
+import { buildReport } from '../src/report.js'
 import { mockFetch } from './helpers/mock-fetch.js'
 
 const types = (issues) => issues.map((i) => i.type)
@@ -61,6 +64,7 @@ test('loadRobots: a 200 is parsed, other 4xx mean no file, 5xx and 429 are unrea
   respond(t, 200, 'User-agent: *\nDisallow: /private')
   const ok = await loadRobots('https://x.test')
   assert.equal(ok.status, 'ok')
+  assert.equal(ok.text, 'User-agent: *\nDisallow: /private')
   assert.equal(ok.parser.isDisallowed('https://x.test/private/a', 'Googlebot'), true)
   assert.equal(ok.parser.isDisallowed('https://x.test/public', 'Googlebot'), false)
   for (const status of [404, 403, 410]) {
@@ -176,6 +180,114 @@ test('robots.txt check: unreachable and failed reads are info, a missing file gi
     ]
   )
   assert.match(issues[1].message, /timed out after 15s/)
+})
+
+test('robots.txt check: pages kept from AI search crawlers are one issue per set of crawlers', async () => {
+  const text = [
+    'User-agent: *',
+    'Disallow: /private/',
+    'User-agent: OAI-SearchBot',
+    'User-agent: PerplexityBot',
+    'Disallow: /news/',
+    'Disallow: /private/',
+    'User-agent: Claude-SearchBot',
+    'Disallow: /news/paid/',
+    'Disallow: /private/'
+  ].join('\n')
+  const pages = ['/', '/news/a', '/news/paid/b', '/private/x'].map((path) => page(`https://a.test${path}`))
+  const issues = await checkRobotsTxt(pages, { load: load({ 'https://a.test': robots('https://a.test', text) }) })
+  assert.deepEqual(
+    issues.map(({ type, urls, severity, source }) => [type, urls, severity, source]),
+    [
+      ['blocked-by-robots', ['https://a.test/private/x'], 'warning', SOURCES.robotsTxt],
+      ['ai-search-blocked', ['https://a.test/news/a'], 'warning', SOURCES.openaiBots],
+      ['ai-search-blocked', ['https://a.test/news/paid/b'], 'warning', SOURCES.openaiBots]
+    ]
+  )
+  assert.equal(
+    issues[1].message,
+    'robots.txt does not allow OAI-SearchBot and PerplexityBot to crawl the page, so ChatGPT search and Perplexity ' +
+      'cannot use it in answers'
+  )
+  assert.match(issues[2].message, /OAI-SearchBot, Claude-SearchBot and PerplexityBot .* ChatGPT search, Claude and/)
+})
+
+test('robots.txt check: each set of AI search crawlers is its own digest variant with its own pages', async () => {
+  const text = 'User-agent: OAI-SearchBot\nDisallow: /one\nUser-agent: Claude-SearchBot\nDisallow: /two'
+  const pages = [page('https://a.test/one', { facts: null }), page('https://a.test/two', { facts: null })]
+  const site = await checkRobotsTxt(pages, { load: load({ 'https://a.test': robots('https://a.test', text) }) })
+  const [finding] = buildDigest(buildReport({ pages, site })).findings
+  assert.deepEqual(
+    finding.variants.map(({ context, urls }) => [context, urls]),
+    [
+      ['https://a.test/robots.txt disallows OAI-SearchBot', ['https://a.test/one']],
+      ['https://a.test/robots.txt disallows Claude-SearchBot', ['https://a.test/two']]
+    ]
+  )
+})
+
+test('robots.txt check: training crawlers alone are no issue', async () => {
+  const text = 'User-agent: GPTBot\nUser-agent: ClaudeBot\nUser-agent: Google-Extended\nDisallow: /'
+  const issues = await checkRobotsTxt([page('https://a.test/')], {
+    load: load({ 'https://a.test': robots('https://a.test', text) })
+  })
+  assert.deepEqual(issues, [])
+})
+
+test('Content-Signal: the value for every crawler is read, case-insensitive and without comments', () => {
+  assert.equal(
+    contentSignal('User-Agent: *\nContent-signal: search=yes, ai-train=no # managed\nAllow: /'),
+    'search=yes, ai-train=no'
+  )
+  assert.equal(contentSignal('Content-Signal: ai-train=no\nUser-agent: *\nAllow: /'), 'ai-train=no')
+  assert.equal(contentSignal('User-agent: GPTBot\nUser-agent: *\nContent-Signal: ai-input=no'), 'ai-input=no')
+  // A signal for one crawler only, or none at all.
+  assert.equal(contentSignal('User-agent: *\nAllow: /\nUser-agent: GPTBot\nContent-Signal: ai-train=no'), null)
+  assert.equal(contentSignal('User-agent: *\nDisallow: /x'), null)
+  assert.equal(contentSignal(''), null)
+})
+
+test('AI crawler access: allowed, blocked or partial over the audited pages, with the Content-Signal', async () => {
+  const text = [
+    'User-agent: *',
+    'Content-Signal: search=yes, ai-train=no',
+    'Allow: /',
+    'User-agent: GPTBot',
+    'Disallow: /',
+    'User-agent: PerplexityBot',
+    'Disallow: /news/'
+  ].join('\n')
+  const pages = [page('https://a.test/'), page('https://a.test/news/x')]
+  const [a] = await aiCrawlerAccess(pages, { load: async () => ({ ...robots('https://a.test', text), text }) })
+  assert.deepEqual(a, {
+    origin: 'https://a.test',
+    robotsTxt: 'ok',
+    aiSearch: { 'OAI-SearchBot': 'allowed', 'Claude-SearchBot': 'allowed', PerplexityBot: 'partial' },
+    aiTraining: {
+      GPTBot: 'blocked',
+      ClaudeBot: 'allowed',
+      'Google-Extended': 'allowed',
+      'Applebot-Extended': 'allowed',
+      CCBot: 'allowed'
+    },
+    contentSignal: 'search=yes, ai-train=no'
+  })
+})
+
+test('AI crawler access: no robots.txt allows every crawler, an unreadable one leaves them unknown', async () => {
+  const files = { 'https://b.test': { status: 'missing' }, 'https://c.test': { status: 'unreachable', code: 503 } }
+  const [b, c] = await aiCrawlerAccess([page('https://b.test/'), page('https://c.test/')], {
+    load: async (origin) => files[origin]
+  })
+  assert.equal(b.robotsTxt, 'missing')
+  assert.ok(Object.values({ ...b.aiSearch, ...b.aiTraining }).every((access) => access === 'allowed'))
+  assert.deepEqual(c, {
+    origin: 'https://c.test',
+    robotsTxt: 'unreachable',
+    aiSearch: null,
+    aiTraining: null,
+    contentSignal: null
+  })
 })
 
 test('robots.txt check: pages that did not load are not tested', async () => {
