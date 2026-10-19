@@ -402,6 +402,10 @@ test('renderHtml: "More about this page" lists the facts that are not shown at f
   assert.match(out, /Organization/)
   assert.match(out, /fi: https:\/\/a.test\/fi/)
   assert.match(out, /Other page/)
+  // The robots header row is only there when the page sent one.
+  assert.doesNotMatch(out, /Robots header/)
+  const sent = page('https://a.test/', [], { facts: { ...facts, robotsHeader: 'noarchive' } })
+  assert.match(renderHtml(wrap([sent])), /<dt>Robots header<\/dt><dd>noarchive<\/dd>/)
   const failed = page('https://a.test/', [issue('fetch-failed', 'error')], {
     status: null,
     finalUrl: null,
