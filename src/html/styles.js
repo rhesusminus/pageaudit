@@ -202,6 +202,8 @@ pre code { margin: 0; display: inline; }
 .audit-category { margin-left: 0.5rem; }
 .audit-items { display: grid; gap: 0.75rem; margin-top: 0.6rem; padding-left: 1rem; border-left: 2px solid var(--line); }
 .audit-items li { display: grid; gap: 0.15rem; overflow-wrap: anywhere; }
+.lh-warnings { display: grid; gap: 0.6rem; margin-block: 1.25rem 0.75rem; }
+.lh-warnings li { display: grid; gap: 0.1rem; overflow-wrap: anywhere; }
 .facts-more { margin-top: 1rem; }
 .outline { display: grid; gap: 0.3rem; overflow-wrap: anywhere; }
 .redirects { margin-top: 1rem; }

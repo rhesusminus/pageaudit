@@ -1,6 +1,15 @@
 import { countSeverities, worstFirst } from '../severity.js'
 import { adviceFor } from '../advice.js'
-import { auditRow, evidence, hasEvidence, lcpElement, lighthouseNote, moreFacts, redirectList } from './detail.js'
+import {
+  auditRow,
+  evidence,
+  hasEvidence,
+  lcpElement,
+  lighthouseNote,
+  lighthouseWarnings,
+  moreFacts,
+  redirectList
+} from './detail.js'
 import { markup, raw } from './escape.js'
 import { CATEGORY_NAMES, formatMetric, link, plural } from './format.js'
 import { METRIC_BANDS, metricBand } from './model.js'
@@ -239,7 +248,7 @@ function lighthouseBlock(lighthouse, auditNotes) {
             ${more > 0 ? markup`<p class="note">${plural(more, 'more finding')} not listed here.</p>` : ''}`
         : ''
     }
-    ${lighthouseNote(lighthouse)}`
+    ${lighthouseWarnings(lighthouse.warnings)} ${lighthouseNote(lighthouse)}`
 }
 
 function pageBody(page, auditNotes) {

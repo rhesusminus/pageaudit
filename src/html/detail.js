@@ -123,6 +123,14 @@ export function lighthouseNote({ lighthouseVersion, formFactor, runs, scoreSprea
   return text ? markup`<p class="note">${text}</p>` : ''
 }
 
+// What Lighthouse warned about its own run, such as a redirect or an audit that crashed: the numbers above may be off.
+export function lighthouseWarnings(warnings = []) {
+  if (!warnings.length) return ''
+  return markup`<ul class="lh-warnings">
+    ${warnings.map((warning) => markup`<li><span class="sev sev-warning">Lighthouse warning</span> ${warning}</li>`)}
+  </ul>`
+}
+
 // ---- page facts ----
 
 const orMissing = (value) => value ?? markup`<span class="missing">Missing</span>`

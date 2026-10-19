@@ -288,6 +288,15 @@ test('renderHtml: the findings left out by the cap are counted in the "more" not
   assert.match(out, /9 more findings not listed here/)
 })
 
+test('renderHtml: each Lighthouse warning is listed after the audits, escaped', () => {
+  const warnings = ['The test URL was redirected to <b>https://a.test/</b>.', 'Audit x failed: unknown error']
+  const out = renderHtml(wrap([page('https://a.test/', [], { lighthouse: { ...lighthouse, warnings } })]))
+  assert.equal(out.match(/<span class="sev sev-warning">Lighthouse warning<\/span>/g).length, 2)
+  assert.match(out, /redirected to &lt;b&gt;https:\/\/a\.test\/&lt;\/b&gt;\./)
+  assert.ok(out.indexOf('class="audits"') < out.indexOf('class="lh-warnings"'))
+  assert.doesNotMatch(renderHtml(report), /class="lh-warnings"|Lighthouse warning/)
+})
+
 test('renderHtml: the Lighthouse issue types show their advice and escape the element', () => {
   const issues = [
     { ...issue('lcp-slow', 'warning'), context: '<h1 class="x">Hi</h1>', category: 'performance' },
