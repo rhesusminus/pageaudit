@@ -21,11 +21,15 @@ function baseName(url) {
 // `existing` holds the names of files already in the folder, lowercased, which are never used.
 export function contentNames(urls, existing = new Set()) {
   const taken = new Set(existing)
+  // The next number to try for each name, so many URLs with one name do not each count up from 2.
+  const next = new Map()
   return new Map(
     urls.map((url) => {
       const base = baseName(url)
       let name = `${base}.md`
-      for (let n = 2; taken.has(name.toLowerCase()); n++) name = `${base}-${n}.md`
+      let n = next.get(base.toLowerCase()) ?? 2
+      while (taken.has(name.toLowerCase())) name = `${base}-${n++}.md`
+      next.set(base.toLowerCase(), n)
       taken.add(name.toLowerCase())
       return [url, name]
     })

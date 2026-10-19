@@ -1,4 +1,4 @@
-import { dirname, relative, resolve } from 'node:path'
+import { basename, dirname, relative, resolve } from 'node:path'
 import chalk from 'chalk'
 import { checkLinks } from './checks/site/links.js'
 import { checkRobotsTxt } from './checks/site/robots.js'
@@ -23,7 +23,7 @@ import { buildCoverage, orphansSkipped } from './coverage.js'
 import { checkLinkTargets } from './links.js'
 import { lighthouseIssues } from './lighthouse-issues.js'
 import { HELP, parseOptions, USAGE } from './options.js'
-import { reportPathProblems, writeReportFile } from './output.js'
+import { reportPathProblems, sameFile, writeReportFile } from './output.js'
 import { createProgress } from './progress.js'
 import { buildReport } from './report.js'
 import { buildDigest } from './digest.js'
@@ -89,11 +89,15 @@ function announceInputs({ urls, skipped, total, sitemapFiles }, options) {
 }
 
 // The writer for the --content files, null without --content, or undefined after printing why the folder cannot be
-// used. The folder is only emptied of an earlier run's files here, once there is something to audit.
+// used. The folder is only emptied of an earlier run's files here, once there is something to audit. A report that
+// goes into the folder keeps its name too.
 async function contentWriterFor(options, urls) {
   if (!options.content) return null
   const { existing, problem } = await prepareContentFolder(options.content)
-  if (!problem) return contentWriter(options.content, urls, existing)
+  const reports = [options.out, options.digest, options.html]
+    .filter((path) => path && sameFile(dirname(resolve(path)), options.content))
+    .map((path) => basename(path).toLowerCase())
+  if (!problem) return contentWriter(options.content, urls, new Set([...existing, ...reports]))
   console.error(problem)
   return undefined
 }

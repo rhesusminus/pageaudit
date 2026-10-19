@@ -43,6 +43,13 @@ test('contentNames: a name already in the folder is never used', () => {
   assert.deepEqual([...names.values()], ['a.test_x-2.md', 'a.test_y.md'])
 })
 
+test('contentNames: numbers continue past the ones already used for a name', () => {
+  const long = `https://a.test/${'x'.repeat(200)}`
+  const base = `a.test_${'x'.repeat(93)}`
+  const names = contentNames([`${long}/1`, `${long}/2`, `${long}/3`], new Set([`${base}-3.md`]))
+  assert.deepEqual([...names.values()], [`${base}.md`, `${base}-2.md`, `${base}-4.md`])
+})
+
 test('prepareContentFolder: makes the folder, also nested', async (t) => {
   const dir = join(await tempDir(t), 'a', 'b')
   assert.deepEqual(await prepareContentFolder(dir), { existing: new Set() })

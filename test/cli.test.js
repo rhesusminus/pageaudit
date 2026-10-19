@@ -848,6 +848,15 @@ test('cli: --content replaces the files of an earlier run and leaves other files
   assert.deepEqual((await readdir(dir)).sort(), ['fixtures.test_rich.html.md', 'notes.md'])
 })
 
+test('cli: a report written into the --content folder keeps its name', async (t) => {
+  const dir = await tempDir(t)
+  const out = join(dir, 'fixtures.test_good.html.md')
+  await runCli(t, [fixtureUrl('good.html'), '--content', dir, '--out', out, '--json'])
+  const report = JSON.parse(await readFile(out, 'utf8'))
+  assert.equal(report.pages[0].content, 'fixtures.test_good.html-2.md')
+  assert.match(await readFile(join(dir, report.pages[0].content), 'utf8'), /^---\ngenerator: "pageaudit"/)
+})
+
 test('cli: --content leaves an earlier run alone when the inputs cannot be read', async (t) => {
   const dir = await tempDir(t)
   await runCli(t, [fixtureUrl('good.html'), '--content', dir, '--json'])
