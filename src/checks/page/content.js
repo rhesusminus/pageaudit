@@ -115,7 +115,7 @@ function imageContext($, el) {
   return limit(text, MAX_IMAGE_TEXT) || null
 }
 
-function imageSrc(src, base) {
+export function imageSrc(src, base) {
   if (!src) return null
   if (/^data:/i.test(src)) return limit(src, MAX_DATA_URI)
   return limit(absolute(src, base) ?? src, MAX_SRC)
