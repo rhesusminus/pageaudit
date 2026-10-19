@@ -241,6 +241,27 @@ export function formatLighthouse(
     .join('\n')
 }
 
+const CHECK_NAMES = { lighthouse: 'Lighthouse', links: 'links', 'orphan-page': 'orphan pages' }
+
+// Whether a check was asked for, by the settings in the report's coverage. Orphan pages come with --check-links on a
+// --sitemap audit, the only kind that can find them.
+const ASKED_FOR = {
+  lighthouse: (settings) => settings.lighthouse || settings.lighthousePages > 0,
+  links: (settings) => settings.checkLinks,
+  'orphan-page': (settings) => settings.checkLinks && settings.sitemaps.length > 0
+}
+
+// The checks that were asked for but did not run, with the reason. A check that was not asked for is left out: the
+// person who ran the audit knows. Nothing without coverage, which only the CLI adds.
+export function formatNotChecked(coverage, columns) {
+  const missed = (coverage?.notRun ?? []).filter(({ check }) => ASKED_FOR[check]?.(coverage.settings) ?? true)
+  if (!missed.length) return ''
+  const lines = missed.map(({ check, reason }) =>
+    chalk.dim(indented(`${CHECK_NAMES[check] ?? check}: ${reason}`, columns))
+  )
+  return [chalk.bold('\nNot checked'), ...lines].join('\n')
+}
+
 export function formatReport(report, columns) {
   const out = [formatPagesTable(report.pages, columns)]
   const sorted = worstFirst(report.pages)
@@ -255,6 +276,8 @@ export function formatReport(report, columns) {
     chalk.bold('\nSite'),
     report.site.length ? formatSiteTable(report.site, columns) : chalk.green('  No cross-page issues')
   )
+  const notChecked = formatNotChecked(report.coverage, columns)
+  if (notChecked) out.push(notChecked)
   out.push(formatSummary(report))
   return out.join('\n')
 }

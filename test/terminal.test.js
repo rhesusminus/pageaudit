@@ -6,6 +6,7 @@ import { buildReport } from '../src/report.js'
 import {
   formatIssueTable,
   formatLighthouse,
+  formatNotChecked,
   formatPagesTable,
   formatReport,
   formatSiteTable,
@@ -388,6 +389,57 @@ test('formatLighthouse: a long largest-element selector is wrapped and indented 
   const selector = 'body > div.page-wrapper > main#content > section.hero-banner > div.container > picture > img'
   const text = stripVTControlCharacters(formatLighthouse(lhBlock([], { lcpElement: { selector, snippet: null } }), 80))
   const lines = text.split('\n').filter((line) => /Largest|picture|img/.test(line))
+  assert.equal(lines.length, 2)
+  for (const line of lines) {
+    assert.ok(line.length <= 80, line)
+    assert.match(line, /^ {2}\S/)
+  }
+})
+
+const coverage = (notRun, settings = {}) => ({
+  settings: { lighthouse: false, lighthousePages: 0, checkLinks: false, sitemaps: [], ...settings },
+  notRun
+})
+
+test('formatReport: lists the checks that were asked for but did not run, before the totals', () => {
+  const notRun = [
+    { check: 'lighthouse', reason: 'not asked for (--lighthouse or --lighthouse-page)' },
+    { check: 'orphan-page', reason: 'only 6 of 1657 URLs were audited' }
+  ]
+  const settings = { checkLinks: true, sitemaps: ['https://a.test/sitemap.xml'] }
+  const report = buildReport({ pages, site, coverage: coverage(notRun, settings) })
+  const text = stripVTControlCharacters(formatReport(report, 100))
+  assert.match(text, /\nNot checked\n {2}orphan pages: only 6 of 1657 URLs were audited\n\n\d+ pages,/)
+  assert.doesNotMatch(text, /Lighthouse: not asked for/)
+})
+
+test('formatNotChecked: leaves out the checks that were not asked for', () => {
+  const notRun = [
+    { check: 'lighthouse', reason: 'not asked for (--lighthouse or --lighthouse-page)' },
+    { check: 'links', reason: 'not asked for (--check-links)' }
+  ]
+  assert.equal(formatNotChecked(coverage(notRun), 100), '')
+  assert.equal(formatNotChecked(undefined, 100), '')
+})
+
+test('formatNotChecked: leaves out orphan pages when links were checked without a sitemap', () => {
+  const notRun = [{ check: 'orphan-page', reason: 'needs a --sitemap, the list of pages that should be linked' }]
+  assert.equal(formatNotChecked(coverage(notRun, { checkLinks: true }), 100), '')
+})
+
+test('formatNotChecked: shows Lighthouse when it was asked for and could not run', () => {
+  const notRun = [{ check: 'lighthouse', reason: 'no page it was asked for returned HTML' }]
+  const text = (settings) => stripVTControlCharacters(formatNotChecked(coverage(notRun, settings), 100))
+  assert.match(text({ lighthouse: true }), /Lighthouse: no page it was asked for returned HTML/)
+  assert.match(text({ lighthousePages: 2 }), /Lighthouse: no page it was asked for returned HTML/)
+})
+
+test('formatNotChecked: a long reason is wrapped and indented at 80 columns', () => {
+  const reason =
+    'checked 500 link targets, 1234 linked from fewer pages were not checked, so some pages may look orphaned'
+  const settings = { checkLinks: true, sitemaps: ['https://a.test/sitemap.xml'] }
+  const text = stripVTControlCharacters(formatNotChecked(coverage([{ check: 'orphan-page', reason }], settings), 80))
+  const lines = text.split('\n').slice(2)
   assert.equal(lines.length, 2)
   for (const line of lines) {
     assert.ok(line.length <= 80, line)
