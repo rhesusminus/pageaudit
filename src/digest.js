@@ -32,7 +32,9 @@ const ABOUT =
   'coverage.notRun lists the checks that did not run: their issue types are missing because nothing was looked ' +
   'for. With --limit the first URLs in input order are audited. The full details of a page are in the report at ' +
   'report.path (relative to this file), under pages[] by url. If report.path is null, the full report was not ' +
-  'written and the details are not available.'
+  'written and the details are not available. A page line with content names a Markdown file (relative to this ' +
+  "file) with the page's main content, the HTML as served before scripts run: read it to judge what the page " +
+  'covers, how clearly and how accurately.'
 
 // The first `max` of a list under `key`, and under `moreKey` how many were left out, when any were.
 function capped(list, max, key, moreKey) {
@@ -128,20 +130,23 @@ const lighthouseLine = ({ scores, omittedAudits, warnings }) => ({
   ...(warnings.length ? { lighthouseWarnings: warnings.length } : {})
 })
 
-// One line per audited page, with the site issues that list it counted in, like the HTML report does.
-const pageLines = (pages) =>
+// One line per audited page, with the site issues that list it counted in, like the HTML report does, and the
+// page's --content file when it has one.
+const pageLines = (pages, contentFiles) =>
   pages.map((page) => ({
     url: page.url,
     ...(page.finalUrl && page.finalUrl !== page.url ? { finalUrl: page.finalUrl } : {}),
     status: page.status,
     ...countSeverities(page.issues),
-    ...(page.lighthouse ? lighthouseLine(page.lighthouse) : {})
+    ...(page.lighthouse ? lighthouseLine(page.lighthouse) : {}),
+    ...(contentFiles.has(page.url) ? { content: contentFiles.get(page.url) } : {})
   }))
 
 // A compact view of a finished report for a model to read first: issues grouped by type and by the element they
 // are about, Lighthouse audits grouped by id and one line per page. `reportPath` is where the full report was
-// written, relative to the digest, or null. Only the page lines grow with the number of pages.
-export function buildDigest(report, { reportPath = null } = {}) {
+// written, relative to the digest, or null, and `contentFiles` the --content file of each page by URL, relative to
+// the digest. Only the page lines grow with the number of pages.
+export function buildDigest(report, { reportPath = null, contentFiles = new Map() } = {}) {
   const pages = pagesWithSiteIssues(report)
   const scores = averageScores(report.pages)
   const audits = lighthouseAudits(report.pages)
@@ -155,6 +160,6 @@ export function buildDigest(report, { reportPath = null } = {}) {
     ...capped(report.skipped, MAX_SKIPPED, 'skipped', 'moreSkipped'),
     findings: findings(report),
     ...(audits.length ? { lighthouseAudits: audits } : {}),
-    pages: pageLines(pages)
+    pages: pageLines(pages, contentFiles)
   }
 }

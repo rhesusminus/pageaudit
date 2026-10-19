@@ -1,4 +1,6 @@
-import { readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import Ajv2020 from 'ajv/dist/2020.js'
@@ -155,8 +157,15 @@ async function fullReport(t, extra = [], behave = (n) => 0.4 + (n % 2) / 10) {
   return JSON.parse(out[0])
 }
 
+// A folder for --content that is removed after the test.
+async function contentDir(t) {
+  const dir = await mkdtemp(join(tmpdir(), 'pageaudit-schema-'))
+  t.after(() => rm(dir, { recursive: true, force: true }))
+  return dir
+}
+
 test('schema: a report with every kind of page, issue and Lighthouse level matches it', async (t) => {
-  const report = await fullReport(t)
+  const report = await fullReport(t, ['--content', await contentDir(t)])
   assert.deepEqual(check(report), [])
   assert.equal(report.schemaVersion, SCHEMA_VERSION)
   assert.equal(schema.properties.schemaVersion.const, SCHEMA_VERSION)
@@ -164,6 +173,7 @@ test('schema: a report with every kind of page, issue and Lighthouse level match
   assert.ok(report.pages.some((p) => p.lighthouse?.audits[0]?.items))
   assert.ok(report.pages.some((p) => p.lighthouse && !p.lighthouse.audits[0]?.items))
   assert.ok(report.pages.some((p) => p.facts === null))
+  assert.ok(report.pages.some((p) => p.content))
   assert.ok(report.site.length > 0 && report.skipped.length > 0)
   const siteTypes = new Set(report.site.map((issue) => issue.type))
   // No orphan-page: the /timeout page's links are unknown, so it is rightly not looked for. Its shape is the same.
@@ -176,8 +186,9 @@ test('schema: a report with every kind of page, issue and Lighthouse level match
 })
 
 test('schema: the digest of a report with every kind of page, issue and Lighthouse level matches it', async (t) => {
-  const report = await fullReport(t)
-  const digest = buildDigest(report, { reportPath: 'report.json' })
+  const report = await fullReport(t, ['--content', await contentDir(t)])
+  const contentFiles = new Map(report.pages.filter((p) => p.content).map((p) => [p.url, p.content]))
+  const digest = buildDigest(report, { reportPath: 'report.json', contentFiles })
   assert.deepEqual(checkDigest(digest), [])
   assert.equal(digestSchema.properties.digestVersion.const, DIGEST_VERSION)
   // The digest must actually contain what the schema describes, or this test proves little.
@@ -185,6 +196,7 @@ test('schema: the digest of a report with every kind of page, issue and Lighthou
   assert.ok(digest.findings.flatMap((f) => f.variants).some((v) => v.selector && v.html))
   assert.ok(digest.findings.flatMap((f) => f.variants).some((v) => v.actual !== undefined && v.expected))
   assert.ok(digest.pages.some((p) => p.status === null) && digest.pages.some((p) => p.finalUrl && p.scores))
+  assert.ok(digest.pages.some((p) => p.content))
   assert.ok(digest.skipped.length > 0)
 })
 

@@ -164,6 +164,10 @@
           "type": "integer",
           "minimum": 1,
           "description": "Warnings of the Lighthouse run, listed in the report."
+        },
+        "content": {
+          "type": "string",
+          "description": "Only with --content: the Markdown file with the page's main content, relative to the digest."
         }
       }
     }

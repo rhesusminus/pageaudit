@@ -200,6 +200,10 @@
           "description": "What is on the page. Null when the page returned no HTML.",
           "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/facts" }]
         },
+        "content": {
+          "type": "string",
+          "description": "Only with --content, for a page that returned HTML: the Markdown file with its main content, the HTML as served before scripts run, relative to the report file (or to the working directory when the report was only printed). Added within schemaVersion 1."
+        },
         "lighthouse": {
           "description": "Only present when Lighthouse was asked for this page. Null when the run failed.",
           "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/lighthouse" }]

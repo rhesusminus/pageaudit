@@ -3,10 +3,10 @@ import { stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 
 // Writes a report file. Returns an error message instead of throwing, so a bad path
-// never loses the report that was already printed.
-export async function writeReportFile(path, content) {
+// never loses the report that was already printed. `options` go to writeFile, such as a flag.
+export async function writeReportFile(path, content, options) {
   try {
-    await writeFile(path, content)
+    await writeFile(path, content, options)
     return null
   } catch (err) {
     return `Could not write ${path}: ${err.code ?? err.message}`
@@ -48,10 +48,10 @@ export function sameFile(a, b) {
 // A file name to suggest when a report option names a directory.
 const EXAMPLE_NAMES = { '--out': 'report.json', '--digest': 'report.digest.json', '--html': 'report.html' }
 
-// Returns a message for each problem with the report options, or an empty list: a path that is a directory, or two
-// reports that would go to the same file. Both can only fail at the very end of the audit, so this is checked
-// before it starts.
-export async function reportPathProblems(outputs) {
+// Returns a message for each problem with the report options, or an empty list: a path that is a directory, two
+// reports that would go to the same file, or a `content` folder (--content) that is a file or a report's path. These can
+// only fail at the very end of the audit, so this is checked before it starts.
+export async function reportPathProblems(outputs, { content } = {}) {
   const found = []
   const files = []
   for (const [option, path] of outputs) {
@@ -67,6 +67,10 @@ export async function reportPathProblems(outputs) {
     for (const [other, otherPath] of files.slice(i + 1)) {
       if (sameFile(path, otherPath)) found.push(`${option} and ${other} name the same file, give each report its own`)
     }
+    if (content && sameFile(path, content)) found.push(`${option} and --content name the same path, give each its own`)
+  }
+  if (content && (await stat(content).catch(() => null))?.isFile()) {
+    found.push(`--content needs a folder, but "${content}" is a file`)
   }
   return found
 }

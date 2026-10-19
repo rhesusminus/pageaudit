@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { link, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { chmod, link, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { Readable } from 'node:stream'
 import pkg from '../package.json' with { type: 'json' }
 import { run } from '../src/cli.js'
@@ -786,12 +786,107 @@ test('cli: an empty --out value is a usage error', async (t) => {
   assert.match(stderr, /--out needs a value/)
 })
 
-test('cli: empty --digest, --html, --title, --client and --logo values are usage errors', async (t) => {
-  for (const option of ['--digest', '--html', '--title', '--client', '--logo']) {
+test('cli: empty --digest, --content, --html, --title, --client and --logo values are usage errors', async (t) => {
+  for (const option of ['--digest', '--content', '--html', '--title', '--client', '--logo']) {
     const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), option, '', '--json'])
     assert.equal(code, 2)
     assert.match(stderr, new RegExp(`${option} needs a value`))
   }
+})
+
+test('cli: --content writes the main content of each page that returned HTML and says where', async (t) => {
+  const dir = join(await tempDir(t), 'content')
+  const { code, stderr } = await runCli(t, [
+    fixtureUrl('good.html'),
+    fixtureUrl('rich.html'),
+    fixtureUrl('missing.html'),
+    '--content',
+    dir,
+    '--json'
+  ])
+  assert.equal(code, 1)
+  assert.match(stderr, new RegExp(`Page content written to ${dir} \\(2 files\\)`))
+  assert.deepEqual((await readdir(dir)).sort(), ['fixtures.test_good.html.md', 'fixtures.test_rich.html.md'])
+  const good = await readFile(join(dir, 'fixtures.test_good.html.md'), 'utf8')
+  assert.match(good, /^---\ngenerator: "pageaudit"\nurl: "https:\/\/fixtures\.test\/good\.html"\n/)
+})
+
+test('cli: the report and the digest name each content file relative to themselves', async (t) => {
+  const dir = await tempDir(t)
+  await mkdir(join(dir, 'full'))
+  const out = join(dir, 'full', 'report.json')
+  const digestPath = join(dir, 'report.digest.json')
+  const args = [fixtureUrl('good.html'), fixtureUrl('missing.html'), '--content', join(dir, 'content')]
+  const { stdout } = await runCli(t, [...args, '--out', out, '--digest', digestPath, '--json'])
+  const file = 'fixtures.test_good.html.md'
+  const report = JSON.parse(await readFile(out, 'utf8'))
+  assert.deepEqual(
+    report.pages.map((page) => page.content),
+    [join('..', 'content', file), undefined]
+  )
+  assert.deepEqual(JSON.parse(stdout).pages[0].content, join('..', 'content', file))
+  const digest = JSON.parse(await readFile(digestPath, 'utf8'))
+  assert.deepEqual(
+    digest.pages.map((page) => page.content),
+    [join('content', file), undefined]
+  )
+  assert.equal(
+    await readFile(join(dir, 'full', report.pages[0].content), 'utf8'),
+    await readFile(join(dir, digest.pages[0].content), 'utf8')
+  )
+  t.mock.restoreAll()
+  const printed = await runJson(t, args)
+  assert.equal(printed.report.pages[0].content, relative(process.cwd(), join(dir, 'content', file)))
+})
+
+test('cli: --content replaces the files of an earlier run and leaves other files alone', async (t) => {
+  const dir = await tempDir(t)
+  await runCli(t, [fixtureUrl('good.html'), '--content', dir, '--json'])
+  await writeFile(join(dir, 'notes.md'), '# Notes\n')
+  t.mock.restoreAll()
+  await runCli(t, [fixtureUrl('rich.html'), '--content', dir, '--json'])
+  assert.deepEqual((await readdir(dir)).sort(), ['fixtures.test_rich.html.md', 'notes.md'])
+})
+
+test('cli: a report written into the --content folder keeps its name', async (t) => {
+  const dir = await tempDir(t)
+  const out = join(dir, 'fixtures.test_good.html.md')
+  await runCli(t, [fixtureUrl('good.html'), '--content', dir, '--out', out, '--json'])
+  const report = JSON.parse(await readFile(out, 'utf8'))
+  assert.equal(report.pages[0].content, 'fixtures.test_good.html-2.md')
+  assert.match(await readFile(join(dir, report.pages[0].content), 'utf8'), /^---\ngenerator: "pageaudit"/)
+})
+
+test('cli: --content leaves an earlier run alone when the inputs cannot be read', async (t) => {
+  const dir = await tempDir(t)
+  await runCli(t, [fixtureUrl('good.html'), '--content', dir, '--json'])
+  t.mock.restoreAll()
+  const { code } = await runCli(t, ['--urls-file', join(dir, 'missing.txt'), '--content', dir, '--json'])
+  assert.equal(code, 2)
+  assert.deepEqual(await readdir(dir), ['fixtures.test_good.html.md'])
+})
+
+test('cli: a --content file that cannot be written fails the run after the audit', async (t) => {
+  const dir = await tempDir(t)
+  await chmod(dir, 0o555)
+  const { code, stdout, stderr } = await runCli(t, [fixtureUrl('good.html'), '--content', dir, '--json'])
+  assert.equal(code, 2)
+  assert.match(stderr, /Could not write .*fixtures\.test_good\.html\.md: EACCES/)
+  assert.equal(JSON.parse(stdout).summary.pages, 1)
+})
+
+test('cli: --content refuses a file and a path a report also names, before the audit', async (t) => {
+  const dir = await tempDir(t)
+  const file = join(dir, 'taken')
+  await writeFile(file, 'x')
+  const asFile = await runCli(t, [fixtureUrl('good.html'), '--content', file, '--json'])
+  assert.equal(asFile.code, 2)
+  assert.match(asFile.stderr, /--content needs a folder, but ".*taken" is a file/)
+  assert.equal(asFile.stdout, '')
+  const shared = join(dir, 'shared')
+  const same = await runCli(t, [fixtureUrl('good.html'), '--content', shared, '--out', shared, '--json'])
+  assert.equal(same.code, 2)
+  assert.match(same.stderr, /--out and --content name the same path/)
 })
 
 test('cli: --html notes how many URLs a --limit left out', async (t) => {

@@ -10,6 +10,7 @@ import {
 import { hostThrottle } from './concurrency.js'
 import { DEFAULT_TIMEOUT_MS, fetchPage as defaultFetchPage } from './fetch.js'
 import { issueId, uniqueIds } from './issue-id.js'
+import { pageMarkdown } from './markdown.js'
 import { parse } from './parse.js'
 
 const EVIDENCE_KEYS = ['selector', 'html', 'parentHtml', 'actual', 'expected']
@@ -23,13 +24,26 @@ export const DEFAULT_DELAY_MS = 200
 
 const NO_HTML = { issues: [], facts: null, response: null, links: null }
 
-// The checks and facts of a page that returned HTML, and `links`, the internal link targets for the site checks.
-function auditHtml({ finalUrl, html, truncated }) {
+// The checks and facts of a page that returned HTML, `links`, the internal link targets for the site checks, and
+// with `content` its main content as Markdown. `url` is the page as given, for the Markdown's front matter.
+function auditHtml({ finalUrl, html, truncated }, { url, content }) {
   const $ = parse(html)
+  const issues = checkHtml($, { url: finalUrl, truncated })
+  const facts = extractFacts($, finalUrl)
   return {
-    issues: checkHtml($, { url: finalUrl, truncated }),
-    facts: extractFacts($, finalUrl),
-    links: internalLinks($, finalUrl)
+    issues,
+    facts,
+    links: internalLinks($, finalUrl),
+    ...(content ? { content: markdownOf($, { url, finalUrl, title: facts.title, truncated }) } : {})
+  }
+}
+
+// The Markdown is extra, so a page it fails on keeps its checks and only goes without, as null.
+function markdownOf($, page) {
+  try {
+    return pageMarkdown($, page)
+  } catch {
+    return null
   }
 }
 
@@ -37,12 +51,12 @@ function auditHtml({ finalUrl, html, truncated }) {
 // report: the headers and size, null when the fetcher did not say which headers were sent, so an unknown header is
 // never reported as missing. HTML the checks cannot process becomes an issue on that page, like a page that cannot be
 // fetched, so it never discards the pages audited around it. Its headers were still received and are still checked.
-function htmlResults(fetched) {
+function htmlResults(fetched, options) {
   if (fetched.status !== 200 || fetched.html === null) return NO_HTML
   const { headers, bodyBytes } = fetched
   const response = headers ? { headers, bodyBytes } : null
   try {
-    return { ...auditHtml(fetched), response }
+    return { ...auditHtml(fetched, options), response }
   } catch (err) {
     return { ...NO_HTML, issues: checkHtmlError(err), response }
   }
@@ -56,8 +70,12 @@ export const checksFailed = (page) => page.issues.some((issue) => issue.type ===
 export const linksUnread = (page) => checksFailed(page) || page.issues.some((issue) => issue.type === 'html-too-large')
 
 // Fetches and checks one page. A page that cannot be fetched or checked becomes an issue on
-// that page instead of an exception, so one bad page never stops the run.
-export async function auditPage(url, { fetchPage = defaultFetchPage, timeout = DEFAULT_TIMEOUT_MS, beforeHop } = {}) {
+// that page instead of an exception, so one bad page never stops the run. With `content`, a page that returned HTML
+// also gets its main content as Markdown in `content`, which is not part of the report.
+export async function auditPage(
+  url,
+  { fetchPage = defaultFetchPage, timeout = DEFAULT_TIMEOUT_MS, beforeHop, content = false } = {}
+) {
   // A fixed key order keeps the JSON report stable whichever check built the issue.
   const withUrl = (issues) => {
     const ids = uniqueIds(issues.map((issue) => issueId(url, issue.type, issue.selector || issue.context)))
@@ -89,14 +107,16 @@ export async function auditPage(url, { fetchPage = defaultFetchPage, timeout = D
     }
   }
   const { finalUrl, status, redirects } = fetched
-  const { issues: htmlIssues, facts, response, links } = htmlResults(fetched)
+  const { issues: htmlIssues, facts, response, links, content: markdown } = htmlResults(fetched, { url, content })
   const issues = [...checkResponse(fetched), ...htmlIssues]
-  return { url, finalUrl, status, redirects, issues: withUrl(mergeRobotsIssues(issues)), facts, response, links }
+  const page = { url, finalUrl, status, redirects, issues: withUrl(mergeRobotsIssues(issues)), facts, response, links }
+  return markdown === undefined ? page : { ...page, content: markdown }
 }
 
 // Audits every URL with at most `concurrency` requests in flight. `pace(url)` is awaited before every request,
 // redirect hops included, to space out requests to the same host: pass the one the whole run shares.
-// Results keep input order.
+// `onPage(page)` is awaited for each page as soon as it is done, such as to write its `content` without keeping
+// every page's Markdown until the end. Results keep input order.
 export async function runAudit(
   urls,
   {
@@ -104,6 +124,8 @@ export async function runAudit(
     timeout,
     concurrency = DEFAULT_CONCURRENCY,
     pace = hostThrottle(DEFAULT_DELAY_MS),
+    content = false,
+    onPage = async () => {},
     onProgress = () => {}
   } = {}
 ) {
@@ -114,7 +136,8 @@ export async function runAudit(
   async function worker() {
     while (next < urls.length) {
       const i = next++
-      pages[i] = await auditPage(urls[i], { fetchPage, timeout, beforeHop: pace })
+      pages[i] = await auditPage(urls[i], { fetchPage, timeout, beforeHop: pace, content })
+      await onPage(pages[i])
       onProgress(++done, urls.length)
     }
   }
