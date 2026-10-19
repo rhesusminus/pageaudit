@@ -368,8 +368,8 @@ export const ADVICE = {
   },
   'client-side-rendered': {
     title: "The page is built in the visitor's browser",
-    why: 'The page code has almost no text, so the content appears only after scripts run. Some search engines and tools see an empty page, and this audit only reads the code, so its results for this page may be incomplete.',
-    fix: 'Render the important content on the server so it is in the page code, or check how the page looks in Google Search Console.'
+    why: 'The page code has almost no text, so the content appears only after scripts run. Google runs the scripts, but the crawlers of ChatGPT, Claude and Perplexity do not, so what the scripts build can be missing from what they read and from the AI answers they feed. This audit also only reads the code, so its results for this page may be incomplete.',
+    fix: 'Render the important content on the server so it is in the page code. Google Search Console shows only how Google sees the page, not how AI crawlers do.'
   },
   'blocked-by-robots': {
     title: 'Search engines are told to stay away from the page',
