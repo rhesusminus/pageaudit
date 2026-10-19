@@ -3,9 +3,10 @@ import { evidence } from '../evidence.js'
 import { seoIssue } from '../snippet.js'
 import { metaContent } from './signals.js'
 
-// Every robots and googlebot meta tag applies to Google and their directives add up, so all of them are read, uncut.
-function robotsTags($) {
-  return $('meta[name="robots" i], meta[name="googlebot" i]')
+// The robots meta tags for these crawler names, uncut. Every robots and googlebot tag applies to Google and their
+// directives add up, so by default those are read.
+export function robotsTags($, names = ['robots', 'googlebot']) {
+  return $(names.map((name) => `meta[name="${name}" i]`).join(', '))
     .toArray()
     .map((el) => {
       const content = $(el).attr('content') ?? ''
