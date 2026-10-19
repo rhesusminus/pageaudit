@@ -34,8 +34,8 @@ export const checkHtml = ($, page = {}) => [
 
 // The values the site checks compare across pages, plus content signals for the
 // report. Empty values are null so a missing title is never reported as a duplicate
-// of another missing title.
-export function extractFacts($, finalUrl) {
+// of another missing title. `robotsHeader` is the X-Robots-Tag value or null.
+export function extractFacts($, finalUrl, robotsHeader = null) {
   const href = canonicalLinks($)
     .map((el) => ($(el).attr('href') ?? '').trim())
     .find(Boolean)
@@ -52,6 +52,6 @@ export function extractFacts($, finalUrl) {
       )
     ],
     canonical: href ? absolute(href, base) : null,
-    ...extractSignals($, base, finalUrl)
+    ...extractSignals($, base, finalUrl, robotsHeader)
   }
 }

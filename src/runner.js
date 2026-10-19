@@ -29,7 +29,7 @@ const NO_HTML = { issues: [], facts: null, response: null, links: null }
 function auditHtml({ finalUrl, html, truncated, robotsHeader = null }, { url, content }) {
   const $ = parse(html)
   const issues = checkHtml($, { url: finalUrl, truncated, robotsHeader })
-  const facts = extractFacts($, finalUrl)
+  const facts = extractFacts($, finalUrl, robotsHeader)
   return {
     issues,
     facts,

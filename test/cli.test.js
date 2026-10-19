@@ -41,6 +41,8 @@ const GOOD_FACTS = {
   lang: 'en',
   viewport: 'width=device-width, initial-scale=1',
   robots: null,
+  robotsHeader: null,
+  nosnippetElements: 0,
   headings: [
     { level: 1, text: 'Gentle Shampoo', excerpt: null },
     { level: 2, text: 'Ingredients', excerpt: null },
@@ -964,7 +966,7 @@ test('cli: a page robots.txt keeps from an AI search crawler is reported, and or
   assert.deepEqual(JSON.parse(await readFile(digestPath, 'utf8')).origins, [partial])
 })
 
-test('cli: snippet rules from the meta tag and the X-Robots-Tag header become issues', async (t) => {
+test('cli: snippet rules from the meta tag and the X-Robots-Tag header become issues and facts', async (t) => {
   const { code, report } = await runJson(t, [fixtureUrl('snippets.html')])
   assert.equal(code, 0)
   const [page] = report.pages
@@ -986,6 +988,8 @@ test('cli: snippet rules from the meta tag and the X-Robots-Tag header become is
       }
     ]
   )
+  assert.equal(page.facts.robots, 'noarchive')
+  assert.equal(page.facts.robotsHeader, 'googlebot: nosnippet')
   assert.ok(report.rules['copilot-restricted'].fix.includes('noarchive'))
 })
 

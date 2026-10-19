@@ -324,6 +324,15 @@
         "lang": { "$ref": "#/$defs/nullableString" },
         "viewport": { "$ref": "#/$defs/nullableString" },
         "robots": { "$ref": "#/$defs/nullableString" },
+        "robotsHeader": {
+          "$ref": "#/$defs/nullableString",
+          "description": "The X-Robots-Tag header as sent, every crawler's rules included. Null when there is none."
+        },
+        "nosnippetElements": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "span, div and section elements with data-nosnippet, whose text Google does not use in snippets."
+        },
         "headings": {
           "type": "array",
           "maxItems": 40,

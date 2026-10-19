@@ -27,6 +27,8 @@ const facts = {
   lang: 'en',
   viewport: null,
   robots: null,
+  robotsHeader: null,
+  nosnippetElements: 0,
   headings: [{ level: 1, text: 'Welcome', excerpt: 'Hello there' }],
   wordCount: 120,
   mainText: null,

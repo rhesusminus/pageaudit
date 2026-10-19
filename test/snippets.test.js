@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { parse } from '../src/parse.js'
 import { checkSnippetControls } from '../src/checks/page/snippets.js'
+import { extractFacts } from '../src/checks/page/index.js'
 
 const meta = (name, content) => `<head><meta name="${name}" content="${content}"></head><body><p>x</p></body>`
 const check = (html, header = null) =>
@@ -92,4 +93,14 @@ test('snippets: Bing reads robots and bingbot rules, not googlebot ones', () => 
     check('<p>x</p>', 'bingbot: noarchive').map(({ type, severity }) => [type, severity]),
     [['copilot-restricted', 'warning']]
   )
+})
+
+test('facts: the X-Robots-Tag header and the elements Google may not quote', () => {
+  const $ = parse(
+    '<body><div data-nosnippet>a</div><span data-nosnippet>b</span><section data-nosnippet>c</section><p data-nosnippet>d</p></body>'
+  )
+  const facts = extractFacts($, 'https://a.test/', 'googlebot: nosnippet')
+  assert.equal(facts.robotsHeader, 'googlebot: nosnippet')
+  assert.equal(facts.nosnippetElements, 3)
+  assert.equal(extractFacts($, 'https://a.test/').robotsHeader, null)
 })
