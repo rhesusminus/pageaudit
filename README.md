@@ -68,7 +68,7 @@ Each request has a 15 s timeout (covering redirects and the body), follows up to
 In a terminal a spinner shows `Auditing 12/40 pages...` on stderr (skipped for JSON output and on TTYs that report 0 columns). Skipped inputs are listed on stderr before the audit starts. The report then shows:
 
 1. A summary table of every page (URL, status, errors, warnings, infos), worst first.
-2. The issues of each page that has any, worst page first. Pages with no issues are collapsed into `N pages clean`. A page run through Lighthouse also shows its scores, its metrics and its worst failing audits. With `--lighthouse-runs`, a line names the run they come from and the scores that moved between runs, such as `Middle of 3 runs; scores ranged: performance 88-98`.
+2. The issues of each page that has any, worst page first. Pages with no issues are collapsed into `N pages clean`. A page run through Lighthouse also shows its scores, its metrics, the largest element on screen (its CSS selector) and its worst failing audits. With `--lighthouse-runs`, a line names the run they come from and the scores that moved between runs, such as `Middle of 3 runs; scores ranged: performance 88-98`.
 3. A `Site` section with the cross-page issues.
 4. A final line such as `40 pages, 6 errors, 19 warnings, 3 infos`.
 
