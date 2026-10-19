@@ -10,12 +10,15 @@ const CELL_PADDING = 2
 const MIN_WIDTH = 80
 const MAX_WIDTH = 114
 
+// The width the report fills: the terminal's, kept within 80 to 114 columns.
+const reportWidth = (columns) => Math.min(Math.max(columns || MAX_WIDTH, MIN_WIDTH), MAX_WIDTH)
+
 // Column widths for a table that fills the terminal (80 to 114 columns): fixed
 // columns keep their width and flexible columns share the rest by weight. A
 // flexible column with a max takes at most that, and leaves the rest to the
 // others, so a table needs one flexible column without a max.
 function columnWidths(columns, layout) {
-  const total = Math.min(Math.max(columns || MAX_WIDTH, MIN_WIDTH), MAX_WIDTH)
+  const total = reportWidth(columns)
   const fixed = layout.filter((c) => c.width).reduce((sum, c) => sum + c.width, 0)
   const space = total - (layout.length + 1) - fixed
   const capped = new Set()
@@ -100,6 +103,13 @@ function wrapLine(line, width) {
 // Wraps by display width ourselves: cli-table3's character wrapping counts ANSI escape codes as width and clips wide
 // characters instead of wrapping them. Takes plain text, so color the wrapped lines.
 const wrap = (text, width) => wrapText(text, width - CELL_PADDING)
+
+// A line of text below a heading, indented by two and wrapped to the report width.
+const indented = (text, columns) =>
+  wrapText(text, reportWidth(columns) - 2)
+    .split('\n')
+    .map((line) => `  ${line}`)
+    .join('\n')
 
 const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`
 
@@ -189,8 +199,17 @@ const metricText = ({ fcp, lcp, tbt, cls, speedIndex }) => {
   return `FCP ${ms(fcp)}, LCP ${ms(lcp)}, TBT ${ms(tbt)}, CLS ${cls ?? 'n/a'}, SI ${ms(speedIndex)}`
 }
 
+// With several runs, which run the numbers come from and the scores that moved between runs.
+function runsText(runs, scoreSpread) {
+  if (!(runs > 1)) return ''
+  const moved = Object.entries(scoreSpread ?? {})
+    .filter(([, range]) => range && range[0] !== range[1])
+    .map(([id, [low, high]]) => `${id} ${low}-${high}`)
+  return `Middle of ${runs} runs; ${moved.length ? `scores ranged: ${moved.join(', ')}` : 'the scores did not change'}`
+}
+
 // Scores, core metrics and the worst failing audits of one page's Lighthouse run.
-export function formatLighthouse({ scores, metrics, audits, omittedAudits = 0 }, columns) {
+export function formatLighthouse({ scores, runs, scoreSpread, metrics, audits, omittedAudits = 0 }, columns) {
   const scoreLine = Object.entries(scores)
     .map(([id, score]) => `${id} ${score === null ? chalk.dim('n/a') : scoreColor(score)(String(score))}`)
     .join('  ')
@@ -206,8 +225,10 @@ export function formatLighthouse({ scores, metrics, audits, omittedAudits = 0 },
   }
   const left = Math.max(audits.length - MAX_AUDITS, 0) + omittedAudits
   const more = left > 0 ? chalk.dim(`  ...and ${left} more`) : ''
+  const runsLine = runsText(runs, scoreSpread)
   return [
     `  Lighthouse: ${scoreLine}`,
+    runsLine && chalk.dim(indented(runsLine, columns)),
     chalk.dim(`  ${metricText(metrics)}`),
     audits.length ? table.toString() : '',
     more
