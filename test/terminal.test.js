@@ -446,3 +446,28 @@ test('formatNotChecked: a long reason is wrapped and indented at 80 columns', ()
     assert.match(line, /^ {2}\S/)
   }
 })
+
+test('formatLighthouse: prints each warning of the run after the audits', () => {
+  const warnings = [
+    'The page loaded too slowly to finish within the time limit.',
+    'Audit largest-contentful-paint-element failed: unknown error'
+  ]
+  const text = stripVTControlCharacters(formatLighthouse(lhBlock([auditLine('a')], { warnings }), 100))
+  assert.match(
+    text,
+    /└.*\n {2}Lighthouse warning: The page loaded too slowly .* time limit\.\n {2}Lighthouse warning: Audit/
+  )
+  assert.doesNotMatch(stripVTControlCharacters(formatLighthouse(lhBlock([]), 100)), /warning/)
+})
+
+test('formatLighthouse: a long warning is wrapped and indented at 80 columns', () => {
+  const warning =
+    'Chrome extensions negatively affected this page load performance. Try auditing the page in incognito mode or from a Chrome profile without extensions.'
+  const text = stripVTControlCharacters(formatLighthouse(lhBlock([], { warnings: [warning] }), 80))
+  const lines = text.split('\n').slice(text.split('\n').findIndex((line) => line.includes('Lighthouse warning')))
+  assert.equal(lines.length, 3)
+  for (const line of lines) {
+    assert.ok(line.length <= 80, line)
+    assert.match(line, /^ {2}\S/)
+  }
+})

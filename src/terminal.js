@@ -208,9 +208,10 @@ function runsText(runs, scoreSpread) {
   return `Middle of ${runs} runs; ${moved.length ? `scores ranged: ${moved.join(', ')}` : 'the scores did not change'}`
 }
 
-// Scores, core metrics and the worst failing audits of one page's Lighthouse run.
+// Scores, core metrics and the worst failing audits of one page's Lighthouse run, then its warnings, such as an audit
+// that crashed.
 export function formatLighthouse(
-  { scores, runs, scoreSpread, metrics, lcpElement, audits, omittedAudits = 0 },
+  { scores, runs, scoreSpread, metrics, lcpElement, audits, omittedAudits = 0, warnings = [] },
   columns
 ) {
   const scoreLine = Object.entries(scores)
@@ -235,7 +236,8 @@ export function formatLighthouse(
     chalk.dim(`  ${metricText(metrics)}`),
     lcpElement && chalk.dim(indented(`Largest element on screen: ${lcpElement.selector}`, columns)),
     audits.length ? table.toString() : '',
-    more
+    more,
+    ...warnings.map((warning) => chalk.yellow(indented(`Lighthouse warning: ${warning}`, columns)))
   ]
     .filter(Boolean)
     .join('\n')
