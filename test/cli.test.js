@@ -944,7 +944,7 @@ test('cli: a page robots.txt keeps from an AI search crawler is reported, and or
       {
         type: 'ai-search-blocked',
         severity: 'warning',
-        context: 'https://fixtures.test/robots.txt',
+        context: 'https://fixtures.test/robots.txt disallows OAI-SearchBot',
         urls: [fixtureUrl('ai-blocked.html')],
         source: 'https://developers.openai.com/api/docs/bots'
       }

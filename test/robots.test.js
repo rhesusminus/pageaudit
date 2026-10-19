@@ -13,6 +13,8 @@ import { fetchPage } from '../src/fetch.js'
 import { auditPage } from '../src/runner.js'
 import { loadRobots } from '../src/robots.js'
 import { SOURCES } from '../src/sources.js'
+import { buildDigest } from '../src/digest.js'
+import { buildReport } from '../src/report.js'
 import { mockFetch } from './helpers/mock-fetch.js'
 
 const types = (issues) => issues.map((i) => i.type)
@@ -208,6 +210,20 @@ test('robots.txt check: pages kept from AI search crawlers are one issue per set
       'cannot use it in answers'
   )
   assert.match(issues[2].message, /OAI-SearchBot, Claude-SearchBot and PerplexityBot .* ChatGPT search, Claude and/)
+})
+
+test('robots.txt check: each set of AI search crawlers is its own digest variant with its own pages', async () => {
+  const text = 'User-agent: OAI-SearchBot\nDisallow: /one\nUser-agent: Claude-SearchBot\nDisallow: /two'
+  const pages = [page('https://a.test/one', { facts: null }), page('https://a.test/two', { facts: null })]
+  const site = await checkRobotsTxt(pages, { load: load({ 'https://a.test': robots('https://a.test', text) }) })
+  const [finding] = buildDigest(buildReport({ pages, site })).findings
+  assert.deepEqual(
+    finding.variants.map(({ context, urls }) => [context, urls]),
+    [
+      ['https://a.test/robots.txt disallows OAI-SearchBot', ['https://a.test/one']],
+      ['https://a.test/robots.txt disallows Claude-SearchBot', ['https://a.test/two']]
+    ]
+  )
 })
 
 test('robots.txt check: training crawlers alone are no issue', async () => {

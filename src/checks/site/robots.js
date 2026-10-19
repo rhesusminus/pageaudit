@@ -25,7 +25,8 @@ const issue = (fields) => ({ category: 'seo', source: SOURCES.robotsTxt, ...fiel
 const words = (list) => (list.length < 2 ? list.join('') : `${list.slice(0, -1).join(', ')} and ${list.at(-1)}`)
 
 // Pages Googlebot may crawl and an AI search crawler may not, one issue per set of crawlers kept out. A page Googlebot
-// cannot crawl is already blocked-by-robots.
+// cannot crawl is already blocked-by-robots. The context names the crawlers, so issues for different sets on one
+// origin stay apart where findings are grouped by context, as in the digest.
 function aiSearchBlocked(origin, robots, pages) {
   const blockedFor = (page) => AI_SEARCH.filter(({ agent }) => robots.parser.isDisallowed(page.finalUrl, agent))
   const groups = Map.groupBy(
@@ -39,14 +40,15 @@ function aiSearchBlocked(origin, robots, pages) {
     .filter(([agents]) => agents)
     .map(([, group]) => {
       const crawlers = blockedFor(group[0])
+      const agents = words(crawlers.map(({ agent }) => agent))
       return issue({
         type: 'ai-search-blocked',
         severity: 'warning',
         source: crawlers[0].source,
         message:
-          `robots.txt does not allow ${words(crawlers.map(({ agent }) => agent))} to crawl the page, so ` +
+          `robots.txt does not allow ${agents} to crawl the page, so ` +
           `${words(crawlers.map(({ product }) => product))} cannot use it in answers`,
-        context: `${origin}/robots.txt`,
+        context: `${origin}/robots.txt disallows ${agents}`,
         urls: group.map((page) => page.url)
       })
     })
