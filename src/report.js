@@ -63,7 +63,16 @@ export const SCHEMA_VERSION = 1
 
 // The JSON report, which doubles as the data handed to Claude. `facts` is null for
 // pages that returned no HTML. `contentFiles` holds the --content file of each page by URL, relative to the report.
-export function buildReport({ pages, site, skipped = [], coverage, contentFiles = new Map(), now = new Date() }) {
+// `origins` says how the robots.txt of each audited origin treats AI crawlers.
+export function buildReport({
+  pages,
+  site,
+  origins,
+  skipped = [],
+  coverage,
+  contentFiles = new Map(),
+  now = new Date()
+}) {
   const issues = [...pages.flatMap((page) => page.issues), ...site]
   const totals = countSeverities(issues)
   const { blocks, notes } = hoistAuditNotes(pages)
@@ -83,6 +92,8 @@ export function buildReport({ pages, site, skipped = [], coverage, contentFiles 
       ...(lighthouse === undefined ? {} : { lighthouse: blocks[i] })
     })),
     site: withSiteIds(site),
+    // Always present in a report from the CLI, empty when no page loaded.
+    ...(origins ? { origins } : {}),
     skipped,
     // What was looked at and what was left out. Always present in a report from the CLI.
     ...(coverage ? { coverage } : {}),

@@ -11,8 +11,8 @@ const MAX_REDIRECTS = 5
 // the character (/%7Ex and /~x are different) and "User-agent: Googlebot*" does not match Googlebot.
 
 // Reads and parses the robots.txt of an origin, the way Google treats the answer:
-// 200 is parsed, any other 4xx than 429 means there is no file and everything is allowed,
-// 5xx and 429 mean it is temporarily unreachable. A network failure, or a body that cannot be read, is `failed`
+// 200 is parsed, and its text is kept for the lines robots-parser drops, such as Content-Signal. Any other 4xx than
+// 429 means there is no file and everything is allowed, 5xx and 429 mean it is temporarily unreachable. A network failure, or a body that cannot be read, is `failed`
 // with the reason: the page itself can load while its robots.txt does not. `beforeHop` paces the requests, see request().
 export async function loadRobots(origin, { timeout, beforeHop } = {}) {
   const url = `${origin}/robots.txt`
@@ -25,7 +25,7 @@ export async function loadRobots(origin, { timeout, beforeHop } = {}) {
   if (res.status === 200) {
     try {
       const text = new TextDecoder().decode((await res.read(MAX_BYTES)).bytes)
-      return { status: 'ok', parser: robotsParser(url, text) }
+      return { status: 'ok', parser: robotsParser(url, text), text }
     } catch (err) {
       return { status: 'failed', reason: err.reason ?? err.message }
     }

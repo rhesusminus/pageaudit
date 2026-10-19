@@ -71,6 +71,21 @@ const GOOD_FACTS = {
   hreflang: []
 }
 
+// How test/fixtures/robots.txt treats AI crawlers when only pages it allows are audited.
+const FIXTURE_ORIGIN = {
+  origin: 'https://fixtures.test',
+  robotsTxt: 'ok',
+  aiSearch: { 'OAI-SearchBot': 'allowed', 'Claude-SearchBot': 'allowed', PerplexityBot: 'allowed' },
+  aiTraining: {
+    GPTBot: 'allowed',
+    ClaudeBot: 'allowed',
+    'Google-Extended': 'allowed',
+    'Applebot-Extended': 'allowed',
+    CCBot: 'allowed'
+  },
+  contentSignal: 'search=yes, ai-train=no'
+}
+
 // The coverage of a run with no option that changes what is collected. The tests run with --delay 0.
 const PLAIN_COVERAGE = {
   tool: { name: 'pageaudit', version: pkg.version },
@@ -109,6 +124,7 @@ test('cli: good.html has no issues, exposes its facts and exits 0', async (t) =>
       }
     ],
     site: [],
+    origins: [FIXTURE_ORIGIN],
     rules: {},
     skipped: [],
     coverage: PLAIN_COVERAGE,
@@ -912,8 +928,15 @@ test('cli: a sitemap run reports robots.txt blocks and sitemap entries that send
   assert.equal(report.pages.find((page) => page.url === fixtureUrl('noindex.html')).issues[0].type, 'noindex')
 })
 
-test('cli: a page robots.txt keeps from an AI search crawler is reported', async (t) => {
-  const { code, report } = await runJson(t, [fixtureUrl('good.html'), fixtureUrl('ai-blocked.html')])
+test('cli: a page robots.txt keeps from an AI search crawler is reported, and origins says which crawlers', async (t) => {
+  const dir = await tempDir(t)
+  const digestPath = join(dir, 'digest.json')
+  const { code, report } = await runJson(t, [
+    fixtureUrl('good.html'),
+    fixtureUrl('ai-blocked.html'),
+    '--digest',
+    digestPath
+  ])
   assert.equal(code, 0)
   assert.deepEqual(
     report.site.map(({ type, severity, context, urls, source }) => ({ type, severity, context, urls, source })),
@@ -931,7 +954,14 @@ test('cli: a page robots.txt keeps from an AI search crawler is reported', async
     report.site[0].message,
     'robots.txt does not allow OAI-SearchBot to crawl the page, so ChatGPT search cannot use it in answers'
   )
+  const partial = {
+    ...FIXTURE_ORIGIN,
+    aiSearch: { ...FIXTURE_ORIGIN.aiSearch, 'OAI-SearchBot': 'partial' },
+    aiTraining: { ...FIXTURE_ORIGIN.aiTraining, GPTBot: 'partial' }
+  }
+  assert.deepEqual(report.origins, [partial])
   assert.ok(report.rules['ai-search-blocked'].fix.includes('OAI-SearchBot'))
+  assert.deepEqual(JSON.parse(await readFile(digestPath, 'utf8')).origins, [partial])
 })
 
 test('cli: pages that are not listed in a sitemap get no sitemap issues and allowed pages are not blocked', async (t) => {

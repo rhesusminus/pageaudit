@@ -15,6 +15,11 @@
       "type": "array",
       "items": { "$ref": "#/$defs/siteIssue" }
     },
+    "origins": {
+      "description": "How the robots.txt of each origin that pages ended up on treats AI crawlers, over the pages audited there. Always written by the CLI.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/origin" }
+    },
     "skipped": {
       "description": "Inputs that were not audited, with the reason.",
       "type": "array",
@@ -37,6 +42,35 @@
     "nullableString": { "type": ["string", "null"] },
     "severity": { "enum": ["error", "warning", "info"] },
     "category": { "enum": ["seo", "accessibility", "performance", "best-practice"] },
+    "crawlerAccess": {
+      "description": "By crawler name: allowed on every audited page of the origin, blocked on every one, or partial. Null when robots.txt could not be read.",
+      "type": ["object", "null"],
+      "additionalProperties": { "enum": ["allowed", "blocked", "partial"] }
+    },
+    "origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["origin", "robotsTxt", "aiSearch", "aiTraining", "contentSignal"],
+      "properties": {
+        "origin": { "type": "string" },
+        "robotsTxt": {
+          "description": "ok: read. missing: none, so everything is allowed. unreachable: 5xx or 429. failed: the request failed.",
+          "enum": ["ok", "missing", "unreachable", "failed"]
+        },
+        "aiSearch": {
+          "$ref": "#/$defs/crawlerAccess",
+          "description": "The crawlers that read pages for AI search answers: OAI-SearchBot (ChatGPT search), Claude-SearchBot and PerplexityBot."
+        },
+        "aiTraining": {
+          "$ref": "#/$defs/crawlerAccess",
+          "description": "Tokens for AI training only (Google-Extended also covers grounding Gemini): GPTBot, ClaudeBot, Google-Extended, Applebot-Extended and CCBot. Blocking them does not affect search."
+        },
+        "contentSignal": {
+          "$ref": "#/$defs/nullableString",
+          "description": "The Content-Signal value for every crawler, such as search=yes, ai-train=no. Null when there is none."
+        }
+      }
+    },
     "skipped": {
       "type": "object",
       "additionalProperties": false,

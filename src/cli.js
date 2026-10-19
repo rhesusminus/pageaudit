@@ -1,7 +1,7 @@
 import { basename, dirname, relative, resolve } from 'node:path'
 import chalk from 'chalk'
 import { checkLinks } from './checks/site/links.js'
-import { checkRobotsTxt } from './checks/site/robots.js'
+import { aiCrawlerAccess, checkRobotsTxt } from './checks/site/robots.js'
 import { checkSite } from './checks/site/index.js'
 import {
   checkSitemapDeclared,
@@ -155,18 +155,20 @@ async function addLighthouse(pages, progress, runner, { all, chosen, runs }) {
 }
 
 // Reads the robots.txt files of the audited sites and checks them and the sitemaps against them, with a spinner
-// because a slow host can take a while. Each robots.txt is read once for all checks.
+// because a slow host can take a while. Each robots.txt is read once for all checks. Returns the issues and
+// `origins`, how each audited origin treats the AI crawlers.
 async function checkRobotsAndSitemaps(pages, inputs, options, { progress, pace }) {
   const load = cachedRobotsLoader((origin) => loadRobots(origin, { beforeHop: pace }))
   const loaded = pages.some((page) => page.status === 200 && page.finalUrl)
   const spinner = loaded || inputs.sitemapFiles.length ? progress.start('Reading robots.txt...') : progress.silent
   try {
-    return [
+    const issues = [
       ...(await checkRobotsTxt(pages, { load })),
       ...checkSitemapFiles(inputs.sitemapFiles),
       ...(await checkSitemapHosts(inputs.sitemapFiles, { load })),
       ...(options.sitemaps.length ? [] : await checkSitemapDeclared(pages, { load }))
     ]
+    return { issues, origins: await aiCrawlerAccess(pages, { load }) }
   } finally {
     spinner.stop()
   }
@@ -260,26 +262,24 @@ async function checkInternalLinks(pages, inputs, options, { progress, pace }) {
 }
 
 // The cross-page issues: duplicates, robots.txt, sitemaps and, with --check-links, internal links. `links` is the
-// outcome of the link checks, undefined without --check-links.
+// outcome of the link checks, undefined without --check-links, and `origins` how each origin treats AI crawlers.
 async function checkAllPages(pages, inputs, options, session) {
-  const site = [
-    ...checkSite(pages),
-    ...(await checkRobotsAndSitemaps(pages, inputs, options, session)),
-    ...checkSitemapEntries(pages, inputs.listed)
-  ]
-  if (!options.checkLinks) return { site }
+  const robots = await checkRobotsAndSitemaps(pages, inputs, options, session)
+  const site = [...checkSite(pages), ...robots.issues, ...checkSitemapEntries(pages, inputs.listed)]
+  if (!options.checkLinks) return { site, origins: robots.origins }
   const { issues, targets } = await checkInternalLinks(pages, inputs, options, session)
-  return { site: [...site, ...issues], links: targets }
+  return { site: [...site, ...issues], links: targets, origins: robots.origins }
 }
 
 // The report of the audit: the pages, the cross-page issues and `links`, the outcome of the link checks, with what
 // the audit covered and the --content files named relative to the --out file.
-function auditReport(pages, { site, links }, { inputs, options, content }) {
+function auditReport(pages, { site, links, origins }, { inputs, options, content }) {
   // A page Lighthouse was tried on has a lighthouse block, null when the run failed.
   const lighthouseRan = pages.some((page) => page.lighthouse !== undefined)
   return buildReport({
     pages,
     site,
+    origins,
     skipped: inputs.skipped,
     coverage: buildCoverage(options, inputs, { links, lighthouseRan }),
     contentFiles: contentPathsFrom(options.out, content)

@@ -34,7 +34,9 @@ const ABOUT =
   'report.path (relative to this file), under pages[] by url. If report.path is null, the full report was not ' +
   'written and the details are not available. A page line with content names a Markdown file (relative to this ' +
   "file) with the page's main content, the HTML as served before scripts run: read it to judge what the page " +
-  'covers, how clearly and how accurately.'
+  'covers, how clearly and how accurately. origins says for each audited origin whether its robots.txt lets the ' +
+  'crawlers of AI search products (aiSearch) and the AI training crawlers (aiTraining) read the audited pages, and ' +
+  'the Content-Signal it declares. Blocking training only is a choice that keeps a site in AI search.'
 
 // The first `max` of a list under `key`, and under `moreKey` how many were left out, when any were.
 function capped(list, max, key, moreKey) {
@@ -155,6 +157,7 @@ export function buildDigest(report, { reportPath = null, contentFiles = new Map(
     about: ABOUT,
     report: { path: reportPath, schemaVersion: report.schemaVersion, generatedAt: report.generatedAt },
     ...(report.coverage ? { coverage: report.coverage } : {}),
+    ...(report.origins ? { origins: report.origins } : {}),
     summary: { ...report.summary, health: pageHealth(pages) },
     ...(scores ? { scores } : {}),
     ...capped(report.skipped, MAX_SKIPPED, 'skipped', 'moreSkipped'),

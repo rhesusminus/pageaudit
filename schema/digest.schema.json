@@ -23,6 +23,7 @@
       }
     },
     "coverage": { "$ref": "report.schema.json#/$defs/coverage" },
+    "origins": { "type": "array", "items": { "$ref": "report.schema.json#/$defs/origin" } },
     "summary": {
       "type": "object",
       "additionalProperties": false,
