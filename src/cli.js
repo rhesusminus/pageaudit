@@ -88,12 +88,21 @@ function announceInputs({ urls, skipped, total, sitemapFiles }, options) {
   return true
 }
 
-// Audits the pages and, with --content, writes the content of each one as it is done. `content` is what happened to
-// the content files, undefined without --content.
-async function auditUrls(urls, options, { progress, pace }) {
+// The writer for the --content files, null without --content, or undefined after printing why the folder cannot be
+// used. The folder is only emptied of an earlier run's files here, once there is something to audit.
+async function contentWriterFor(options, urls) {
+  if (!options.content) return null
+  const { existing, problem } = await prepareContentFolder(options.content)
+  if (!problem) return contentWriter(options.content, urls, existing)
+  console.error(problem)
+  return undefined
+}
+
+// Audits the pages and with `writer`, from contentWriterFor(), writes the content of each one as it is done.
+// `content` is what happened to the content files, undefined without --content.
+async function auditUrls(urls, options, { progress, pace }, writer) {
   const text = (done) => `Auditing ${done}/${urls.length} pages...`
   const spinner = progress.start(text(0))
-  const writer = options.content ? contentWriter(options.content, urls) : null
   const pages = await runAudit(urls, {
     concurrency: options.concurrency,
     pace,
@@ -210,8 +219,7 @@ async function loadLogo(path) {
   }
 }
 
-// Report paths that would fail only after the whole audit are refused up front. The --content folder is made
-// here too, and the files an earlier run wrote there are removed.
+// Report paths that would fail only after the whole audit are refused up front.
 async function reportPathsUsable(options) {
   const problems = await reportPathProblems(
     [
@@ -221,10 +229,6 @@ async function reportPathsUsable(options) {
     ],
     { content: options.content }
   )
-  if (!problems.length && options.content) {
-    const problem = await prepareContentFolder(options.content)
-    if (problem) problems.push(problem)
-  }
   if (problems.length) console.error(problems.join('\n'))
   return problems.length === 0
 }
@@ -310,7 +314,9 @@ export async function run(argv, { stdin = process.stdin, lighthouse = runLightho
   if (exitCode) return exitCode
   if (!announceInputs(inputs, options)) return 2
 
-  const { pages, content } = await auditUrls(inputs.urls, options, session)
+  const writer = await contentWriterFor(options, inputs.urls)
+  if (writer === undefined) return 2
+  const { pages, content } = await auditUrls(inputs.urls, options, session, writer)
   await addLighthouse(pages, progress, lighthouse, {
     all: options.lighthouse,
     chosen: inputs.marked,

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { link, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { chmod, link, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { Readable } from 'node:stream'
@@ -848,12 +848,21 @@ test('cli: --content replaces the files of an earlier run and leaves other files
   assert.deepEqual((await readdir(dir)).sort(), ['fixtures.test_rich.html.md', 'notes.md'])
 })
 
+test('cli: --content leaves an earlier run alone when the inputs cannot be read', async (t) => {
+  const dir = await tempDir(t)
+  await runCli(t, [fixtureUrl('good.html'), '--content', dir, '--json'])
+  t.mock.restoreAll()
+  const { code } = await runCli(t, ['--urls-file', join(dir, 'missing.txt'), '--content', dir, '--json'])
+  assert.equal(code, 2)
+  assert.deepEqual(await readdir(dir), ['fixtures.test_good.html.md'])
+})
+
 test('cli: a --content file that cannot be written fails the run after the audit', async (t) => {
   const dir = await tempDir(t)
-  await mkdir(join(dir, 'fixtures.test_good.html.md'))
+  await chmod(dir, 0o555)
   const { code, stdout, stderr } = await runCli(t, [fixtureUrl('good.html'), '--content', dir, '--json'])
   assert.equal(code, 2)
-  assert.match(stderr, /Could not write .*fixtures\.test_good\.html\.md: EISDIR/)
+  assert.match(stderr, /Could not write .*fixtures\.test_good\.html\.md: EACCES/)
   assert.equal(JSON.parse(stdout).summary.pages, 1)
 })
 
