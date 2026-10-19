@@ -12,6 +12,7 @@ import { checkRobotsHeader, googleRules, mergeRobotsIssues } from '../src/checks
 import { fetchPage } from '../src/fetch.js'
 import { auditPage } from '../src/runner.js'
 import { loadRobots } from '../src/robots.js'
+import { SOURCES } from '../src/sources.js'
 import { mockFetch } from './helpers/mock-fetch.js'
 
 const types = (issues) => issues.map((i) => i.type)
@@ -176,6 +177,44 @@ test('robots.txt check: unreachable and failed reads are info, a missing file gi
     ]
   )
   assert.match(issues[1].message, /timed out after 15s/)
+})
+
+test('robots.txt check: pages kept from AI search crawlers are one issue per set of crawlers', async () => {
+  const text = [
+    'User-agent: *',
+    'Disallow: /private/',
+    'User-agent: OAI-SearchBot',
+    'User-agent: PerplexityBot',
+    'Disallow: /news/',
+    'Disallow: /private/',
+    'User-agent: Claude-SearchBot',
+    'Disallow: /news/paid/',
+    'Disallow: /private/'
+  ].join('\n')
+  const pages = ['/', '/news/a', '/news/paid/b', '/private/x'].map((path) => page(`https://a.test${path}`))
+  const issues = await checkRobotsTxt(pages, { load: load({ 'https://a.test': robots('https://a.test', text) }) })
+  assert.deepEqual(
+    issues.map(({ type, urls, severity, source }) => [type, urls, severity, source]),
+    [
+      ['blocked-by-robots', ['https://a.test/private/x'], 'warning', SOURCES.robotsTxt],
+      ['ai-search-blocked', ['https://a.test/news/a'], 'warning', SOURCES.openaiBots],
+      ['ai-search-blocked', ['https://a.test/news/paid/b'], 'warning', SOURCES.openaiBots]
+    ]
+  )
+  assert.equal(
+    issues[1].message,
+    'robots.txt does not allow OAI-SearchBot and PerplexityBot to crawl the page, so ChatGPT search and Perplexity ' +
+      'cannot use it in answers'
+  )
+  assert.match(issues[2].message, /OAI-SearchBot, Claude-SearchBot and PerplexityBot .* ChatGPT search, Claude and/)
+})
+
+test('robots.txt check: training crawlers alone are no issue', async () => {
+  const text = 'User-agent: GPTBot\nUser-agent: ClaudeBot\nUser-agent: Google-Extended\nDisallow: /'
+  const issues = await checkRobotsTxt([page('https://a.test/')], {
+    load: load({ 'https://a.test': robots('https://a.test', text) })
+  })
+  assert.deepEqual(issues, [])
 })
 
 test('robots.txt check: pages that did not load are not tested', async () => {

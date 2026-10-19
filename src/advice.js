@@ -376,6 +376,11 @@ export const ADVICE = {
     why: 'The robots.txt file of the site does not let Google crawl this page, so it cannot read it or rank it for what it says. That is right for private areas, but a problem on a page that should be found.',
     fix: 'If the page should appear in search, remove the matching Disallow rule from robots.txt. If not, no action is needed.'
   },
+  'ai-search-blocked': {
+    title: 'AI search tools are told to stay away from the page',
+    why: 'The robots.txt file of the site lets Google crawl the page but not the crawlers that ChatGPT search, Claude or Perplexity use to find pages for their answers, so the page cannot be quoted or linked there. Some sites do this on purpose, others meant to block only the crawlers that collect training data.',
+    fix: 'If the page should be found through AI search, remove the Disallow rule for the crawler named in the finding (OAI-SearchBot, Claude-SearchBot or PerplexityBot). To keep the content out of AI training only, block GPTBot, ClaudeBot and Google-Extended instead.'
+  },
   'robots-txt-unreachable': {
     title: 'The robots.txt file could not be read',
     why: 'The server answered with an error when asked for robots.txt. Google pauses crawling a site while it cannot read the file, and gives up on it after a while.',

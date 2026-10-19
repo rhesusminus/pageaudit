@@ -912,6 +912,28 @@ test('cli: a sitemap run reports robots.txt blocks and sitemap entries that send
   assert.equal(report.pages.find((page) => page.url === fixtureUrl('noindex.html')).issues[0].type, 'noindex')
 })
 
+test('cli: a page robots.txt keeps from an AI search crawler is reported', async (t) => {
+  const { code, report } = await runJson(t, [fixtureUrl('good.html'), fixtureUrl('ai-blocked.html')])
+  assert.equal(code, 0)
+  assert.deepEqual(
+    report.site.map(({ type, severity, context, urls, source }) => ({ type, severity, context, urls, source })),
+    [
+      {
+        type: 'ai-search-blocked',
+        severity: 'warning',
+        context: 'https://fixtures.test/robots.txt',
+        urls: [fixtureUrl('ai-blocked.html')],
+        source: 'https://developers.openai.com/api/docs/bots'
+      }
+    ]
+  )
+  assert.equal(
+    report.site[0].message,
+    'robots.txt does not allow OAI-SearchBot to crawl the page, so ChatGPT search cannot use it in answers'
+  )
+  assert.ok(report.rules['ai-search-blocked'].fix.includes('OAI-SearchBot'))
+})
+
 test('cli: pages that are not listed in a sitemap get no sitemap issues and allowed pages are not blocked', async (t) => {
   const { report } = await runJson(t, [fixtureUrl('noindex.html'), fixtureUrl('bad-canonical.html')])
   assert.ok(report.site.every((issue) => !issue.type.startsWith('sitemap-')))
