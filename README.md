@@ -70,7 +70,8 @@ In a terminal a spinner shows `Auditing 12/40 pages...` on stderr (skipped for J
 1. A summary table of every page (URL, status, errors, warnings, infos), worst first.
 2. The issues of each page that has any, worst page first. Pages with no issues are collapsed into `N pages clean`. A page run through Lighthouse also shows its scores, its metrics, the largest element on screen (its CSS selector) and its worst failing audits. With `--lighthouse-runs`, a line names the run they come from and the scores that moved between runs, such as `Middle of 3 runs; scores ranged: performance 88-98`.
 3. A `Site` section with the cross-page issues.
-4. A final line such as `40 pages, 6 errors, 19 warnings, 3 infos`.
+4. A `Not checked` section when a check that was asked for could not run, with the reason, such as `orphan pages: only 50 of 200 URLs were audited`. Checks that were not asked for are not listed there, but they are in `coverage.notRun` in the JSON report.
+5. A final line such as `40 pages, 6 errors, 19 warnings, 3 infos`.
 
 With `--out`, `--digest`, `--html` or `--content`, a line on stderr then says where each report file was written, such as `HTML report written to report.html` or `Page content written to content (40 files)`, in JSON output too.
 
