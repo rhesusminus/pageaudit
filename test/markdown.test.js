@@ -114,6 +114,13 @@ test('markdown: text that would start a heading, list or quote is escaped, line 
   )
 })
 
+test('markdown: an element named like an Object method is walked into like any unknown element', () => {
+  assert.equal(
+    body('<main><p>Before</p><constructor>Content</constructor><toString>More</toString><p>After</p></main>'),
+    'Before\n\nContent\n\nMore\n\nAfter'
+  )
+})
+
 test('markdown: a page nested deeper than Chrome parses is converted without running out of stack', () => {
   const depth = 10000
   const md = body(`<main>${'<div>'.repeat(depth)}deep${'</div>'.repeat(depth)}</main>`)

@@ -231,7 +231,9 @@ function blocks(nodes, ctx) {
         run += inline(node, ctx)
       } else {
         flush()
-        out.push(...(BLOCKS[node.name] ?? ((n) => blocks(n.children, ctx)))(node, ctx))
+        // Only BLOCKS' own keys: an element named like an Object method, such as <constructor>, is walked into.
+        const render = Object.hasOwn(BLOCKS, node.name) ? BLOCKS[node.name] : (n) => blocks(n.children, ctx)
+        out.push(...render(node, ctx))
       }
     }
   }
