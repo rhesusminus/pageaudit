@@ -242,8 +242,10 @@ const quote = (node, ctx) => {
   return text ? [text.replace(/^/gm, '> ').replace(/^> $/gm, '>')] : []
 }
 
+// A heading's text with a backslash before hashes at its end that follow a space, which Markdown would take for the
+// closing hashes of the heading and drop: "Issue #" would read "Issue". "C#" has no space and stays.
 const heading = (node, ctx) => {
-  const text = oneLine(node, ctx)
+  const text = oneLine(node, ctx).replace(/(^|\s)(#+)$/, '$1\\$2')
   return text ? [`${'#'.repeat(Number(node.name[1]))} ${text}`] : []
 }
 

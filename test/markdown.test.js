@@ -170,6 +170,13 @@ test('markdown: entities written as text and alt text are escaped like the rest 
   assert.equal(body('<p><img src="a.png" alt="[x] *y*"></p>'), '![\\[x\\] \\*y\\*](https://a.test/dir/a.png)')
 })
 
+test('markdown: hashes at the end of a heading are kept as text', () => {
+  assert.equal(
+    body('<h2>Issue #</h2><h3>#</h3><h3>Learn C#</h3><h3>A ## B</h3>'),
+    '## Issue \\#\n\n### \\#\n\n### Learn C#\n\n### A ## B'
+  )
+})
+
 test('markdown: an element named like an Object method is walked into like any unknown element', () => {
   assert.equal(
     body('<main><p>Before</p><constructor>Content</constructor><toString>More</toString><p>After</p></main>'),
