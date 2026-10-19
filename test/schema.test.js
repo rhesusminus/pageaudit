@@ -116,6 +116,7 @@ const NAMES = [
   'noindex-header.html',
   'blocked.html',
   'ai-blocked.html',
+  'snippets.html',
   'rich.html',
   'hreflang.html',
   'hreflang-fi.html',

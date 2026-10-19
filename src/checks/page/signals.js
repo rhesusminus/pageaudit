@@ -159,13 +159,19 @@ function jsonLdTypes($) {
   return [...new Set(types)].slice(0, MAX_TYPES)
 }
 
-// Content and metadata signals about one page, kept small enough to hand to a model.
-export function extractSignals($, baseUrl, pageUrl) {
+// Elements whose text Google may not use in a snippet. Google reads the attribute on span, div and section only.
+const nosnippetElements = ($) => $('span[data-nosnippet], div[data-nosnippet], section[data-nosnippet]').length
+
+// Content and metadata signals about one page, kept small enough to hand to a model. `robotsHeader` is the
+// X-Robots-Tag value or null.
+export function extractSignals($, baseUrl, pageUrl, robotsHeader = null) {
   const pageLinkList = pageLinks($, baseUrl, pageUrl)
   return {
     lang: clean($('html').attr('lang')),
     viewport: metaContent($, 'meta[name="viewport" i]'),
     robots: robotsValue($),
+    robotsHeader: robotsHeader && clean(robotsHeader, MAX_URL),
+    nosnippetElements: nosnippetElements($),
     headings: headings($),
     wordCount: wordCount($),
     mainText: mainText($),

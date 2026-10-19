@@ -180,6 +180,8 @@ function moreRows(facts) {
   return [
     ['Mobile viewport', orMissing(facts.viewport)],
     ['Robots', facts.robots ?? 'Not set'],
+    // Most sites send no X-Robots-Tag, so the row is only there when one was sent.
+    ['Robots header', facts.robotsHeader ?? ''],
     ['Open Graph', social.length ? social.join(' / ') : orMissing(null)],
     ['Twitter card', orMissing(facts.twitterCard)],
     // No check asks for structured data, so its absence is not styled as a problem.

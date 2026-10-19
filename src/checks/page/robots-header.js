@@ -7,11 +7,11 @@ const VALUE_RULES = new Set(['unavailable_after', 'max-snippet', 'max-image-prev
 // An agent name starts with a letter, so the 16 in a date like "16:00 GMT" is not one.
 const PREFIXED = /^([a-z][a-z0-9_-]*)\s*:\s*(.*)$/
 
-// The X-Robots-Tag rules that apply to Google: those without a user agent and those prefixed with googlebot.
+// The X-Robots-Tag rules that apply to one crawler: those without a user agent and those prefixed with its name.
 // A prefix applies to the rules after it. Repeated headers arrive joined with ", " and fetch cannot give them back
 // separately, so a generic header after one for another crawler ("bingbot: nofollow" then "noindex") is read as
 // bingbot's and missed.
-export function googleRules(header) {
+export function agentRules(header, name) {
   const rules = []
   let agent = null
   for (const part of header.split(',')) {
@@ -21,10 +21,12 @@ export function googleRules(header) {
       agent = prefixed[1]
       rule = prefixed[2].trim()
     }
-    if (agent === null || agent === 'googlebot') rules.push(rule)
+    if (agent === null || agent === name) rules.push(rule)
   }
   return rules
 }
+
+export const googleRules = (header) => agentRules(header, 'googlebot')
 
 // Error pages are often noindex on purpose and are already errors, so only a 200 is checked.
 export function checkRobotsHeader({ robotsHeader, status }) {

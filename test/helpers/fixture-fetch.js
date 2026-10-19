@@ -14,6 +14,7 @@ const SECURE_HEADERS = {
 // Fixture pages served with other response headers. An undefined value leaves out a secure default.
 const HEADER_PAGES = {
   'noindex-header.html': { 'x-robots-tag': 'noindex' },
+  'snippets.html': { 'x-robots-tag': 'googlebot: nosnippet' },
   'weak-headers.html': {
     'strict-transport-security': undefined,
     'x-content-type-options': undefined,
