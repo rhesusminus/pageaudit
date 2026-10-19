@@ -99,7 +99,7 @@ test('facts: the X-Robots-Tag header and the elements Google may not quote', () 
   const $ = parse(
     '<body><div data-nosnippet>a</div><span data-nosnippet>b</span><section data-nosnippet>c</section><p data-nosnippet>d</p></body>'
   )
-  const facts = extractFacts($, 'https://a.test/', 'googlebot: nosnippet')
+  const facts = extractFacts($, 'https://a.test/', { robotsHeader: 'googlebot: nosnippet' })
   assert.equal(facts.robotsHeader, 'googlebot: nosnippet')
   assert.equal(facts.nosnippetElements, 3)
   assert.equal(extractFacts($, 'https://a.test/').robotsHeader, null)

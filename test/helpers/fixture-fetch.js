@@ -15,6 +15,7 @@ const SECURE_HEADERS = {
 const HEADER_PAGES = {
   'noindex-header.html': { 'x-robots-tag': 'noindex' },
   'snippets.html': { 'x-robots-tag': 'googlebot: nosnippet' },
+  'article.html': { 'last-modified': 'Mon, 19 Oct 2026 10:00:00 GMT' },
   'weak-headers.html': {
     'strict-transport-security': undefined,
     'x-content-type-options': undefined,

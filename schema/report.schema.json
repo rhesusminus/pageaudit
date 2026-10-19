@@ -430,6 +430,54 @@
               "href": { "type": "string" }
             }
           }
+        },
+        "jsonLd": {
+          "description": "What the JSON-LD says about who made the page and when, per typed node, at most 10.",
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["types", "name", "authors", "publisher", "datePublished", "dateModified", "sameAs"],
+            "properties": {
+              "types": { "type": "array", "items": { "type": "string" } },
+              "name": { "$ref": "#/$defs/nullableString", "description": "The headline, else the name." },
+              "authors": {
+                "type": "array",
+                "maxItems": 5,
+                "items": { "type": "string" },
+                "description": "Author names, @id references to other nodes of the page resolved."
+              },
+              "publisher": { "$ref": "#/$defs/nullableString" },
+              "datePublished": { "$ref": "#/$defs/nullableString" },
+              "dateModified": { "$ref": "#/$defs/nullableString" },
+              "sameAs": { "type": "array", "maxItems": 5, "items": { "type": "string" } }
+            }
+          }
+        },
+        "dates": {
+          "description": "Dates as the page and its response give them, unparsed.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["published", "modified", "lastModified"],
+          "properties": {
+            "published": {
+              "$ref": "#/$defs/nullableString",
+              "description": "The first JSON-LD datePublished, else article:published_time."
+            },
+            "modified": {
+              "$ref": "#/$defs/nullableString",
+              "description": "The first JSON-LD dateModified, else article:modified_time, else og:updated_time."
+            },
+            "lastModified": {
+              "$ref": "#/$defs/nullableString",
+              "description": "The Last-Modified header. On a page built for every request it is often the time it was sent."
+            }
+          }
+        },
+        "author": {
+          "$ref": "#/$defs/nullableString",
+          "description": "The author meta tag, else the JSON-LD authors of the first node that has any."
         }
       }
     },

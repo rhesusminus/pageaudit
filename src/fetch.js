@@ -180,14 +180,15 @@ function decode(bytes, contentType) {
   return new TextDecoder(encoding).decode(bytes)
 }
 
-// The response headers the header checks read, lowercase. A header that was not sent is left out.
+// The response headers the header checks and the page facts read, lowercase. A header that was not sent is left out.
 const CHECKED_HEADERS = [
   'strict-transport-security',
   'content-security-policy',
   'content-security-policy-report-only',
   'x-content-type-options',
   'x-frame-options',
-  'content-encoding'
+  'content-encoding',
+  'last-modified'
 ]
 
 const checkedHeaders = (headers) =>

@@ -1,5 +1,6 @@
 import { collapseWhitespace } from '../../text.js'
 import { checkA11y } from './a11y.js'
+import { jsonLdSummary, pageAuthor, pageDates } from './authorship.js'
 import { checkHeadings } from './headings.js'
 import { checkHreflang } from './hreflang.js'
 import { checkHygiene } from './hygiene.js'
@@ -34,12 +35,14 @@ export const checkHtml = ($, page = {}) => [
 
 // The values the site checks compare across pages, plus content signals for the
 // report. Empty values are null so a missing title is never reported as a duplicate
-// of another missing title. `robotsHeader` is the X-Robots-Tag value or null.
-export function extractFacts($, finalUrl, robotsHeader = null) {
+// of another missing title. `response` holds what the response said about the page: `robotsHeader`, the X-Robots-Tag
+// value, and `lastModified`, the Last-Modified header, each null or left out when not sent.
+export function extractFacts($, finalUrl, { robotsHeader = null, lastModified = null } = {}) {
   const href = canonicalLinks($)
     .map((el) => ($(el).attr('href') ?? '').trim())
     .find(Boolean)
   const base = baseUrl($, finalUrl)
+  const jsonLd = jsonLdSummary($)
   return {
     title: collapseWhitespace(titleElement($).text()) || null,
     description: descriptionValues($).find(Boolean) ?? null,
@@ -52,6 +55,9 @@ export function extractFacts($, finalUrl, robotsHeader = null) {
       )
     ],
     canonical: href ? absolute(href, base) : null,
-    ...extractSignals($, base, finalUrl, robotsHeader)
+    ...extractSignals($, base, finalUrl, robotsHeader),
+    jsonLd,
+    dates: pageDates($, jsonLd, lastModified),
+    author: pageAuthor($, jsonLd)
   }
 }

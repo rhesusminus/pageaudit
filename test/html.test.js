@@ -39,7 +39,10 @@ const facts = {
   openGraph: { title: null, description: null, image: null, type: null, url: null },
   twitterCard: null,
   jsonLdTypes: ['Organization'],
-  hreflang: [{ lang: 'fi', href: 'https://a.test/fi' }]
+  hreflang: [{ lang: 'fi', href: 'https://a.test/fi' }],
+  jsonLd: [],
+  dates: { published: null, modified: null, lastModified: null },
+  author: null
 }
 const lighthouse = {
   scores: { performance: 95, accessibility: 60, 'best-practices': 30, seo: null },

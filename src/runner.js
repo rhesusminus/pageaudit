@@ -26,10 +26,10 @@ const NO_HTML = { issues: [], facts: null, response: null, links: null }
 
 // The checks and facts of a page that returned HTML, `links`, the internal link targets for the site checks, and
 // with `content` its main content as Markdown. `url` is the page as given, for the Markdown's front matter.
-function auditHtml({ finalUrl, html, truncated, robotsHeader = null }, { url, content }) {
+function auditHtml({ finalUrl, html, truncated, robotsHeader = null, headers }, { url, content }) {
   const $ = parse(html)
   const issues = checkHtml($, { url: finalUrl, truncated, robotsHeader })
-  const facts = extractFacts($, finalUrl, robotsHeader)
+  const facts = extractFacts($, finalUrl, { robotsHeader, lastModified: headers?.['last-modified'] ?? null })
   return {
     issues,
     facts,
