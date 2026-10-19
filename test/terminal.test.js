@@ -9,7 +9,8 @@ import {
   formatPagesTable,
   formatReport,
   formatSiteTable,
-  formatSummary
+  formatSummary,
+  wrapText
 } from '../src/terminal.js'
 import { auditLine, issue, lhBlock, page, pages, site } from './helpers/report-pages.js'
 
@@ -67,11 +68,50 @@ test('formatIssueTable: context breaks at spaces and splits only a word longer t
   const context = '<title>The Ultimate Guide to Choosing the Best Gentle Shampoo</title>'
   const plain = plainColored(() => formatIssueTable([issue('warning', 'seo', 'Title is long', context)], 80))
   assert.deepEqual(contextLines(plain), ['<title>The Ultimate Guide', 'to Choosing the Best', 'Gentle Shampoo</title>'])
-  // A word longer than the column fills whole lines.
-  const lines = contextLines(stripVTControlCharacters(renderColored())).filter(Boolean)
-  assert.ok(lines.every((l) => l.length <= 44))
-  assert.equal(lines.filter((l) => l.length === 44).length, 4)
-  assert.equal(lines.join('').replaceAll(' ', '').split(CONTEXT.replaceAll(' ', '')).length - 1, 2)
+  // A word longer than the column is split after a hyphen or a slash.
+  const plainImages = stripVTControlCharacters(renderColored())
+  assert.deepEqual(contextLines(plainImages).slice(0, 3), [
+    '<img src="/averyveryverylongimagefilename-',
+    'that-goes-on-and-on-and-on/hero-banner-',
+    'final-v2.png">'
+  ])
+})
+
+test('wrapText: a word that does not fit moves to the next line whole', () => {
+  assert.deepEqual(wrapText('style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0"', 25).split('\n'), [
+    'style="mask-type:alpha"',
+    'maskUnits=',
+    '"userSpaceOnUse" x="0"'
+  ])
+})
+
+test('wrapText: a word wider than the line is split after a slash, = ? & _ or -', () => {
+  assert.deepEqual(wrapText('https://nodejs.org/en/blog', 25).split('\n'), ['https://nodejs.org/en/', 'blog'])
+  // The rest of the line is used when a part of the word fits there.
+  assert.deepEqual(wrapText('see https://a.test/one/two/three', 16).split('\n'), [
+    'see https://',
+    'a.test/one/two/',
+    'three'
+  ])
+})
+
+test('wrapText: a word with nowhere to break is split on lines of its own', () => {
+  assert.deepEqual(wrapText(`x ${'a'.repeat(25)}`, 10).split('\n'), [
+    'x',
+    'a'.repeat(10),
+    'a'.repeat(10),
+    'a'.repeat(5)
+  ])
+})
+
+test('wrapText: wraps by display width and never splits a character', () => {
+  assert.deepEqual(wrapText('日本語のタイトル', 5).split('\n'), ['日本', '語の', 'タイ', 'トル'])
+  assert.deepEqual(wrapText('👍🏽👍🏽👍🏽', 4).split('\n'), ['👍🏽👍🏽', '👍🏽'])
+})
+
+test('wrapText: keeps line breaks and empty text', () => {
+  assert.equal(wrapText('a\nb c', 10), 'a\nb c')
+  assert.equal(wrapText('', 10), '')
 })
 
 test('formatIssueTable: all table lines have equal width', () => {
