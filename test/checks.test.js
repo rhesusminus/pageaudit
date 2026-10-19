@@ -10,6 +10,7 @@ import { checkHygiene } from '../src/checks/page/hygiene.js'
 import { checkIndexing } from '../src/checks/page/indexing.js'
 import { checkSocial } from '../src/checks/page/social.js'
 import { checkStructuredData } from '../src/checks/page/structured-data.js'
+import { mainArea } from '../src/checks/page/content.js'
 import { truncate } from '../src/checks/snippet.js'
 
 const types = (issues) => issues.map((i) => i.type)
@@ -745,6 +746,17 @@ test('facts: mainText without a main area skips navigation, header, footer and a
     '<body><header>Brand</header><nav>Menu</nav><div>Body text</div><aside>Ad</aside><footer>Legal</footer></body>'
   assert.equal((await factsOf(html)).mainText, 'Body text')
   assert.equal((await factsOf('<body></body>')).mainText, null)
+})
+
+test('mainArea: <main> before <article>, an empty one passed over, else the body', () => {
+  const areaOf = (html) => {
+    const $ = parse(html)
+    const { root, area } = mainArea($)
+    return [area, $(root).prop('tagName').toLowerCase()]
+  }
+  assert.deepEqual(areaOf('<body><article>A</article><div role="main">M</div></body>'), ['main', 'div'])
+  assert.deepEqual(areaOf('<body><main id="app"> </main><article>A</article></body>'), ['article', 'article'])
+  assert.deepEqual(areaOf('<body><main></main><p>Text</p></body>'), ['body', 'body'])
 })
 
 test('facts: mainText is cut to a size a model can take in', async () => {

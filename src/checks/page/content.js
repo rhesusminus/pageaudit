@@ -14,7 +14,11 @@ const MAX_SRC = 2000
 const NOT_VISIBLE = new Set(['script', 'style', 'noscript', 'template', 'svg'])
 const PAGE_CHROME = new Set(['nav', 'header', 'footer', 'aside'])
 const HEADING = /^h[1-6]$/
-const MAIN_AREAS = ['main, [role="main" i]', 'article']
+const BODY_SKIP = new Set([...NOT_VISIBLE, ...PAGE_CHROME])
+const MAIN_AREAS = [
+  ['main, [role="main" i]', 'main'],
+  ['article', 'article']
+]
 
 // Walks the visible text of a tree in document order, until `onText` returns true. A space goes around every
 // element so that "<p>a</p><p>b</p>" reads "a b". `onHeading` takes over a heading, which then is not walked into.
@@ -52,12 +56,21 @@ function textOf(root, skip, max) {
   return found.text()
 }
 
-// The text a visitor reads in the main area, without navigation and footers, cut to a size a model can take in.
-// An empty main area, such as the shell of a client-side app, falls back to the body.
+// The part of the page a visitor reads: the first of <main> and <article> that has text, else the body without
+// navigation and footers. An empty main area, such as the shell of a client-side app, is passed over. `skip` names
+// the elements to leave out of `root`, and `area` says which one it is: main, article or body.
+export function mainArea($) {
+  for (const [selector, area] of MAIN_AREAS) {
+    const root = $(selector).first().get(0)
+    if (root && textOf(root, NOT_VISIBLE, 1)) return { root, skip: NOT_VISIBLE, area }
+  }
+  return { root: bodyOf($), skip: BODY_SKIP, area: 'body' }
+}
+
+// The text a visitor reads in the main area, cut to a size a model can take in.
 export function mainText($) {
-  const areas = MAIN_AREAS.map((selector) => $(selector).first().get(0)).filter(Boolean)
-  const inArea = areas.map((area) => textOf(area, NOT_VISIBLE, MAX_MAIN_TEXT)).find(Boolean)
-  return inArea ?? textOf(bodyOf($), new Set([...NOT_VISIBLE, ...PAGE_CHROME]), MAX_MAIN_TEXT)
+  const { root, skip } = mainArea($)
+  return textOf(root, skip, MAX_MAIN_TEXT)
 }
 
 // The first words under each heading, up to the next heading, keyed by the heading element.
