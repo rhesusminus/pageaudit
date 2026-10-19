@@ -67,6 +67,21 @@ test('auditPage: an HTML page keeps its internal link targets for the link check
   assert.equal(notHtml.links, null)
 })
 
+test('auditPage: with content, a page that returned HTML gets its main content as Markdown', async () => {
+  const fetchPage = async (url) => page(url, { finalUrl: 'https://a.test/final' })
+  const result = await auditPage('https://a.test/given', { fetchPage, content: true })
+  assert.equal(
+    result.content,
+    '---\ngenerator: "pageaudit"\nurl: "https://a.test/given"\nfinalUrl: "https://a.test/final"\ntitle: "Good page title here"\narea: "main"\n---\n\n# Hello\n'
+  )
+  assert.equal('content' in (await auditPage('https://a.test/given', { fetchPage })), false)
+  const notHtml = await auditPage('https://a.test/file', {
+    fetchPage: async (url) => page(url, { html: null }),
+    content: true
+  })
+  assert.equal('content' in notHtml, false)
+})
+
 test('auditPage: every issue carries the page URL', async () => {
   const result = await auditPage('https://a.test/x', {
     fetchPage: async (url) => page(url, { html: '<img src="a.jpg">' })
@@ -244,6 +259,23 @@ test('runAudit: a page whose checks fail does not stop the others', async () => 
   const urls = ['https://a.test/1', 'https://a.test/broken', 'https://a.test/3']
   const pages = await runAudit(urls, { fetchPage, pace: noPace })
   assert.deepEqual(pages.map(types), [[], ['check-failed'], []])
+})
+
+test('runAudit: onPage is awaited for each page as soon as it is done, before progress counts it', async () => {
+  const events = []
+  const urls = ['https://a.test/1', 'https://a.test/2']
+  await runAudit(urls, {
+    fetchPage: async (url) => page(url),
+    pace: noPace,
+    concurrency: 1,
+    content: true,
+    onPage: async (done) => {
+      await new Promise((resolve) => setTimeout(resolve, 1))
+      events.push(`page ${done.url} ${done.content.startsWith('---')}`)
+    },
+    onProgress: (done) => events.push(`progress ${done}`)
+  })
+  assert.deepEqual(events, ['page https://a.test/1 true', 'progress 1', 'page https://a.test/2 true', 'progress 2'])
 })
 
 test('runAudit: an empty list resolves to no pages', async () => {

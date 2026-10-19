@@ -18,6 +18,7 @@ import { fromSitemap } from './input/sitemap.js'
 import { cachedRobotsLoader, loadRobots } from './robots.js'
 import { lighthouseFailed, runLighthouse, shortSummary } from './lighthouse.js'
 import { hostThrottle } from './concurrency.js'
+import { contentWriter, prepareContentFolder } from './content-files.js'
 import { buildCoverage, orphansSkipped } from './coverage.js'
 import { checkLinkTargets } from './links.js'
 import { lighthouseIssues } from './lighthouse-issues.js'
@@ -87,16 +88,21 @@ function announceInputs({ urls, skipped, total, sitemapFiles }, options) {
   return true
 }
 
+// Audits the pages and, with --content, writes the content of each one as it is done. `content` is what happened to
+// the content files, undefined without --content.
 async function auditUrls(urls, options, { progress, pace }) {
   const text = (done) => `Auditing ${done}/${urls.length} pages...`
   const spinner = progress.start(text(0))
+  const writer = options.content ? contentWriter(options.content, urls) : null
   const pages = await runAudit(urls, {
     concurrency: options.concurrency,
     pace,
+    content: Boolean(writer),
+    onPage: writer?.write,
     onProgress: (done) => spinner.update(text(done))
   })
   spinner.stop()
-  return pages
+  return { pages, content: writer?.outcome() }
 }
 
 // Lighthouse loads the page in Chrome, so it also runs on a page whose HTML the static checks could not process.
@@ -156,9 +162,9 @@ async function checkRobotsAndSitemaps(pages, inputs, options, { progress, pace }
 // The --digest file names the full report relative to itself, so the two can be moved together.
 const reportPathFrom = (digest, out) => out && relative(dirname(resolve(digest)), resolve(out))
 
-// Writes the --out, --digest and --html files and says where each one went, on stderr so the JSON on stdout stays
-// clean. Returns false after printing why when one failed.
-async function writeFiles(options, report, { logo }) {
+// Writes the --out, --digest and --html files and says where each one went, and where the --content files went, on
+// stderr so the JSON on stdout stays clean. Returns false after printing why when one failed.
+async function writeFiles(options, report, { logo, content }) {
   const files = []
   if (options.out) files.push(['JSON report', options.out, `${JSON.stringify(report, null, 2)}\n`])
   if (options.digest) {
@@ -169,9 +175,10 @@ async function writeFiles(options, report, { logo }) {
     const { title, client } = options.branding
     files.push(['HTML report', options.html, renderHtml(report, { title, client, logo })])
   }
-  let ok = true
-  for (const [label, path, content] of files) {
-    const failure = await writeReportFile(path, content)
+  let ok = content?.ok ?? true
+  if (content) console.error(content.message)
+  for (const [label, path, text] of files) {
+    const failure = await writeReportFile(path, text)
     console.error(failure ?? `${label} written to ${path}`)
     ok &&= !failure
   }
@@ -190,13 +197,21 @@ async function loadLogo(path) {
   }
 }
 
-// Report paths that would fail only after the whole audit are refused up front.
+// Report paths that would fail only after the whole audit are refused up front. The --content folder is made
+// here too, and the files an earlier run wrote there are removed.
 async function reportPathsUsable(options) {
-  const problems = await reportPathProblems([
-    ['--out', options.out],
-    ['--digest', options.digest],
-    ['--html', options.html]
-  ])
+  const problems = await reportPathProblems(
+    [
+      ['--out', options.out],
+      ['--digest', options.digest],
+      ['--html', options.html]
+    ],
+    { content: options.content }
+  )
+  if (!problems.length && options.content) {
+    const problem = await prepareContentFolder(options.content)
+    if (problem) problems.push(problem)
+  }
   if (problems.length) console.error(problems.join('\n'))
   return problems.length === 0
 }
@@ -268,7 +283,7 @@ export async function run(argv, { stdin = process.stdin, lighthouse = runLightho
   if (exitCode) return exitCode
   if (!announceInputs(inputs, options)) return 2
 
-  const pages = await auditUrls(inputs.urls, options, session)
+  const { pages, content } = await auditUrls(inputs.urls, options, session)
   await addLighthouse(pages, progress, lighthouse, {
     all: options.lighthouse,
     chosen: inputs.marked,
@@ -280,7 +295,7 @@ export async function run(argv, { stdin = process.stdin, lighthouse = runLightho
   const coverage = buildCoverage(options, inputs, { links, lighthouseRan })
   const report = buildReport({ pages, site, skipped: inputs.skipped, coverage })
   console.log(json ? JSON.stringify(report, null, 2) : formatReport(report, process.stdout.columns))
-  if (!(await writeFiles(options, report, { logo }))) return 2
+  if (!(await writeFiles(options, report, { logo, content }))) return 2
 
   const { errors, warnings } = report.summary
   return errors > 0 || (options.failOn === 'warning' && warnings > 0) ? 1 : 0

@@ -226,7 +226,12 @@ function frontMatter(fields) {
 }
 
 // Marks a file as written by pageaudit, so a later run can replace it and leave other files alone.
-export const GENERATOR = 'pageaudit'
+const GENERATOR = 'pageaudit'
+const START = `---\ngenerator: ${JSON.stringify(GENERATOR)}\n`
+
+// True when `head`, the start of a file, is the start of one pageMarkdown() wrote.
+export const writtenByPageaudit = (head) => head.startsWith(START)
+export const HEAD_LENGTH = START.length
 
 // The main content of a page as Markdown, after front matter that says which page it is and which part of it was
 // read. The content is the HTML as served, before scripts run. `truncated` says the HTML was cut at 2 MB.
