@@ -73,10 +73,21 @@ test('markdown: lists nest, ordered lists keep their start, and a paragraph in a
   assert.equal(body(html), '- One\n  - Nested\n- Two\n  More\n-\n\n3. Three\n4. Four')
 })
 
-test('markdown: a table becomes a pipe table, nested tables and uneven rows included safely', () => {
+test('markdown: a data table becomes a pipe table, with uneven rows and one-line cells', () => {
   const html =
-    '<table><thead><tr><th>Name</th><th>A|B</th></tr></thead><tbody><tr><td>x<br>y</td></tr><tr><td><table><tr><td>inner</td></tr></table></td><td>z</td></tr></tbody></table>'
-  assert.equal(body(html), '| Name | A\\|B |\n| --- | --- |\n| x y |  |\n| inner | z |')
+    '<table><thead><tr><th>Name</th><th>A|B</th></tr></thead><tbody><tr><td>x<br>y</td></tr><tr><td><p>one</p></td><td><ul><li>a</li><li>b</li></ul></td></tr></tbody></table>'
+  assert.equal(body(html), '| Name | A\\|B |\n| --- | --- |\n| x y |  |\n| one | a b |')
+})
+
+test('markdown: a layout table is read cell by cell, so an article laid out in one does not run together', () => {
+  const nested = '<table><tr><td>Menu</td><td><table><tr><td>Inner</td></tr></table></td></tr></table>'
+  assert.equal(body(nested), 'Menu\n\nInner')
+  const article =
+    '<table><tr><td><font size="2">First paragraph.<br><br>Second, with a<br>break.</font></td></tr></table>'
+  assert.equal(body(article), 'First paragraph.\n\nSecond, with a\nbreak.')
+  const headed = '<table><tr><td><h2>Title</h2></td></tr></table>'
+  assert.equal(body(headed), '## Title')
+  assert.equal(body('<table role="presentation"><tr><td>A</td><td>B</td></tr></table>'), 'A\n\nB')
 })
 
 test('markdown: preformatted code is fenced with its language, longer than any fence inside', () => {

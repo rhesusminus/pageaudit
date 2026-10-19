@@ -2,11 +2,15 @@ import { imageSrc, mainArea } from './checks/page/content.js'
 import { absolute, baseUrl } from './checks/page/signals.js'
 import { isElement } from './parse.js'
 
-// Elements whose content runs on in the line around them. Every other element starts a block of its own.
+// Elements whose content runs on in the line around them, old presentational ones such as <font> included. Every
+// other element starts a block of its own.
 const INLINE = new Set(
-  'a abbr b bdi bdo br cite code data del dfn em i img ins kbd label mark q s samp small span strong sub sup time u var wbr'.split(
-    ' '
-  )
+  [
+    'a abbr acronym b bdi bdo big br cite code data del dfn em font i img ins kbd label mark nobr q s samp small span',
+    'strike strong sub sup time tt u var wbr'
+  ]
+    .join(' ')
+    .split(' ')
 )
 // A line break inside a paragraph, kept apart from the whitespace that is collapsed around it.
 const BREAK = '\u2028'
@@ -22,8 +26,13 @@ const clean = (text) =>
 const escapeLineStart = (line) =>
   line.replace(/^(\d+)([.)]\s)/, '$1\\$2').replace(/^(#{1,6}\s|[-+*]\s|>|-{3,}$|={3,}$)/, '\\$1')
 
-// The text of a paragraph as Markdown lines.
-const paragraph = (text) => text.split(BREAK).map(escapeLineStart).join('\n')
+// The paragraphs of a run of text as Markdown. Two line breaks in a row end a paragraph, as on pages that use <br><br>
+// instead of <p>, and a single one stays a line break.
+const paragraphs = (text) =>
+  text
+    .split(/\u2028{2,}/)
+    .map((part) => part.split(BREAK).map(escapeLineStart).join('\n'))
+    .filter(Boolean)
 
 // Wraps the text between its leading and trailing spaces, so a marker never sits next to a space: "** a**" is not
 // bold in Markdown.
@@ -84,7 +93,8 @@ function inline(node, ctx) {
     case 'samp':
       return code(textContent(node).replace(/\s+/g, ' '))
     default:
-      return inlineChildren(node, ctx)
+      // A block on one line, such as a list item in a table cell, still stays apart from its neighbours.
+      return INLINE.has(node.name) ? inlineChildren(node, ctx) : ` ${inlineChildren(node, ctx)} `
   }
 }
 
@@ -142,13 +152,26 @@ function rows(table) {
   return found
 }
 
+const cellsOf = (row) =>
+  (row.children ?? []).filter((cell) => isElement(cell) && (cell.name === 'td' || cell.name === 'th'))
+
+const holds = (node, names) =>
+  (node.children ?? []).some((child) => isElement(child) && (names.has(child.name) || holds(child, names)))
+const STRUCTURE = new Set(['table', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+
+// A table used to lay out the page rather than to hold data: marked as presentation, a single cell, or with a cell
+// that holds a heading, another table or more than one paragraph. Its cells are read as the blocks they hold, in order, since
+// one table row per line would run a whole article together.
+const layoutTable = (node, cells, ctx) =>
+  ['presentation', 'none'].includes(attr(node, 'role')) ||
+  cells.length < 2 ||
+  cells.some((cell) => holds(cell, STRUCTURE) || blocks(cell.children, ctx).length > 1)
+
 function table(node, ctx) {
-  const cells = rows(node)
-    .map((row) =>
-      (row.children ?? [])
-        .filter((cell) => isElement(cell) && (cell.name === 'td' || cell.name === 'th'))
-        .map((cell) => oneLine(cell, ctx).replaceAll('|', '\\|'))
-    )
+  const grid = rows(node).map(cellsOf)
+  if (layoutTable(node, grid.flat(), ctx)) return grid.flat().flatMap((cell) => blocks(cell.children, ctx))
+  const cells = grid
+    .map((row) => row.map((cell) => oneLine(cell, ctx).replaceAll('|', '\\|')))
     .filter((row) => row.length)
   if (!cells.length) return []
   const width = Math.max(...cells.map((row) => row.length))
@@ -197,8 +220,7 @@ function blocks(nodes, ctx) {
   const out = []
   let run = ''
   const flush = () => {
-    const text = clean(run)
-    if (text) out.push(paragraph(text))
+    out.push(...paragraphs(clean(run)))
     run = ''
   }
   for (const node of nodes ?? []) {
