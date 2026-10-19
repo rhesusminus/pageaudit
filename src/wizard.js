@@ -85,6 +85,18 @@ export function checkReportPath(value = '') {
   }
 }
 
+// The --content folder may not exist yet, the audit makes it. Files an earlier audit wrote there are replaced and
+// other files are left alone, so an existing folder needs no question.
+export function checkContentFolder(value = '') {
+  const path = value.trim()
+  if (!path) return 'Enter the path of the folder'
+  try {
+    if (statSync(path, { throwIfNoEntry: false })?.isFile()) return `${path} is a file, enter a folder`
+  } catch (err) {
+    return `Could not use ${path}: ${err.code ?? err.message}`
+  }
+}
+
 // The limit answer that audits every page. An empty answer becomes it, so the answer shown is never blank.
 const NO_LIMIT = 'all'
 
@@ -134,7 +146,8 @@ const CHECKS = {
 const REPORTS = {
   html: { label: 'HTML report', hint: 'one file to show a customer' },
   json: { label: 'JSON report', hint: 'for scripts or Claude' },
-  digest: { label: 'Digest', hint: 'a short JSON summary for Claude to read first' }
+  digest: { label: 'Digest', hint: 'a short JSON summary for Claude to read first' },
+  content: { label: 'Page content', hint: 'the text of each page as Markdown, for Claude' }
 }
 
 // The trimmed answer to the client or logo question, or undefined when it was left out.
@@ -144,7 +157,7 @@ const optional = (value) => {
 }
 
 // The command line arguments that run the audit the answers describe.
-export function answersToArgs({ source, input, limit, checks = [], html, title, client, logo, json, digest }) {
+export function answersToArgs({ source, input, limit, checks = [], html, title, client, logo, json, digest, content }) {
   const args = SOURCES[source].args(input)
   const max = limit?.trim()
   if (max && max !== NO_LIMIT) args.push('--limit', max)
@@ -159,6 +172,7 @@ export function answersToArgs({ source, input, limit, checks = [], html, title, 
   }
   if (json?.trim()) args.push('--out', json.trim())
   if (digest?.trim()) args.push('--digest', digest.trim())
+  if (content?.trim()) args.push('--content', content.trim())
   return args
 }
 
@@ -210,6 +224,21 @@ async function askAll(questions) {
     answers[name] = answer
   }
   return answers
+}
+
+// Asks for the --content folder. `taken` says why a path a report already goes to cannot be used. Returns the trimmed
+// path or clack's cancel symbol.
+async function askContentFolder(taken, streams) {
+  const defaultPath = 'content'
+  const check = (value) => checkContentFolder(value) ?? taken(value)
+  const answer = await text({
+    message: 'Which folder should the page content go in?',
+    placeholder: defaultPath,
+    defaultValue: defaultPath,
+    validate: (value) => check(value?.trim() ? value : defaultPath),
+    ...streams
+  })
+  return isCancel(answer) ? answer : answer.trim() || defaultPath
 }
 
 // Asks for the path of a report file, and when the file exists whether to replace it. Answering no asks for the
@@ -306,8 +335,15 @@ const htmlQuestions = (streams) => ({
 
 // Two reports in one file would leave only the one written last. `taken` is [path, which report goes there] for each
 // report path already answered.
-const checkOwnPath = (taken) => (value) =>
-  checkReportPath(value) ?? taken.find(([path]) => path && sameFile(value.trim(), path))?.[1]
+const takenPath = (taken) => (value) => taken.find(([path]) => path && sameFile(value.trim(), path))?.[1]
+const checkOwnPath = (taken) => (value) => checkReportPath(value) ?? takenPath(taken)(value)
+
+// The report paths answered so far, as `taken` for the checks above. A report not asked for yet has no path.
+const answeredPaths = ({ html, json, digest }) => [
+  [html, 'The HTML report goes there'],
+  [json, 'The JSON report goes there'],
+  [digest, 'The digest goes there']
+]
 
 const reportQuestions = (streams) => ({
   reports: () =>
@@ -318,31 +354,30 @@ const reportQuestions = (streams) => ({
       ...streams
     }),
   ...htmlQuestions(streams),
-  json: ({ reports, html }) =>
-    reports.includes('json')
+  json: (answers) =>
+    answers.reports.includes('json')
       ? askReportPath(
           {
             message: 'Where should the JSON report go?',
             defaultPath: 'report.json',
-            validate: checkOwnPath([[html, 'The HTML report goes there']])
+            validate: checkOwnPath(answeredPaths(answers))
           },
           streams
         )
       : undefined,
-  digest: ({ reports, html, json }) =>
-    reports.includes('digest')
+  digest: (answers) =>
+    answers.reports.includes('digest')
       ? askReportPath(
           {
             message: 'Where should the digest go?',
             defaultPath: 'report.digest.json',
-            validate: checkOwnPath([
-              [html, 'The HTML report goes there'],
-              [json, 'The JSON report goes there']
-            ])
+            validate: checkOwnPath(answeredPaths(answers))
           },
           streams
         )
-      : undefined
+      : undefined,
+  content: (answers) =>
+    answers.reports.includes('content') ? askContentFolder(takenPath(answeredPaths(answers)), streams) : undefined
 })
 
 // Asks for the audit setup, shows the command it makes and asks whether to run it now. Returns the arguments for

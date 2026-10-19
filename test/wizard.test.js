@@ -9,6 +9,7 @@ import { stripVTControlCharacters } from 'node:util'
 import {
   answersToArgs,
   askArgs,
+  checkContentFolder,
   checkLimit,
   checkLogoFile,
   checkPageUrls,
@@ -318,6 +319,17 @@ test('wizard: a report path is a file in a folder that exists', (t) => {
   assert.equal(checkReportPath(long), `Could not use ${long}: ENAMETOOLONG`)
 })
 
+test('wizard: the page content goes in a folder, which may not exist yet', (t) => {
+  const dir = tempDir(t)
+  writeFileSync(join(dir, 'file'), 'x')
+  assert.equal(checkContentFolder(dir), undefined)
+  assert.equal(checkContentFolder(` ${join(dir, 'new', 'content')} `), undefined)
+  assert.equal(checkContentFolder(' '), 'Enter the path of the folder')
+  assert.equal(checkContentFolder(join(dir, 'file')), `${join(dir, 'file')} is a file, enter a folder`)
+  const long = join(dir, 'a'.repeat(300))
+  assert.equal(checkContentFolder(long), `Could not use ${long}: ENAMETOOLONG`)
+})
+
 test('wizard: a logo is left out, or a readable image file of at most 512 KB', (t) => {
   const dir = tempDir(t)
   writeFileSync(join(dir, 'logo.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>')
@@ -347,6 +359,7 @@ test('wizard: the report answers become their options, leaving out defaults and 
   ])
   assert.deepEqual(answersToArgs({ ...page, json: ' r.json ' }), ['https://a.test/', '--out', 'r.json'])
   assert.deepEqual(answersToArgs({ ...page, digest: ' d.json ' }), ['https://a.test/', '--digest', 'd.json'])
+  assert.deepEqual(answersToArgs({ ...page, content: ' pages ' }), ['https://a.test/', '--content', 'pages'])
   // "none" only stands for a left-out client or logo. As a path or a title it is what was typed.
   assert.deepEqual(answersToArgs({ ...page, ...html, html: 'none', title: 'none', json: 'none' }), [
     'https://a.test/',
@@ -389,6 +402,20 @@ test('wizard: the digest cannot take the path of the JSON report', async (t) => 
   const typed = [...ONE_PAGE, DOWN + SPACE + DOWN + SPACE + ENTER, `${json}\r`, `${json}\r`, `\u0015${digest}\r`]
   const { args, shown } = await askShown(...typed, RUN)
   assert.deepEqual(args, ['https://a.test/', '--out', json, '--digest', digest])
+  assert.match(shown, /The JSON report goes there/)
+})
+
+test('wizard: asks for the page content folder, which cannot be where a report goes', async (t) => {
+  const dir = tempDir(t)
+  const cwd = process.cwd()
+  process.chdir(dir)
+  t.after(() => process.chdir(cwd))
+  const contentOnly = DOWN + DOWN + DOWN + SPACE + ENTER
+  assert.deepEqual(await ask(...ONE_PAGE, contentOnly, ENTER, RUN), ['https://a.test/', '--content', 'content'])
+  const jsonAndContent = DOWN + SPACE + DOWN + DOWN + SPACE + ENTER
+  const typed = [...ONE_PAGE, jsonAndContent, 'r.json\r', 'r.json\r', '\u0015pages\r']
+  const { args, shown } = await askShown(...typed, RUN)
+  assert.deepEqual(args, ['https://a.test/', '--out', 'r.json', '--content', 'pages'])
   assert.match(shown, /The JSON report goes there/)
 })
 
