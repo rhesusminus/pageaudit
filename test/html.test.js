@@ -5,6 +5,7 @@ import { ADVICE } from '../src/advice.js'
 import { escapeHtml, markup, raw } from '../src/html/escape.js'
 import { metricBand, siteWideIssues, verdict } from '../src/html/model.js'
 import { averageScores, groupIssues, pageHealth, pagesWithSiteIssues } from '../src/overview.js'
+import { formatPageDate } from '../src/html/format.js'
 import { renderHtml } from '../src/html/render.js'
 import { buildReport } from '../src/report.js'
 
@@ -396,6 +397,15 @@ test('renderHtml: Lighthouse audits show their category, savings, items and expl
   assert.doesNotMatch(plain, /Show details/)
 })
 
+test('formatPageDate: an ISO day becomes a long date, anything else stays as written', () => {
+  assert.equal(formatPageDate('2026-03-02'), '2 March 2026')
+  assert.equal(formatPageDate('2026-12-31T23:59:59-11:00'), '31 December 2026')
+  assert.equal(formatPageDate('2026-02-30'), '2026-02-30')
+  assert.equal(formatPageDate('2026-13-01'), '2026-13-01')
+  assert.equal(formatPageDate('Mon, 19 Oct 2026'), 'Mon, 19 Oct 2026')
+  assert.equal(formatPageDate('20260101'), '20260101')
+})
+
 test('renderHtml: "More about this page" lists the facts that are not shown at first', () => {
   const out = renderHtml(report)
   assert.match(out, /More about this page/)
@@ -405,6 +415,20 @@ test('renderHtml: "More about this page" lists the facts that are not shown at f
   assert.match(out, /Organization/)
   assert.match(out, /fi: https:\/\/a.test\/fi/)
   assert.match(out, /Other page/)
+  // The author and date rows are only there when the page gives them.
+  assert.doesNotMatch(out, /<dt>(Author|Published|Updated)<\/dt>/)
+  const dated = page('https://a.test/', [], {
+    facts: {
+      ...facts,
+      author: 'Maija',
+      dates: { ...facts.dates, published: '2026-03-02', modified: '2026-09-15T23:30:00-05:00' }
+    }
+  })
+  const datedOut = renderHtml(wrap([dated]))
+  assert.match(datedOut, /<dt>Author<\/dt><dd>Maija<\/dd>/)
+  assert.match(datedOut, /<dt>Published<\/dt><dd>2 March 2026<\/dd>/)
+  // The day the page wrote, not converted to another time zone.
+  assert.match(datedOut, /<dt>Updated<\/dt><dd>15 September 2026<\/dd>/)
   // The robots header row is only there when the page sent one.
   assert.doesNotMatch(out, /Robots header/)
   const sent = page('https://a.test/', [], { facts: { ...facts, robotsHeader: 'noarchive' } })

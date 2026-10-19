@@ -1,7 +1,7 @@
 // The evidence behind a finding: the element an issue is about, what Lighthouse found on a page and the
 // less visible facts of a page. All of it sits in collapsed sections, so the report still reads top down.
 import { markup } from './escape.js'
-import { CATEGORY_NAMES, formatBytes, formatMetric, link, plural } from './format.js'
+import { CATEGORY_NAMES, formatBytes, formatMetric, formatPageDate, link, plural } from './format.js'
 
 const EVIDENCE_LABEL = { element: 'Show the element', measurement: 'Show the measurement' }
 
@@ -184,6 +184,10 @@ function moreRows(facts) {
     ['Robots header', facts.robotsHeader ?? ''],
     ['Open Graph', social.length ? social.join(' / ') : orMissing(null)],
     ['Twitter card', orMissing(facts.twitterCard)],
+    // Only pages such as articles name an author or dates, so the rows are only there when the page gives them.
+    ['Author', facts.author ?? ''],
+    ['Published', facts.dates.published ? formatPageDate(facts.dates.published) : ''],
+    ['Updated', facts.dates.modified ? formatPageDate(facts.dates.modified) : ''],
     // No check asks for structured data, so its absence is not styled as a problem.
     ['Structured data', facts.jsonLdTypes.length ? facts.jsonLdTypes.join(', ') : 'None found'],
     // Most sites have one language, so no hreflang links is not a problem either.
