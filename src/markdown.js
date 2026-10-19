@@ -26,6 +26,11 @@ const clean = (text) =>
 const escapeLineStart = (line) =>
   line.replace(/^(\d+)([.)]\s)/, '$1\\$2').replace(/^(#{1,6}\s|[-+*]\s|>|-{3,}$|={3,}$)/, '\\$1')
 
+// Page text with a backslash before what Markdown would read as markup: emphasis, code, links and HTML. An
+// underscore inside a word, as in snake_case, is left alone, since it is not emphasis there.
+const escapeText = (text) =>
+  text.replace(/[\\`*[\]<]/g, '\\$&').replace(/(?<![\p{L}\p{N}])_|_(?![\p{L}\p{N}])/gu, '\\_')
+
 // The paragraphs of a run of text as Markdown. Two line breaks in a row end a paragraph, as on pages that use <br><br>
 // instead of <p>, and a single one stays a line break.
 const paragraphs = (text) =>
@@ -73,7 +78,7 @@ function link(node, ctx) {
 }
 
 function inline(node, ctx) {
-  if (node.type === 'text') return node.data
+  if (node.type === 'text') return escapeText(node.data)
   if (!isElement(node) || ctx.skip.has(node.name)) return ''
   switch (node.name) {
     case 'br':
@@ -225,7 +230,7 @@ function blocks(nodes, ctx) {
   }
   for (const node of nodes ?? []) {
     if (node.type === 'text') {
-      run += node.data
+      run += escapeText(node.data)
     } else if (isElement(node) && !ctx.skip.has(node.name)) {
       if (INLINE.has(node.name)) {
         run += inline(node, ctx)

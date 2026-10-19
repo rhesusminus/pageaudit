@@ -114,6 +114,16 @@ test('markdown: text that would start a heading, list or quote is escaped, line 
   )
 })
 
+test('markdown: page text that Markdown would read as markup is escaped, code is not', () => {
+  assert.equal(
+    body(
+      '<p>Fields marked *required*, a [note], &lt;b&gt;bold&lt;/b&gt;, C:\\dir, `tick`, _under_ but snake_case. <code>a*b</code></p>'
+    ),
+    'Fields marked \\*required\\*, a \\[note\\], \\<b>bold\\</b>, C:\\\\dir, \\`tick\\`, \\_under\\_ but snake_case. `a*b`'
+  )
+  assert.equal(body('<p><a href="/x">An [unfinished label</a></p>'), '[An \\[unfinished label](https://a.test/x)')
+})
+
 test('markdown: an element named like an Object method is walked into like any unknown element', () => {
   assert.equal(
     body('<main><p>Before</p><constructor>Content</constructor><toString>More</toString><p>After</p></main>'),
