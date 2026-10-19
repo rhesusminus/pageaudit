@@ -8,6 +8,7 @@ import { checkIndexing } from './indexing.js'
 import { checkLinks } from './links.js'
 import { canonicalLinks, checkMeta, descriptionValues, titleElement } from './meta.js'
 import { absolute, baseUrl, extractSignals } from './signals.js'
+import { checkSnippetControls } from './snippets.js'
 import { checkSocial } from './social.js'
 import { checkStructuredData } from './structured-data.js'
 
@@ -15,8 +16,8 @@ export { checkFetchError, checkHtmlError, checkResponse } from './response.js'
 export { mergeRobotsIssues } from './robots-header.js'
 export { internalLinks } from './signals.js'
 
-// Every check that looks at the parsed HTML of one page. `page` is { url, truncated }: the final URL, and whether the
-// HTML was cut at the size Googlebot reads, see fetchPage().
+// Every check that looks at the parsed HTML of one page. `page` is { url, truncated, robotsHeader }: the final URL,
+// whether the HTML was cut at the size Googlebot reads, see fetchPage(), and the X-Robots-Tag value or null.
 export const checkHtml = ($, page = {}) => [
   ...checkImages($),
   ...checkA11y($),
@@ -24,6 +25,7 @@ export const checkHtml = ($, page = {}) => [
   ...checkMeta($),
   ...checkHeadings($),
   ...checkIndexing($),
+  ...checkSnippetControls($, page.robotsHeader ?? null),
   ...checkSocial($),
   ...checkStructuredData($),
   ...checkHreflang($, page),

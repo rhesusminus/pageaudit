@@ -33,6 +33,8 @@ export const SOURCES = {
   anthropicBots:
     'https://support.claude.com/en/articles/8896518-does-anthropic-crawl-data-from-the-web-and-how-can-site-owners-block-the-crawler',
   perplexityBots: 'https://docs.perplexity.ai/guides/bots',
+  bingCopilot:
+    'https://blogs.bing.com/webmaster/september-2023/Announcing-new-options-for-webmasters-to-control-usage-of-their-content-in-Bing-Chat',
   formLabels: 'https://www.w3.org/WAI/tutorials/forms/labels/',
   linkPurpose: 'https://www.w3.org/WAI/WCAG22/Understanding/link-purpose-in-context.html',
   landmarks: 'https://www.w3.org/WAI/ARIA/apg/practices/landmark-regions/',

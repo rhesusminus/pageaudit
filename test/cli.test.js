@@ -964,6 +964,31 @@ test('cli: a page robots.txt keeps from an AI search crawler is reported, and or
   assert.deepEqual(JSON.parse(await readFile(digestPath, 'utf8')).origins, [partial])
 })
 
+test('cli: snippet rules from the meta tag and the X-Robots-Tag header become issues', async (t) => {
+  const { code, report } = await runJson(t, [fixtureUrl('snippets.html')])
+  assert.equal(code, 0)
+  const [page] = report.pages
+  assert.deepEqual(
+    page.issues.map(({ type, severity, context, source }) => ({ type, severity, context, source })),
+    [
+      {
+        type: 'snippet-restricted',
+        severity: 'warning',
+        context: 'X-Robots-Tag: googlebot: nosnippet',
+        source: 'https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag'
+      },
+      {
+        type: 'copilot-restricted',
+        severity: 'warning',
+        context: '<meta name="robots" content="noarchive">',
+        source:
+          'https://blogs.bing.com/webmaster/september-2023/Announcing-new-options-for-webmasters-to-control-usage-of-their-content-in-Bing-Chat'
+      }
+    ]
+  )
+  assert.ok(report.rules['copilot-restricted'].fix.includes('noarchive'))
+})
+
 test('cli: pages that are not listed in a sitemap get no sitemap issues and allowed pages are not blocked', async (t) => {
   const { report } = await runJson(t, [fixtureUrl('noindex.html'), fixtureUrl('bad-canonical.html')])
   assert.ok(report.site.every((issue) => !issue.type.startsWith('sitemap-')))

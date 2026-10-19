@@ -381,6 +381,16 @@ export const ADVICE = {
     why: 'The robots.txt file of the site lets Google crawl the page but not the crawlers that ChatGPT search, Claude or Perplexity use to find pages for their answers, so the page cannot be quoted or linked there. Some sites do this on purpose, others meant to block only the crawlers that collect training data.',
     fix: 'If the page should be found through AI search, remove the Disallow rule for the crawler named in the finding (OAI-SearchBot, Claude-SearchBot or PerplexityBot). To keep the content out of AI training only, block GPTBot, ClaudeBot and Google-Extended instead.'
   },
+  'snippet-restricted': {
+    title: 'Google may quote little or nothing from the page',
+    why: 'A nosnippet or max-snippet rule in the robots meta tag or the X-Robots-Tag header limits the text Google shows under the page in search results. The same rule limits how much of the page AI Overviews and AI Mode can use, and with nosnippet or max-snippet:0 they cannot use its text at all.',
+    fix: 'If the page should be quoted in search and AI answers, remove nosnippet, or raise max-snippet or set it to -1 for no limit. To hide only some parts, such as a price that changes, wrap them in an element with data-nosnippet instead.'
+  },
+  'copilot-restricted': {
+    title: 'Bing is told to keep the page out of Copilot answers',
+    why: 'Bing reads noarchive as "do not use this page in Copilot answers" and nocache as "show only its title, address and snippet". Google no longer uses noarchive at all, so the rule is often left over from old cache settings and now only costs visibility in Copilot.',
+    fix: 'If the page should be used in Copilot answers, remove noarchive and nocache from the robots meta tag (or a bingbot one) and from the X-Robots-Tag header.'
+  },
   'robots-txt-unreachable': {
     title: 'The robots.txt file could not be read',
     why: 'The server answered with an error when asked for robots.txt. Google pauses crawling a site while it cannot read the file, and gives up on it after a while.',
