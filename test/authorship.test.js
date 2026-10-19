@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { parse } from '../src/parse.js'
 import { jsonLdSummary, pageAuthor, pageDates } from '../src/checks/page/authorship.js'
+import { lastmodByPage } from '../src/input/sitemap.js'
 
 const ldJson = (...values) =>
   values.map((value) => `<script type="application/ld+json">${JSON.stringify(value)}</script>`).join('')
@@ -133,4 +134,24 @@ test('author: the author meta tag wins, else the first JSON-LD node with authors
   const fromMeta = page(`<meta name="author" content="Maija">${graph}`)
   assert.equal(pageAuthor(fromMeta, jsonLdSummary(fromMeta)), 'Maija')
   assert.equal(pageAuthor(page(''), []), null)
+})
+
+test('sitemap lastmod: by page key from urlset files only, the first one wins', () => {
+  const files = [
+    { kind: 'index', lastmods: [{ loc: 'https://a.test/child.xml', value: '2026-01-01' }] },
+    {
+      kind: 'urlset',
+      lastmods: [
+        { loc: 'https://A.test/x/', value: '2026-02-01' },
+        { loc: 'https://a.test/x', value: '2026-03-01' },
+        { loc: '', value: '2026-04-01' },
+        { loc: 'not a url', value: 'yesterday' }
+      ]
+    }
+  ]
+  const byPage = lastmodByPage(files)
+  assert.equal(byPage.get('https://a.test/x'), '2026-02-01')
+  assert.equal(byPage.get('not a url'), 'yesterday')
+  assert.equal(byPage.has('https://a.test/child.xml'), false)
+  assert.equal(byPage.size, 2)
 })

@@ -459,7 +459,7 @@
           "description": "Dates as the page and its response give them, unparsed.",
           "type": "object",
           "additionalProperties": false,
-          "required": ["published", "modified", "lastModified"],
+          "required": ["published", "modified", "lastModified", "sitemapLastmod"],
           "properties": {
             "published": {
               "$ref": "#/$defs/nullableString",
@@ -472,6 +472,10 @@
             "lastModified": {
               "$ref": "#/$defs/nullableString",
               "description": "The Last-Modified header. On a page built for every request it is often the time it was sent."
+            },
+            "sitemapLastmod": {
+              "$ref": "#/$defs/nullableString",
+              "description": "The <lastmod> of the sitemap entry that listed the page, null when no audited sitemap did."
             }
           }
         },

@@ -41,7 +41,7 @@ const facts = {
   jsonLdTypes: ['Organization'],
   hreflang: [{ lang: 'fi', href: 'https://a.test/fi' }],
   jsonLd: [],
-  dates: { published: null, modified: null, lastModified: null },
+  dates: { published: null, modified: null, lastModified: null, sitemapLastmod: null },
   author: null
 }
 const lighthouse = {

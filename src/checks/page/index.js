@@ -57,7 +57,8 @@ export function extractFacts($, finalUrl, { robotsHeader = null, lastModified = 
     canonical: href ? absolute(href, base) : null,
     ...extractSignals($, base, finalUrl, robotsHeader),
     jsonLd,
-    dates: pageDates($, jsonLd, lastModified),
+    // sitemapLastmod is filled in once the audit knows which sitemap listed the page, see addSitemapDates().
+    dates: { ...pageDates($, jsonLd, lastModified), sitemapLastmod: null },
     author: pageAuthor($, jsonLd)
   }
 }
