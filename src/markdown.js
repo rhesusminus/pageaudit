@@ -157,6 +157,14 @@ function rows(table) {
   return found
 }
 
+// For each row, the index just past the last row of its group (<thead>, <tbody>, <tfoot> or the table itself), which
+// no rowspan runs past.
+function groupEnds(trs) {
+  const ends = []
+  for (let r = trs.length - 1; r >= 0; r--) ends[r] = trs[r + 1]?.parent === trs[r].parent ? ends[r + 1] : r + 1
+  return ends
+}
+
 const cellsOf = (row) =>
   (row.children ?? []).filter((cell) => isElement(cell) && (cell.name === 'td' || cell.name === 'th'))
 
@@ -172,36 +180,44 @@ const layoutTable = (node, cells, ctx) =>
   cells.some((cell) => holds(cell, STRUCTURE) || blocks(cell.children, ctx).length > 1)
 
 // How many columns and rows a cell covers, within the limits HTML sets: colspan up to 1000, rowspan up to 65534 and
-// never past the last row, which a rowspan of 0 runs to.
+// never past the last row of its group, which a rowspan of 0 runs to.
 function span(cell, rowsLeft) {
   const number = (name, max) => Math.min(Math.max(Number.parseInt(attr(cell, name), 10) || 1, 1), max)
   const rows = attr(cell, 'rowspan')?.trim() === '0' ? rowsLeft : number('rowspan', 65534)
   return { cols: number('colspan', 1000), rows: Math.min(rows, rowsLeft) }
 }
 
+// The characters a cell takes in each place of a pipe table: its text and the " | " before it.
+const placeLength = (text) => text.length + 3
+
 // The text of each cell placed in its row and column, a spanning cell repeated in every place it covers, so each
-// value stays under its own header. A grid much larger than the cells it holds, from spans or very uneven rows,
-// is null: written out it could grow with the square of the table.
-function cellGrid(rowCells, ctx) {
-  const limit = Math.max(64, 4 * rowCells.flat().length)
-  const spans = rowCells.map((cells, r) => cells.map((cell) => span(cell, rowCells.length - r)))
-  if (spans.flat().reduce((sum, { cols, rows }) => sum + cols * rows, 0) > limit) return null
+// value stays under its own header. Rows that hold nothing are left out once the spans are placed. A table that
+// would be written out much longer than its cells' text, from spans or very uneven rows, is null: it could grow with
+// the square of the table.
+function cellGrid(trs, ctx) {
+  const rowCells = trs.map(cellsOf)
+  const texts = rowCells.map((cells) => cells.map((cell) => oneLine(cell, ctx).replaceAll('|', '\\|')))
+  const ends = groupEnds(trs)
+  const spans = rowCells.map((cells, r) => cells.map((cell) => span(cell, ends[r] - r)))
+  const limit = Math.max(4096, 4 * texts.flat().reduce((sum, text) => sum + placeLength(text), 0))
+  const written = spans.flatMap((row, r) => row.map(({ cols, rows }, i) => cols * rows * placeLength(texts[r][i])))
+  if (written.reduce((sum, length) => sum + length, 0) > limit) return null
   const grid = rowCells.map(() => [])
   rowCells.forEach((cells, r) => {
     let column = 0
-    cells.forEach((cell, i) => {
+    cells.forEach((_, i) => {
       while (grid[r][column] !== undefined) column++
-      const text = oneLine(cell, ctx).replaceAll('|', '\\|')
       const { cols, rows } = spans[r][i]
       for (let down = 0; down < rows; down++) {
-        for (let across = 0; across < cols; across++) grid[r + down][column + across] = text
+        for (let across = 0; across < cols; across++) grid[r + down][column + across] = texts[r][i]
       }
       column += cols
     })
   })
-  const width = Math.max(...grid.map((row) => row.length))
-  if (width * grid.length > limit) return null
-  return grid.map((row) => Array.from({ length: width }, (_, column) => row[column] ?? ''))
+  const filled = grid.filter((row) => row.length)
+  const width = Math.max(0, ...filled.map((row) => row.length))
+  if (width * filled.length * placeLength('') > limit) return null
+  return filled.map((row) => Array.from({ length: width }, (_, column) => row[column] ?? ''))
 }
 
 function pipeTable([head, ...body]) {
@@ -215,12 +231,10 @@ function table(node, ctx) {
   const caption = (node.children ?? [])
     .filter((child) => isElement(child) && child.name === 'caption')
     .flatMap((child) => labelled(child, ctx, '*'))
-  const rowCells = rows(node)
-    .map(cellsOf)
-    .filter((row) => row.length)
-  const cells = rowCells.flat()
-  const grid = layoutTable(node, cells, ctx) ? null : cellGrid(rowCells, ctx)
-  return [...caption, ...(grid ? [pipeTable(grid)] : cells.flatMap((cell) => blocks(cell.children, ctx)))]
+  const trs = rows(node)
+  const cells = trs.flatMap(cellsOf)
+  const grid = layoutTable(node, cells, ctx) ? null : cellGrid(trs, ctx)
+  return [...caption, ...(grid?.length ? [pipeTable(grid)] : cells.flatMap((cell) => blocks(cell.children, ctx)))]
 }
 
 const quote = (node, ctx) => {

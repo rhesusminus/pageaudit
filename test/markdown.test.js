@@ -119,6 +119,17 @@ test('markdown: a table far larger than its cells is read cell by cell instead o
   )
 })
 
+test('markdown: a spanning cell covers the empty rows below it, but not the rows of the next group', () => {
+  const html =
+    '<table><thead><tr><th rowspan="3">H</th><th>A</th></tr></thead><tbody><tr><td>x</td><td>y</td></tr></tbody><tbody><tr><td rowspan="2">s</td><td>1</td></tr><tr></tr><tr><td>2</td><td>3</td></tr></tbody></table>'
+  assert.equal(body(html), ['| H | A |', '| --- | --- |', '| x | y |', '| s | 1 |', '| s |  |', '| 2 | 3 |'].join('\n'))
+})
+
+test('markdown: a long cell spanning many columns is read once instead of repeated', () => {
+  const html = `<table><tr><td colspan="1000">${'w'.repeat(1000)}</td></tr><tr><td>a</td><td>b</td></tr></table>`
+  assert.equal(body(html), `${'w'.repeat(1000)}\n\na\n\nb`)
+})
+
 test('markdown: preformatted code is fenced with its language, longer than any fence inside', () => {
   assert.equal(
     body('<pre class="language-js"><code>const a = 1\n\n  return a\n</code></pre>'),
