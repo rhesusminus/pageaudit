@@ -183,7 +183,7 @@ h4 { font-size: 1.05rem; line-height: 1.35; margin: 0 0 0.35rem; }
 .band-good { color: var(--good); }
 .band-average { color: var(--warn); }
 .band-poor { color: var(--err); }
-.audit-score { display: inline-block; min-width: 4rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.audit-score { font-weight: 700; font-variant-numeric: tabular-nums; }
 .evidence { margin-top: 0.5rem; }
 .evidence > summary { color: var(--accent); font-size: 0.875rem; }
 .evidence > summary::before {
@@ -198,8 +198,9 @@ pre {
   border-radius: 8px; font: 0.8125rem/1.5 var(--mono); color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere;
 }
 pre code { margin: 0; display: inline; }
-.audits > li { display: block; }
-.audit-category { margin-left: 0.5rem; }
+.audits > li { display: grid; grid-template-columns: 4rem 1fr; column-gap: 0.5rem; }
+.audit-body { min-width: 0; }
+.audit-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.75rem; margin: 0; max-width: none; }
 .audit-items { display: grid; gap: 0.75rem; margin-top: 0.6rem; padding-left: 1rem; border-left: 2px solid var(--line); }
 .audit-items li { display: grid; gap: 0.15rem; overflow-wrap: anywhere; }
 .lh-warnings { display: grid; gap: 0.6rem; margin-block: 1.25rem 0.75rem; }

@@ -86,10 +86,15 @@ function auditDetail(audit, note) {
 
 export function auditRow(audit, notes) {
   return markup`<li>
-    <span class="audit-score">${audit.score}/100</span> ${audit.title}
-    ${audit.displayValue ? markup`<span class="note">${audit.displayValue}</span>` : ''}
-    <span class="note audit-category">${CATEGORY_NAMES[audit.category] ?? audit.category}</span>
-    ${auditDetail(audit, notes?.[audit.id])}
+    <span class="audit-score">${audit.score}/100</span>
+    <div class="audit-body">
+      <p class="audit-head">
+        <span class="audit-title">${audit.title}</span>
+        ${audit.displayValue ? markup`<span class="note">${audit.displayValue}</span>` : ''}
+        <span class="note audit-category">${CATEGORY_NAMES[audit.category] ?? audit.category}</span>
+      </p>
+      ${auditDetail(audit, notes?.[audit.id])}
+    </div>
   </li>`
 }
 

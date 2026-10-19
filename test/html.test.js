@@ -288,6 +288,14 @@ test('renderHtml: the findings left out by the cap are counted in the "more" not
   assert.match(out, /9 more findings not listed here/)
 })
 
+test('renderHtml: a Lighthouse audit keeps its title, value and category in one row next to the score', () => {
+  const out = renderHtml(report)
+  assert.match(
+    out,
+    /<span class="audit-score">10\/100<\/span>\s*<div class="audit-body">\s*<p class="audit-head">\s*<span class="audit-title">Fix the thing<\/span>\s*<span class="note">3 KiB<\/span>\s*<span class="note audit-category">Search \(SEO\)<\/span>\s*<\/p>/
+  )
+})
+
 test('renderHtml: each Lighthouse warning is listed after the audits, escaped', () => {
   const warnings = ['The test URL was redirected to <b>https://a.test/</b>.', 'Audit x failed: unknown error']
   const out = renderHtml(wrap([page('https://a.test/', [], { lighthouse: { ...lighthouse, warnings } })]))
