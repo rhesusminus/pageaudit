@@ -162,13 +162,26 @@ async function checkRobotsAndSitemaps(pages, inputs, options, { progress, pace }
 // The --digest file names the full report relative to itself, so the two can be moved together.
 const reportPathFrom = (digest, out) => out && relative(dirname(resolve(digest)), resolve(out))
 
+// The --content files by page URL, relative to the folder of `file`, the report that names them, or to the working
+// directory when there is none, such as a report printed to stdout.
+const contentPathsFrom = (file, content) =>
+  new Map(
+    [...(content?.files ?? [])].map(([url, path]) => [
+      url,
+      relative(file ? dirname(resolve(file)) : process.cwd(), resolve(path))
+    ])
+  )
+
 // Writes the --out, --digest and --html files and says where each one went, and where the --content files went, on
 // stderr so the JSON on stdout stays clean. Returns false after printing why when one failed.
 async function writeFiles(options, report, { logo, content }) {
   const files = []
   if (options.out) files.push(['JSON report', options.out, `${JSON.stringify(report, null, 2)}\n`])
   if (options.digest) {
-    const digest = buildDigest(report, { reportPath: reportPathFrom(options.digest, options.out) })
+    const digest = buildDigest(report, {
+      reportPath: reportPathFrom(options.digest, options.out),
+      contentFiles: contentPathsFrom(options.digest, content)
+    })
     files.push(['Digest', options.digest, `${JSON.stringify(digest, null, 2)}\n`])
   }
   if (options.html) {
@@ -251,6 +264,20 @@ async function checkAllPages(pages, inputs, options, session) {
   return { site: [...site, ...issues], links: targets }
 }
 
+// The report of the audit: the pages, the cross-page issues and `links`, the outcome of the link checks, with what
+// the audit covered and the --content files named relative to the --out file.
+function auditReport(pages, { site, links }, { inputs, options, content }) {
+  // A page Lighthouse was tried on has a lighthouse block, null when the run failed.
+  const lighthouseRan = pages.some((page) => page.lighthouse !== undefined)
+  return buildReport({
+    pages,
+    site,
+    skipped: inputs.skipped,
+    coverage: buildCoverage(options, inputs, { links, lighthouseRan }),
+    contentFiles: contentPathsFrom(options.out, content)
+  })
+}
+
 export async function run(argv, { stdin = process.stdin, lighthouse = runLighthouse } = {}) {
   let options
   try {
@@ -289,11 +316,7 @@ export async function run(argv, { stdin = process.stdin, lighthouse = runLightho
     chosen: inputs.marked,
     runs: options.lighthouseRuns
   })
-  const { site, links } = await checkAllPages(pages, inputs, options, session)
-  // A page Lighthouse was tried on has a lighthouse block, null when the run failed.
-  const lighthouseRan = pages.some((page) => page.lighthouse !== undefined)
-  const coverage = buildCoverage(options, inputs, { links, lighthouseRan })
-  const report = buildReport({ pages, site, skipped: inputs.skipped, coverage })
+  const report = auditReport(pages, await checkAllPages(pages, inputs, options, session), { inputs, options, content })
   console.log(json ? JSON.stringify(report, null, 2) : formatReport(report, process.stdout.columns))
   if (!(await writeFiles(options, report, { logo, content }))) return 2
 

@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { link, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { Readable } from 'node:stream'
 import pkg from '../package.json' with { type: 'json' }
 import { run } from '../src/cli.js'
@@ -809,6 +809,34 @@ test('cli: --content writes the main content of each page that returned HTML and
   assert.deepEqual((await readdir(dir)).sort(), ['fixtures.test_good.html.md', 'fixtures.test_rich.html.md'])
   const good = await readFile(join(dir, 'fixtures.test_good.html.md'), 'utf8')
   assert.match(good, /^---\ngenerator: "pageaudit"\nurl: "https:\/\/fixtures\.test\/good\.html"\n/)
+})
+
+test('cli: the report and the digest name each content file relative to themselves', async (t) => {
+  const dir = await tempDir(t)
+  await mkdir(join(dir, 'full'))
+  const out = join(dir, 'full', 'report.json')
+  const digestPath = join(dir, 'report.digest.json')
+  const args = [fixtureUrl('good.html'), fixtureUrl('missing.html'), '--content', join(dir, 'content')]
+  const { stdout } = await runCli(t, [...args, '--out', out, '--digest', digestPath, '--json'])
+  const file = 'fixtures.test_good.html.md'
+  const report = JSON.parse(await readFile(out, 'utf8'))
+  assert.deepEqual(
+    report.pages.map((page) => page.content),
+    [join('..', 'content', file), undefined]
+  )
+  assert.deepEqual(JSON.parse(stdout).pages[0].content, join('..', 'content', file))
+  const digest = JSON.parse(await readFile(digestPath, 'utf8'))
+  assert.deepEqual(
+    digest.pages.map((page) => page.content),
+    [join('content', file), undefined]
+  )
+  assert.equal(
+    await readFile(join(dir, 'full', report.pages[0].content), 'utf8'),
+    await readFile(join(dir, digest.pages[0].content), 'utf8')
+  )
+  t.mock.restoreAll()
+  const printed = await runJson(t, args)
+  assert.equal(printed.report.pages[0].content, relative(process.cwd(), join(dir, 'content', file)))
 })
 
 test('cli: --content replaces the files of an earlier run and leaves other files alone', async (t) => {

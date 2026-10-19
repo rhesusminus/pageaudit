@@ -62,11 +62,11 @@ export async function prepareContentFolder(dir) {
 }
 
 // Writes the content of each page as it is audited, to the file contentNames() gave its URL, and drops it from the
-// page, so the Markdown of a large audit is never all in memory. A page that got a file has `contentFile`, its path.
-// After a write fails the others are not tried: the folder is the same for all of them.
+// page, so the Markdown of a large audit is never all in memory. After a write fails the others are not tried: the
+// folder is the same for all of them.
 export function contentWriter(dir, urls) {
   const names = contentNames(urls)
-  let written = 0
+  const files = new Map()
   let failure = null
   return {
     async write(page) {
@@ -75,14 +75,14 @@ export function contentWriter(dir, urls) {
       if (content === null || content === undefined || failure) return
       const path = join(dir, names.get(page.url))
       failure = await writeReportFile(path, content)
-      if (failure) return
-      page.contentFile = path
-      written++
+      if (!failure) files.set(page.url, path)
     },
-    // What happened, to print once the audit is done, and whether every file was written.
+    // What happened, to print once the audit is done, whether every file was written, and the file of each page
+    // by URL.
     outcome: () => ({
-      message: failure ?? `Page content written to ${dir} (${written} ${written === 1 ? 'file' : 'files'})`,
-      ok: !failure
+      message: failure ?? `Page content written to ${dir} (${files.size} ${files.size === 1 ? 'file' : 'files'})`,
+      ok: !failure,
+      files
     })
   }
 }

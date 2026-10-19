@@ -62,8 +62,8 @@ function hoistAuditNotes(pages) {
 export const SCHEMA_VERSION = 1
 
 // The JSON report, which doubles as the data handed to Claude. `facts` is null for
-// pages that returned no HTML.
-export function buildReport({ pages, site, skipped = [], coverage, now = new Date() }) {
+// pages that returned no HTML. `contentFiles` holds the --content file of each page by URL, relative to the report.
+export function buildReport({ pages, site, skipped = [], coverage, contentFiles = new Map(), now = new Date() }) {
   const issues = [...pages.flatMap((page) => page.issues), ...site]
   const totals = countSeverities(issues)
   const { blocks, notes } = hoistAuditNotes(pages)
@@ -77,6 +77,8 @@ export function buildReport({ pages, site, skipped = [], coverage, now = new Dat
       redirects,
       issues,
       facts: reportFacts(facts),
+      // Only present for a page whose main content was written with --content.
+      ...(contentFiles.has(url) ? { content: contentFiles.get(url) } : {}),
       // Only present when Lighthouse ran for the page (--lighthouse, --lighthouse-page or a urls file marker).
       ...(lighthouse === undefined ? {} : { lighthouse: blocks[i] })
     })),

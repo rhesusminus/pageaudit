@@ -62,7 +62,7 @@ test('prepareContentFolder: a file in the way is refused', async (t) => {
   assert.match(await prepareContentFolder(join(path, 'sub')), /Could not use .* for --content: (ENOTDIR|EEXIST)/)
 })
 
-test('contentWriter: writes each page with content, drops it from the page and counts the files', async (t) => {
+test('contentWriter: writes each page with content, drops it from the page and lists the files by URL', async (t) => {
   const dir = await tempDir(t)
   const writer = contentWriter(dir, ['https://a.test/x', 'https://a.test/y', 'https://a.test/z'])
   const pages = [
@@ -71,13 +71,13 @@ test('contentWriter: writes each page with content, drops it from the page and c
     { url: 'https://a.test/z' }
   ]
   for (const page of pages) await writer.write(page)
-  assert.deepEqual(pages, [
-    { url: 'https://a.test/x', contentFile: join(dir, 'a.test_x.md') },
-    { url: 'https://a.test/y' },
-    { url: 'https://a.test/z' }
-  ])
+  assert.deepEqual(pages, [{ url: 'https://a.test/x' }, { url: 'https://a.test/y' }, { url: 'https://a.test/z' }])
   assert.equal(await readFile(join(dir, 'a.test_x.md'), 'utf8'), 'X')
-  assert.deepEqual(writer.outcome(), { message: `Page content written to ${dir} (1 file)`, ok: true })
+  assert.deepEqual(writer.outcome(), {
+    message: `Page content written to ${dir} (1 file)`,
+    ok: true,
+    files: new Map([['https://a.test/x', join(dir, 'a.test_x.md')]])
+  })
 })
 
 test('contentWriter: after a write fails the others are not tried', async (t) => {
@@ -89,7 +89,8 @@ test('contentWriter: after a write fails the others are not tried', async (t) =>
   await writer.write(y)
   assert.deepEqual(y, { url: 'https://a.test/y' })
   assert.deepEqual(await readdir(dir), ['a.test_x.md'])
-  const { message, ok } = writer.outcome()
+  const { message, ok, files } = writer.outcome()
   assert.equal(ok, false)
+  assert.deepEqual(files, new Map())
   assert.match(message, /Could not write .*a\.test_x\.md: EISDIR/)
 })
