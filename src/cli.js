@@ -13,8 +13,8 @@ import { readLogo } from './html/logo.js'
 import { renderHtml } from './html/render.js'
 import { fromArgs } from './input/args.js'
 import { fromFile } from './input/file.js'
-import { resolveUrls } from './input/resolve.js'
-import { fromSitemap } from './input/sitemap.js'
+import { pageKey, resolveUrls } from './input/resolve.js'
+import { fromSitemap, lastmodByPage } from './input/sitemap.js'
 import { cachedRobotsLoader, loadRobots } from './robots.js'
 import { lighthouseFailed, runLighthouse, shortSummary } from './lighthouse.js'
 import { hostThrottle } from './concurrency.js'
@@ -151,6 +151,15 @@ async function addLighthouse(pages, progress, runner, { all, chosen, runs }) {
     page.lighthouse = result.summary && !detailed ? shortSummary(result.summary) : (result.summary ?? null)
     if (result.error) page.issues.push(lighthouseFailed(page.url, result.error))
     if (result.summary) page.issues.push(...lighthouseIssues(page.url, result.summary))
+  }
+}
+
+// Adds to the facts of each page the <lastmod> a sitemap of the audit gives it, as the page was audited (its input
+// URL, not where it redirected to).
+function addSitemapDates(pages, sitemapFiles) {
+  const lastmods = lastmodByPage(sitemapFiles)
+  for (const page of pages) {
+    if (page.facts) page.facts.dates.sitemapLastmod = lastmods.get(pageKey(page.url)) ?? null
   }
 }
 
@@ -321,6 +330,7 @@ export async function run(argv, { stdin = process.stdin, lighthouse = runLightho
   const writer = await contentWriterFor(options, inputs.urls)
   if (writer === undefined) return 2
   const { pages, content } = await auditUrls(inputs.urls, options, session, writer)
+  addSitemapDates(pages, inputs.sitemapFiles)
   await addLighthouse(pages, progress, lighthouse, {
     all: options.lighthouse,
     chosen: inputs.marked,

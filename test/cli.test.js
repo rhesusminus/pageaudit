@@ -70,7 +70,10 @@ const GOOD_FACTS = {
   },
   twitterCard: 'summary_large_image',
   jsonLdTypes: [],
-  hreflang: []
+  hreflang: [],
+  jsonLd: [],
+  dates: { published: null, modified: null, lastModified: null, sitemapLastmod: null },
+  author: null
 }
 
 // How test/fixtures/robots.txt treats AI crawlers when only pages it allows are audited.
@@ -991,6 +994,30 @@ test('cli: snippet rules from the meta tag and the X-Robots-Tag header become is
   assert.equal(page.facts.robots, 'noarchive')
   assert.equal(page.facts.robotsHeader, 'googlebot: nosnippet')
   assert.ok(report.rules['copilot-restricted'].fix.includes('noarchive'))
+})
+
+test('cli: the facts say who made a page and when, from JSON-LD, its tags, its headers and the sitemap', async (t) => {
+  const { report } = await runJson(t, ['--sitemap', fixtureUrl('sitemap.xml'), fixtureUrl('article.html')])
+  const facts = (name) => report.pages.find((page) => page.url === fixtureUrl(name)).facts
+  const article = facts('article.html')
+  assert.deepEqual(
+    article.jsonLd.map(({ types, name, authors, publisher }) => [types, name, authors, publisher]),
+    [
+      [['Article'], 'How to wash your hair', ['Maija Mallikas'], 'Example Store'],
+      [['Person'], 'Maija Mallikas', [], null],
+      [['Organization'], 'Example Store', [], null]
+    ]
+  )
+  // The JSON-LD date wins over the article:published_time tag. The page is in no sitemap.
+  assert.deepEqual(article.dates, {
+    published: '2026-03-02T09:00:00+02:00',
+    modified: '2026-09-15T12:30:00+03:00',
+    lastModified: 'Mon, 19 Oct 2026 10:00:00 GMT',
+    sitemapLastmod: null
+  })
+  assert.equal(article.author, 'Maija Mallikas')
+  assert.equal(facts('good.html').dates.sitemapLastmod, '2026-09-01')
+  assert.equal(facts('bad-missing.html').dates.sitemapLastmod, null)
 })
 
 test('cli: pages that are not listed in a sitemap get no sitemap issues and allowed pages are not blocked', async (t) => {

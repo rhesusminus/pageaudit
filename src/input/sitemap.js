@@ -1,6 +1,8 @@
 import { gunzipSync } from 'node:zlib'
 import * as cheerio from 'cheerio'
 import { request } from '../fetch.js'
+import { limit } from '../text.js'
+import { pageKey } from './resolve.js'
 
 // Returns the <loc> values of a <urlset> or a <sitemapindex>, and what a validation of the file needs:
 // the number of entries (also those without a <loc>), how many have no <loc> text, and every <lastmod>.
@@ -113,6 +115,22 @@ async function followIndex(index, result, options) {
     else if (nested.file.kind === 'index') skip('nested sitemap index (only one level is followed)')
     else for (const entry of entries(nested.file.locs, child)) result.entries.push(entry)
   }
+}
+
+const MAX_LASTMOD = 60
+
+// The <lastmod> of each page the urlset files list, by page key, as written: sitemap-invalid-lastmod reports the bad
+// ones. The first file and entry to give a page one wins.
+export function lastmodByPage(files) {
+  const byPage = new Map()
+  for (const { kind, lastmods } of files) {
+    if (kind !== 'urlset') continue
+    for (const { loc, value } of lastmods) {
+      const key = loc && value && pageKey(loc)
+      if (key && !byPage.has(key)) byPage.set(key, limit(value, MAX_LASTMOD))
+    }
+  }
+  return byPage
 }
 
 // URLs listed in a sitemap, and `files` with the facts of every sitemap file that was read. A sitemap index is

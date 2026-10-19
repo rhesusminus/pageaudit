@@ -131,13 +131,16 @@ function openGraph($) {
 
 export const typesOf = (node) => [node['@type']].flat().filter((type) => typeof type === 'string')
 
-// Every object with a usable @type in a JSON-LD value, looking inside arrays and @graph.
-export function jsonLdNodes(value, depth = 0) {
+// Every object in a JSON-LD value, looking inside arrays and @graph. A node need not have a @type, an author that
+// another node refers to by @id often has only a name.
+export function jsonLdObjects(value, depth = 0) {
   if (!value || typeof value !== 'object' || depth > MAX_JSON_LD_DEPTH) return []
-  if (Array.isArray(value)) return value.flatMap((item) => jsonLdNodes(item, depth + 1))
-  const own = typesOf(value).length > 0 ? [value] : []
-  return [...own, ...jsonLdNodes(value['@graph'], depth + 1)]
+  if (Array.isArray(value)) return value.flatMap((item) => jsonLdObjects(item, depth + 1))
+  return [value, ...jsonLdObjects(value['@graph'], depth + 1)]
 }
+
+// Every object with a usable @type in a JSON-LD value, looking inside arrays and @graph.
+export const jsonLdNodes = (value) => jsonLdObjects(value).filter((node) => typesOf(node).length > 0)
 
 // Every JSON-LD script as { value } when it parses or { error, text } when it does not.
 export function jsonLdBlocks($) {
