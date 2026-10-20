@@ -887,13 +887,30 @@ test('cli: --content leaves an earlier run alone when the inputs cannot be read'
   assert.deepEqual(await readdir(dir), ['fixtures.test_good.html.md'])
 })
 
-test('cli: a --content file that cannot be written fails the run after the audit', async (t) => {
+test('cli: --content keeps the files of an earlier run when the run fails after the audit', async (t) => {
+  const dir = await tempDir(t)
+  await runCli(t, [fixtureUrl('good.html'), '--content', dir, '--json'])
+  t.mock.restoreAll()
+  const lighthouse = async () => {
+    throw new Error('Chrome crashed')
+  }
+  await assert.rejects(
+    runCli(t, [fixtureUrl('rich.html'), '--content', dir, '--lighthouse', '--json'], { lighthouse }),
+    /Chrome crashed/
+  )
+  assert.deepEqual(
+    (await readdir(dir)).filter((name) => !name.startsWith('.')),
+    ['fixtures.test_good.html.md']
+  )
+})
+
+test('cli: a --content folder that cannot be written fails the run before the audit', async (t) => {
   const dir = await tempDir(t)
   await chmod(dir, 0o555)
   const { code, stdout, stderr } = await runCli(t, [fixtureUrl('good.html'), '--content', dir, '--json'])
   assert.equal(code, 2)
-  assert.match(stderr, /Could not write .*fixtures\.test_good\.html\.md: EACCES/)
-  assert.equal(JSON.parse(stdout).summary.pages, 1)
+  assert.match(stderr, /Could not use .* for --content: EACCES/)
+  assert.equal(stdout, '')
 })
 
 test('cli: --content refuses a file and a path a report also names, before the audit', async (t) => {

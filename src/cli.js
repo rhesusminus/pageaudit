@@ -89,21 +89,22 @@ function announceInputs({ urls, skipped, total, sitemapFiles }, options) {
 }
 
 // The writer for the --content files, null without --content, or undefined after printing why the folder cannot be
-// used. The folder is only emptied of an earlier run's files here, once there is something to audit. A report that
-// goes into the folder keeps its name too.
+// used. The folder is only made here, once there is something to audit. A report that goes into the folder keeps its
+// name too.
 async function contentWriterFor(options, urls) {
   if (!options.content) return null
-  const { existing, problem } = await prepareContentFolder(options.content)
+  const { problem, ...folder } = await prepareContentFolder(options.content)
+  if (problem) {
+    console.error(problem)
+    return undefined
+  }
   const reports = [options.out, options.digest, options.html]
     .filter((path) => path && sameFile(dirname(resolve(path)), options.content))
     .map((path) => basename(path).toLowerCase())
-  if (!problem) return contentWriter(options.content, urls, new Set([...existing, ...reports]))
-  console.error(problem)
-  return undefined
+  return contentWriter(options.content, urls, { ...folder, existing: new Set([...folder.existing, ...reports]) })
 }
 
 // Audits the pages and with `writer`, from contentWriterFor(), writes the content of each one as it is done.
-// `content` is what happened to the content files, undefined without --content.
 async function auditUrls(urls, options, { progress, pace }, writer) {
   const text = (done) => `Auditing ${done}/${urls.length} pages...`
   const spinner = progress.start(text(0))
@@ -115,7 +116,7 @@ async function auditUrls(urls, options, { progress, pace }, writer) {
     onProgress: (done) => spinner.update(text(done))
   })
   spinner.stop()
-  return { pages, content: writer?.outcome() }
+  return pages
 }
 
 // Lighthouse loads the page in Chrome, so it also runs on a page whose HTML the static checks could not process.
@@ -280,6 +281,18 @@ async function checkAllPages(pages, inputs, options, session) {
   return { site: [...site, ...issues], links: targets, origins: robots.origins }
 }
 
+// Everything that follows auditing the pages one by one: the sitemap dates, Lighthouse and the cross-page checks.
+// Returns the cross-page issues.
+async function checkAudited(pages, inputs, options, { lighthouse, ...session }) {
+  addSitemapDates(pages, inputs.sitemapFiles)
+  await addLighthouse(pages, session.progress, lighthouse, {
+    all: options.lighthouse,
+    chosen: inputs.marked,
+    runs: options.lighthouseRuns
+  })
+  return checkAllPages(pages, inputs, options, session)
+}
+
 // The report of the audit: the pages, the cross-page issues and `links`, the outcome of the link checks, with what
 // the audit covered and the --content files named relative to the --out file.
 function auditReport(pages, { site, links, origins }, { inputs, options, content }) {
@@ -329,14 +342,12 @@ export async function run(argv, { stdin = process.stdin, lighthouse = runLightho
 
   const writer = await contentWriterFor(options, inputs.urls)
   if (writer === undefined) return 2
-  const { pages, content } = await auditUrls(inputs.urls, options, session, writer)
-  addSitemapDates(pages, inputs.sitemapFiles)
-  await addLighthouse(pages, progress, lighthouse, {
-    all: options.lighthouse,
-    chosen: inputs.marked,
-    runs: options.lighthouseRuns
-  })
-  const report = auditReport(pages, await checkAllPages(pages, inputs, options, session), { inputs, options, content })
+  const pages = await auditUrls(inputs.urls, options, session, writer)
+  const checks = await checkAudited(pages, inputs, options, { ...session, lighthouse })
+  // The content files replace those of an earlier run only now, so a run that fails or is stopped before keeps them.
+  // `content` is what happened to them, undefined without --content.
+  const content = await writer?.finish()
+  const report = auditReport(pages, checks, { inputs, options, content })
   console.log(json ? JSON.stringify(report, null, 2) : formatReport(report, process.stdout.columns))
   if (!(await writeFiles(options, report, { logo, content }))) return 2
 

@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { contentNames, contentWriter, prepareContentFolder } from '../src/content-files.js'
 import { pageMarkdown } from '../src/markdown.js'
 import { parse } from '../src/parse.js'
@@ -50,22 +50,45 @@ test('contentNames: numbers continue past the ones already used for a name', () 
   assert.deepEqual([...names.values()], [`${base}.md`, `${base}-2.md`, `${base}-4.md`])
 })
 
-test('prepareContentFolder: makes the folder, also nested', async (t) => {
+// The folder prepared for a writer, with the staging folder it got.
+async function prepared(dir) {
+  const folder = await prepareContentFolder(dir)
+  return { folder, staged: () => readdir(folder.staging) }
+}
+
+test('prepareContentFolder: makes the folder, also nested, with a hidden staging folder in it', async (t) => {
   const dir = join(await tempDir(t), 'a', 'b')
-  assert.deepEqual(await prepareContentFolder(dir), { existing: new Set() })
-  assert.deepEqual(await readdir(dir), [])
+  const { existing, earlier, staging } = await prepareContentFolder(dir)
+  assert.deepEqual({ existing, earlier }, { existing: new Set(), earlier: [] })
+  assert.equal(dirname(staging), dir)
+  assert.match(basename(staging), /^\.pageaudit-/)
+  assert.deepEqual(await readdir(dir), [basename(staging)])
 })
 
-test('prepareContentFolder: removes only the files an earlier run wrote, and names the others', async (t) => {
+test('prepareContentFolder: removes nothing, names the files an earlier run wrote and the others', async (t) => {
   const dir = await tempDir(t)
   await writeFile(join(dir, 'old.md'), markdown('https://a.test/old'))
   await writeFile(join(dir, 'Notes.md'), '# My notes\n')
   await writeFile(join(dir, 'empty.md'), '')
   await writeFile(join(dir, 'old.txt'), markdown('https://a.test/txt'))
   await mkdir(join(dir, 'folder.md'))
-  const { existing } = await prepareContentFolder(dir)
+  const { existing, earlier, staging } = await prepareContentFolder(dir)
   assert.deepEqual([...existing].sort(), ['empty.md', 'folder.md', 'notes.md', 'old.txt'])
-  assert.deepEqual((await readdir(dir)).sort(), ['Notes.md', 'empty.md', 'folder.md', 'old.txt'])
+  assert.deepEqual(earlier, ['old.md'])
+  assert.deepEqual(
+    (await readdir(dir)).sort(),
+    [basename(staging), 'Notes.md', 'empty.md', 'folder.md', 'old.md', 'old.txt'].sort()
+  )
+})
+
+test('prepareContentFolder: removes the staging folders a stopped run left', async (t) => {
+  const dir = await tempDir(t)
+  await mkdir(join(dir, '.pageaudit-left'))
+  await writeFile(join(dir, '.pageaudit-left', 'a.test_x.md'), markdown('https://a.test/x'))
+  await writeFile(join(dir, '.pageaudit-file'), 'not a folder')
+  const { existing, staging } = await prepareContentFolder(dir)
+  assert.deepEqual([...existing], ['.pageaudit-file'])
+  assert.deepEqual((await readdir(dir)).sort(), ['.pageaudit-file', basename(staging)].sort())
 })
 
 test('prepareContentFolder: a folder that cannot be made says why', async (t) => {
@@ -77,67 +100,130 @@ test('prepareContentFolder: a folder that cannot be made says why', async (t) =>
   }
 })
 
-test('contentWriter: writes each page with content, drops it from the page and lists the files by URL', async (t) => {
+test('prepareContentFolder: a folder that cannot be written says why', async (t) => {
   const dir = await tempDir(t)
-  const writer = contentWriter(dir, ['https://a.test/x', 'https://a.test/z'], new Set())
+  await chmod(dir, 0o555)
+  const { problem } = await prepareContentFolder(dir)
+  assert.match(problem, /Could not use .* for --content: EACCES/)
+})
+
+test('contentWriter: stages each page, drops the content from it and moves the files in once finished', async (t) => {
+  const dir = await tempDir(t)
+  const { folder, staged } = await prepared(dir)
+  const writer = contentWriter(dir, ['https://a.test/x', 'https://a.test/z'], folder)
   const pages = [{ url: 'https://a.test/x', content: 'X' }, { url: 'https://a.test/z' }]
   for (const page of pages) await writer.write(page)
   assert.deepEqual(pages, [{ url: 'https://a.test/x' }, { url: 'https://a.test/z' }])
-  assert.equal(await readFile(join(dir, 'a.test_x.md'), 'utf8'), 'X')
-  assert.deepEqual(writer.outcome(), {
+  assert.deepEqual(await staged(), ['a.test_x.md'])
+  assert.deepEqual(await writer.finish(), {
     message: `Page content written to ${dir} (1 file)`,
     ok: true,
     files: new Map([['https://a.test/x', join(dir, 'a.test_x.md')]])
   })
+  assert.deepEqual(await readdir(dir), ['a.test_x.md'])
+  assert.equal(await readFile(join(dir, 'a.test_x.md'), 'utf8'), 'X')
 })
 
-test('contentWriter: a file of the folder is never replaced, also one that appeared during the audit', async (t) => {
+test('contentWriter: the files of an earlier run are kept until finished, then replaced', async (t) => {
+  const dir = await tempDir(t)
+  await writeFile(join(dir, 'a.test_x.md'), markdown('https://a.test/x'))
+  await writeFile(join(dir, 'a.test_gone.md'), markdown('https://a.test/gone'))
+  await writeFile(join(dir, 'notes.md'), '# Notes\n')
+  const { folder } = await prepared(dir)
+  const writer = contentWriter(dir, ['https://a.test/x'], folder)
+  await writer.write({ url: 'https://a.test/x', content: 'X' })
+  assert.deepEqual(
+    (await readdir(dir)).sort(),
+    [basename(folder.staging), 'a.test_gone.md', 'a.test_x.md', 'notes.md'].sort()
+  )
+  assert.equal((await writer.finish()).ok, true)
+  assert.deepEqual((await readdir(dir)).sort(), ['a.test_x.md', 'notes.md'])
+  assert.equal(await readFile(join(dir, 'a.test_x.md'), 'utf8'), 'X')
+})
+
+test('contentWriter: an earlier file another file took the place of during the audit is not removed', async (t) => {
+  const dir = await tempDir(t)
+  await writeFile(join(dir, 'a.test_old.md'), markdown('https://a.test/old'))
+  const { folder } = await prepared(dir)
+  const writer = contentWriter(dir, ['https://a.test/x'], folder)
+  await writer.write({ url: 'https://a.test/x', content: 'X' })
+  await writeFile(join(dir, 'a.test_old.md'), 'mine now')
+  assert.equal((await writer.finish()).ok, true)
+  assert.deepEqual((await readdir(dir)).sort(), ['a.test_old.md', 'a.test_x.md'])
+  assert.equal(await readFile(join(dir, 'a.test_old.md'), 'utf8'), 'mine now')
+})
+
+test('contentWriter: a file that is not an earlier page is never replaced, also one from during the audit', async (t) => {
   const dir = await tempDir(t)
   await writeFile(join(dir, 'a.test_x.md'), 'mine')
-  const writer = contentWriter(dir, ['https://a.test/x', 'https://a.test/y'], new Set(['a.test_x.md']))
-  await writeFile(join(dir, 'a.test_y.md'), 'appeared')
+  await writeFile(join(dir, 'a.test_old.md'), markdown('https://a.test/old'))
+  const { folder } = await prepared(dir)
+  const writer = contentWriter(dir, ['https://a.test/x', 'https://a.test/y'], folder)
   await writer.write({ url: 'https://a.test/x', content: 'X' })
   await writer.write({ url: 'https://a.test/y', content: 'Y' })
-  assert.equal(await readFile(join(dir, 'a.test_x.md'), 'utf8'), 'mine')
-  assert.equal(await readFile(join(dir, 'a.test_x-2.md'), 'utf8'), 'X')
-  assert.equal(await readFile(join(dir, 'a.test_y.md'), 'utf8'), 'appeared')
-  const { message, ok } = writer.outcome()
+  await writeFile(join(dir, 'a.test_y.md'), 'appeared')
+  const { message, ok, files } = await writer.finish()
   assert.equal(ok, false)
-  assert.match(message, /Could not write .*a\.test_y\.md: EEXIST/)
+  assert.match(message, /Could not write .*a\.test_y\.md: EEXIST\nNo page content was written to .*, the files in it/)
+  assert.deepEqual(files, new Map())
+  assert.deepEqual((await readdir(dir)).sort(), ['a.test_old.md', 'a.test_x.md', 'a.test_y.md'])
+  assert.equal(await readFile(join(dir, 'a.test_x.md'), 'utf8'), 'mine')
+  assert.equal(await readFile(join(dir, 'a.test_y.md'), 'utf8'), 'appeared')
 })
 
-test('contentWriter: the first failure is kept when writes running beside it succeed', async (t) => {
+test('contentWriter: after a failed write nothing is moved in and the earlier files are kept', async (t) => {
   const dir = await tempDir(t)
-  await mkdir(join(dir, 'a.test_x.md'))
-  const writer = contentWriter(dir, ['https://a.test/x', 'https://a.test/y'], new Set())
+  await writeFile(join(dir, 'a.test_old.md'), markdown('https://a.test/old'))
+  const { folder } = await prepared(dir)
+  await mkdir(join(folder.staging, 'a.test_x.md'))
+  const writer = contentWriter(dir, ['https://a.test/x', 'https://a.test/y'], folder)
   await Promise.all([
     writer.write({ url: 'https://a.test/x', content: 'X' }),
     writer.write({ url: 'https://a.test/y', content: 'Y' })
   ])
-  const { message, ok, files } = writer.outcome()
+  const { message, ok, files } = await writer.finish()
   assert.equal(ok, false)
-  assert.match(message, /Could not write .*a\.test_x\.md: EEXIST/)
-  assert.deepEqual([...files.keys()], ['https://a.test/y'])
+  // The first failure is kept when writes running beside it succeed, and names the file in the folder.
+  assert.match(message, new RegExp(`^Could not write ${join(dir, 'a.test_x.md')}: EEXIST\n`))
+  assert.deepEqual(files, new Map())
+  assert.deepEqual(await readdir(dir), ['a.test_old.md'])
+})
+
+test('contentWriter: when the files cannot be moved in, the earlier files are kept', async (t) => {
+  const dir = await tempDir(t)
+  await writeFile(join(dir, 'a.test_old.md'), markdown('https://a.test/old'))
+  const { folder } = await prepared(dir)
+  const writer = contentWriter(dir, ['https://a.test/x'], folder)
+  await writer.write({ url: 'https://a.test/x', content: 'X' })
+  await rm(join(folder.staging, 'a.test_x.md'))
+  const outcome = await writer.finish()
+  assert.equal(outcome.ok, false)
+  assert.match(outcome.message, /^Could not move the page content into .*: ENOENT\nNo page content was written/)
+  assert.deepEqual(outcome.files, new Map())
+  assert.deepEqual(
+    (await readdir(dir)).filter((name) => !name.startsWith('.')),
+    ['a.test_old.md']
+  )
 })
 
 test('contentWriter: after a write fails no new one is started', async (t) => {
   const dir = await tempDir(t)
-  await mkdir(join(dir, 'a.test_x.md'))
-  const writer = contentWriter(dir, ['https://a.test/x', 'https://a.test/y'], new Set())
+  const { folder, staged } = await prepared(dir)
+  await mkdir(join(folder.staging, 'a.test_x.md'))
+  const writer = contentWriter(dir, ['https://a.test/x', 'https://a.test/y'], folder)
   const y = { url: 'https://a.test/y', content: 'Y' }
   await writer.write({ url: 'https://a.test/x', content: 'X' })
   await writer.write(y)
   assert.deepEqual(y, { url: 'https://a.test/y' })
-  assert.deepEqual(await readdir(dir), ['a.test_x.md'])
-  assert.deepEqual(writer.outcome().files, new Map())
+  assert.deepEqual(await staged(), ['a.test_x.md'])
 })
 
 test('contentWriter: pages the Markdown failed on are named, the first five and how many more', async (t) => {
   const dir = await tempDir(t)
   const urls = Array.from({ length: 7 }, (_, i) => `https://a.test/${i}`)
-  const writer = contentWriter(dir, urls, new Set())
+  const writer = contentWriter(dir, urls, (await prepared(dir)).folder)
   for (const url of urls) await writer.write({ url, content: null })
-  const { message, ok } = writer.outcome()
+  const { message, ok } = await writer.finish()
   assert.equal(ok, true)
   assert.equal(
     message,
