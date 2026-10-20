@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { chmod, link, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { chmod, link, lstat, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, relative } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 import { Readable } from 'node:stream'
 import pkg from '../package.json' with { type: 'json' }
 import { run } from '../src/cli.js'
@@ -638,6 +638,80 @@ test('cli: --out to an unwritable path exits 2 but still prints the report', asy
   assert.equal(JSON.parse(stdout).summary.pages, 1)
 })
 
+test('cli: a report that cannot be written leaves the earlier one whole and no other file', async (t) => {
+  const dir = await tempDir(t)
+  const out = join(dir, 'r.json')
+  await writeFile(out, 'earlier')
+  await chmod(dir, 0o555)
+  const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), '--json', '--out', out])
+  await chmod(dir, 0o755)
+  assert.equal(code, 2)
+  assert.match(stderr, /Could not write .*r\.json: EACCES/)
+  assert.equal(await readFile(out, 'utf8'), 'earlier')
+  assert.deepEqual(await readdir(dir), ['r.json'])
+})
+
+test('cli: a report keeps the permissions of the one it replaces', async (t) => {
+  const out = join(await tempDir(t), 'r.json')
+  await writeFile(out, 'earlier', { mode: 0o600 })
+  await chmod(out, 0o600)
+  await runCli(t, [fixtureUrl('good.html'), '--json', '--out', out])
+  assert.equal(JSON.parse(await readFile(out, 'utf8')).summary.pages, 1)
+  assert.equal((await lstat(out)).mode & 0o777, 0o600)
+})
+
+test('cli: a report under a path that is a file says why', async (t) => {
+  const file = join(await tempDir(t), 'file')
+  await writeFile(file, 'x')
+  const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), '--json', '--out', join(file, 'r.json')])
+  assert.equal(code, 2)
+  assert.match(stderr, /Could not write .*file\/r\.json: ENOTDIR/)
+})
+
+test('cli: a report path that is a link to a file not there yet makes that file', async (t) => {
+  const dir = await tempDir(t)
+  for (const [name, target] of [
+    ['relative.json', 'relative-target.json'],
+    ['absolute.json', join(dir, 'absolute-target.json')]
+  ]) {
+    await symlink(target, join(dir, name))
+    await runCli(t, [fixtureUrl('good.html'), '--json', '--out', join(dir, name)])
+    t.mock.restoreAll()
+    assert.ok((await lstat(join(dir, name))).isSymbolicLink())
+    assert.equal(JSON.parse(await readFile(resolve(dir, target), 'utf8')).summary.pages, 1)
+  }
+})
+
+test('cli: a link to a file not there yet is followed from the real folder of the link', async (t) => {
+  const dir = await tempDir(t)
+  await mkdir(join(dir, 'real', 'reports'), { recursive: true })
+  await symlink(join(dir, 'real', 'reports'), join(dir, 'linked'))
+  await symlink(join('..', 'r.json'), join(dir, 'real', 'reports', 'out.json'))
+  await runCli(t, [fixtureUrl('good.html'), '--json', '--out', join(dir, 'linked', 'out.json')])
+  assert.equal(JSON.parse(await readFile(join(dir, 'real', 'r.json'), 'utf8')).summary.pages, 1)
+  assert.deepEqual((await readdir(dir)).sort(), ['linked', 'real'])
+})
+
+test('cli: a report path that is a loop of links says so and stays a link', async (t) => {
+  const out = join(await tempDir(t), 'r.json')
+  await symlink(out, out)
+  const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), '--json', '--out', out])
+  assert.equal(code, 2)
+  assert.match(stderr, /Could not write .*r\.json: ELOOP/)
+  assert.ok((await lstat(out)).isSymbolicLink())
+})
+
+test('cli: a report path that is a link is written through and stays a link', async (t) => {
+  const dir = await tempDir(t)
+  const [real, out] = [join(dir, 'real.json'), join(dir, 'r.json')]
+  await writeFile(real, 'earlier')
+  await symlink(real, out)
+  await runCli(t, [fixtureUrl('good.html'), '--json', '--out', out])
+  assert.equal(JSON.parse(await readFile(real, 'utf8')).summary.pages, 1)
+  assert.ok((await lstat(out)).isSymbolicLink())
+  assert.deepEqual((await readdir(dir)).sort(), ['r.json', 'real.json'])
+})
+
 const TINY_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
   'base64'
@@ -887,13 +961,30 @@ test('cli: --content leaves an earlier run alone when the inputs cannot be read'
   assert.deepEqual(await readdir(dir), ['fixtures.test_good.html.md'])
 })
 
-test('cli: a --content file that cannot be written fails the run after the audit', async (t) => {
+test('cli: --content keeps the files of an earlier run when the run fails after the audit', async (t) => {
+  const dir = await tempDir(t)
+  await runCli(t, [fixtureUrl('good.html'), '--content', dir, '--json'])
+  t.mock.restoreAll()
+  const lighthouse = async () => {
+    throw new Error('Chrome crashed')
+  }
+  await assert.rejects(
+    runCli(t, [fixtureUrl('rich.html'), '--content', dir, '--lighthouse', '--json'], { lighthouse }),
+    /Chrome crashed/
+  )
+  assert.deepEqual(
+    (await readdir(dir)).filter((name) => !name.startsWith('.')),
+    ['fixtures.test_good.html.md']
+  )
+})
+
+test('cli: a --content folder that cannot be written fails the run before the audit', async (t) => {
   const dir = await tempDir(t)
   await chmod(dir, 0o555)
   const { code, stdout, stderr } = await runCli(t, [fixtureUrl('good.html'), '--content', dir, '--json'])
   assert.equal(code, 2)
-  assert.match(stderr, /Could not write .*fixtures\.test_good\.html\.md: EACCES/)
-  assert.equal(JSON.parse(stdout).summary.pages, 1)
+  assert.match(stderr, /Could not use .* for --content: EACCES/)
+  assert.equal(stdout, '')
 })
 
 test('cli: --content refuses a file and a path a report also names, before the audit', async (t) => {
