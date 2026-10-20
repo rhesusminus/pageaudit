@@ -1,25 +1,51 @@
-import { realpathSync, statSync } from 'node:fs'
-import { stat, writeFile } from 'node:fs/promises'
+import { randomBytes } from 'node:crypto'
+import { readlinkSync, realpathSync, statSync } from 'node:fs'
+import { chmod, lstat, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 
 // Writes a report file. Returns an error message instead of throwing, so a bad path
-// never loses the report that was already printed. `options` go to writeFile, such as a flag.
-export async function writeReportFile(path, content, options) {
+// never loses the report that was already printed. The report goes to a hidden file beside the one it replaces first,
+// so a run that fails or is stopped while writing leaves the earlier report whole. A link is followed, as it stays.
+export async function writeReportFile(path, content) {
+  const target = destination(path)
+  // Still a link once links are followed means a loop of them, which the report must not replace.
+  if ((await lstat(target).catch(() => null))?.isSymbolicLink()) return `Could not write ${path}: ELOOP`
+  const temp = join(dirname(target), `.${basename(target)}.${randomBytes(6).toString('hex')}.tmp`)
   try {
-    await writeFile(path, content, options)
+    // A new file gets the default permissions, so the report keeps those of the one it replaces, such as 0600.
+    const mode = (await stat(target).catch(() => null))?.mode
+    await writeFile(temp, content, { flag: 'wx', mode: mode === undefined ? undefined : mode & 0o777 })
+    if (mode !== undefined) await chmod(temp, mode & 0o7777)
+    await rename(temp, target)
     return null
   } catch (err) {
+    await rm(temp, { force: true }).catch(() => {})
     return `Could not write ${path}: ${err.code ?? err.message}`
   }
 }
 
+// Links followed at most, like the system does, so a loop of links ends.
+const MAX_LINKS = 40
+
+// The path a link points to, resolved from the real folder of the link as the system does, so a ".." in it leaves
+// that folder and not a linked one. Null when the path is not a link.
+function linkTarget(path) {
+  try {
+    return resolve(realpathSync(dirname(path)), readlinkSync(path))
+  } catch {
+    return null
+  }
+}
+
 // The file a report path ends up in once links are followed, so two spellings of one file compare equal. The file
-// itself may not exist yet, nor its folder.
-function destination(path) {
+// itself may not exist yet, nor its folder, also when a link names it.
+function destination(path, links = 0) {
   const full = resolve(path)
   try {
     return realpathSync(full)
   } catch {
+    const target = links < MAX_LINKS ? linkTarget(full) : null
+    if (target !== null) return destination(target, links + 1)
     try {
       return join(realpathSync(dirname(full)), basename(full))
     } catch {

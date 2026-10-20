@@ -73,7 +73,7 @@ In a terminal a spinner shows `Auditing 12/40 pages...` on stderr (skipped for J
 4. A `Not checked` section when a check that was asked for could not run, with the reason, such as `orphan pages: only 50 of 200 URLs were audited`. Checks that were not asked for are not listed there, but they are in `coverage.notRun` in the JSON report.
 5. A final line such as `40 pages, 6 errors, 19 warnings, 3 infos`.
 
-With `--out`, `--digest`, `--html` or `--content`, a line on stderr then says where each report file was written, such as `HTML report written to report.html` or `Page content written to content (40 files)`, in JSON output too.
+With `--out`, `--digest`, `--html` or `--content`, a line on stderr then says where each report file was written, such as `HTML report written to report.html` or `Page content written to content (40 files)`, in JSON output too. Each report is first written to a hidden file beside it and then renamed into place, so a run that fails or is stopped while writing leaves the earlier report whole. That takes a folder pageaudit can write to.
 
 Tables follow the terminal width (80 to 114 columns).
 
