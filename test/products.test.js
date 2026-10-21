@@ -308,3 +308,19 @@ test('products: the price range only covers offers in the currency of the first 
   assert.deepEqual(range(unpricedEur, { '@type': 'Offer', price: 8, priceCurrency: 'USD' }), [8, 8, 'USD'])
   assert.deepEqual(range(unpricedEur, { '@type': 'Offer', price: 3 }, { '@type': 'Offer', price: 4 }), [3, 4, null])
 })
+
+test('products: an offer written as an @id reference is read', () => {
+  const [found] = products({
+    '@graph': [
+      { '@type': 'Product', name: 'X', offers: { '@id': '#offer' } },
+      { '@type': 'Offer', '@id': '#offer', price: 12, priceCurrency: 'EUR', availability: 'InStock' }
+    ]
+  })
+  assert.deepEqual(found.offers, {
+    count: 1,
+    lowPrice: 12,
+    highPrice: 12,
+    priceCurrency: 'EUR',
+    availability: ['InStock']
+  })
+})

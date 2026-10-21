@@ -14,6 +14,8 @@ const isObject = (value) => Boolean(value) && typeof value === 'object' && !Arra
 const objects = (value) => [value].flat().filter(isObject)
 const has = (value) => value !== undefined && value !== null && value !== ''
 const idOf = (node) => (typeof node['@id'] === 'string' ? node['@id'] : null)
+// An object written inline or as a { @id } reference to another node of the page, followed one step.
+const resolved = (entry, byId) => ({ ...byId.get(idOf(entry)), ...entry })
 
 const isProduct = (node) => typesOf(node).some((type) => type === 'Product' || type === 'ProductGroup')
 const isGroup = (node) => typesOf(node).includes('ProductGroup')
@@ -83,7 +85,7 @@ function policyPlace(offers, offerKey, orgKey, nodes) {
 function variantsByGroup(nodes, byId) {
   const groups = new Map(nodes.filter(isGroup).map((group) => [group, []]))
   for (const [group, variants] of groups) {
-    for (const entry of objects(group.hasVariant)) variants.push({ ...byId.get(idOf(entry)), ...entry })
+    for (const entry of objects(group.hasVariant)) variants.push(resolved(entry, byId))
   }
   for (const node of nodes.filter((n) => isProduct(n) && !isGroup(n))) {
     const group = byId.get(objects(node.isVariantOf).map(idOf)[0])
@@ -110,7 +112,7 @@ const first = (members, read) => members.map(read).find(Boolean) ?? null
 // products, and the types of its offers.
 function describe(node, variants, nodes, byId) {
   const members = [node, ...variants]
-  const offers = members.flatMap((member) => objects(member.offers))
+  const offers = members.flatMap((member) => objects(member.offers).map((offer) => resolved(offer, byId)))
   // Shopify themes write the sku and barcode of each variant on its offer.
   const withOffers = [...members, ...offers]
   return {
