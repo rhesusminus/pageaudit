@@ -1,5 +1,5 @@
 import { MAX_URL } from '../../text.js'
-import { idIndex, pageObjects, text, textValue, typesOf } from './json-ld.js'
+import { idIndex, nameOf, pageObjects, text, textValue, typesOf } from './json-ld.js'
 import { metaContent } from './signals.js'
 
 const MAX_NODES = 10
@@ -8,16 +8,12 @@ const MAX_SAME_AS = 5
 const MAX_TEXT = 120
 const MAX_DATE = 60
 
-// The names behind an author or publisher: a plain name, an object with a name, or a { @id } reference to another
-// node of the page, which is how Yoast and most CMSs write them. A reference is followed one step, so a loop of
-// references cannot hang the audit.
+// The names behind an author or publisher, see nameOf(). Yoast and most CMSs write them as { @id } references.
 function names(value, byId) {
-  const name = (item) => {
-    if (typeof item === 'string') return text(item)
-    if (!item || typeof item !== 'object') return null
-    return textValue(item.name) ?? (typeof item['@id'] === 'string' ? textValue(byId.get(item['@id'])?.name) : null)
-  }
-  const list = [value].flat().map(name).filter(Boolean)
+  const list = [value]
+    .flat()
+    .map((item) => nameOf(item, byId))
+    .filter(Boolean)
   return [...new Set(list)].slice(0, MAX_NAMES)
 }
 

@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Repair Conditioner - Example Store</title>
+  <meta name="description" content="A repairing conditioner for dry and damaged hair, in two sizes, made by Acme Labs.">
+  <link rel="canonical" href="https://fixtures.test/product-variants.html">
+  <meta property="og:site_name" content="Example Store">
+  <!-- A ProductGroup with one variant written inline and one referenced by @id, shipping and returns on the
+       Organization. -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "ProductGroup",
+        "@id": "https://fixtures.test/product-variants.html#product",
+        "name": "Repair Conditioner",
+        "url": "https://fixtures.test/product-variants.html",
+        "brand": { "@type": "Brand", "name": "Acme Labs" },
+        "productGroupID": "RC",
+        "variesBy": ["https://schema.org/size"],
+        "hasVariant": [
+          {
+            "@type": "Product",
+            "name": "Repair Conditioner 250 ml",
+            "sku": "RC-250",
+            "gtin13": "6410000000013",
+            "image": { "@type": "ImageObject", "url": "https://fixtures.test/cdn/shop/files/rc-250.jpg" },
+            "offers": {
+              "@type": "Offer",
+              "price": "14.50",
+              "priceCurrency": "EUR",
+              "availability": "https://schema.org/InStock"
+            }
+          },
+          { "@id": "https://fixtures.test/product-variants.html#rc-500" }
+        ]
+      },
+      {
+        "@type": "Product",
+        "@id": "https://fixtures.test/product-variants.html#rc-500",
+        "name": "Repair Conditioner 500 ml",
+        "sku": "RC-500",
+        "gtin13": "6410000000020",
+        "image": "https://fixtures.test/cdn/shop/files/rc-500.jpg",
+        "isVariantOf": { "@id": "https://fixtures.test/product-variants.html#product" },
+        "offers": {
+          "@type": "Offer",
+          "price": "24.00",
+          "priceCurrency": "EUR",
+          "availability": "https://schema.org/InStock"
+        }
+      },
+      {
+        "@type": "OnlineStore",
+        "name": "Example Store",
+        "url": "https://fixtures.test",
+        "hasMerchantReturnPolicy": {
+          "@type": "MerchantReturnPolicy",
+          "applicableCountry": "FI",
+          "returnPolicyCategory": "https://schema.org/MerchantReturnFiniteReturnWindow",
+          "merchantReturnDays": 14
+        },
+        "hasShippingService": {
+          "@type": "ShippingService",
+          "shippingConditions": { "@type": "ShippingConditions", "shippingDestination": { "@type": "DefinedRegion", "addressCountry": "FI" } }
+        }
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+<main>
+  <h1>Repair Conditioner</h1>
+  <p>A repairing conditioner for dry and damaged hair, in 250 ml and 500 ml bottles.</p>
+  <img src="/cdn/shop/files/rc-250.jpg" alt="Bottle of repair conditioner" width="600" height="600">
+</main>
+</body>
+</html>

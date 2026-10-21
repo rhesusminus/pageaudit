@@ -54,3 +54,11 @@ export function textValue(value, max) {
   if (!Array.isArray(value)) return scalarText(value, max)
   return value.map((item) => scalarText(item, max)).find((item) => item !== null) ?? null
 }
+
+// The name behind a value that names something: a plain name, an object with a name, or a { @id } reference to
+// another node of the page. A reference is followed one step, so a loop of references cannot hang the audit.
+export function nameOf(item, byId) {
+  if (typeof item === 'string') return text(item)
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return null
+  return textValue(item.name) ?? (typeof item['@id'] === 'string' ? textValue(byId.get(item['@id'])?.name) : null)
+}

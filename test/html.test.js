@@ -43,7 +43,8 @@ const facts = {
   hreflang: [{ lang: 'fi', href: 'https://a.test/fi' }],
   jsonLd: [],
   dates: { published: null, modified: null, lastModified: null, sitemapLastmod: null },
-  author: null
+  author: null,
+  products: []
 }
 const lighthouse = {
   scores: { performance: 95, accessibility: 60, 'best-practices': 30, seo: null },
@@ -439,6 +440,30 @@ test('renderHtml: "More about this page" lists the facts that are not shown at f
     facts: null
   })
   assert.doesNotMatch(renderHtml(wrap([failed])), /More about this page/)
+})
+
+test('renderHtml: the products row shows each product with its price range, availability and brand', () => {
+  // The row is only there when the page has Product markup.
+  assert.doesNotMatch(renderHtml(report), /<dt>Products<\/dt>/)
+  const product = {
+    types: ['Product'],
+    name: 'Hair oil',
+    brand: 'Acme',
+    sku: null,
+    gtin: null,
+    mpn: null,
+    image: null,
+    offers: { count: 2, lowPrice: 19.9, highPrice: 24, priceCurrency: 'EUR', availability: ['InStock'] },
+    shipping: null,
+    returnPolicy: null,
+    rating: null
+  }
+  const shop = page('https://a.test/', [], {
+    facts: { ...facts, products: [product, { ...product, name: null, brand: null, offers: null }] }
+  })
+  const shopOut = renderHtml(wrap([shop]))
+  assert.match(shopOut, /<strong>Hair oil<\/strong> 19.90-24.00 EUR, InStock <span class="note">brand Acme<\/span>/)
+  assert.match(shopOut, /<strong>No name<\/strong> no offers<\/li>/)
 })
 
 test('renderHtml: every redirect hop is listed, with its status', () => {
