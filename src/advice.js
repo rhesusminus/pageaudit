@@ -281,6 +281,11 @@ export const ADVICE = {
     why: 'Google matches products by brand and product code. A shop name as the brand of products made by others hides the real brand that shoppers search for.',
     fix: 'Set the brand to the maker of the product. On Shopify, the brand comes from the product vendor. If the shop makes the product itself, the shop name is right and this can be ignored.'
   },
+  'conflicting-product-data': {
+    title: 'The page describes one product twice, differently',
+    why: 'Two pieces of Product markup give a different price or rating for the same product, often the theme and an app. Google picks one, so the price or stars in search results may be wrong.',
+    fix: 'Keep one source of Product markup. Turn off the markup in the app or the theme, or make both read the same price and reviews.'
+  },
   'long-url': {
     title: 'The web address is long',
     why: 'Long addresses are harder to read, share and remember. Google has no strict limit.',

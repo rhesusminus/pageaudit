@@ -251,10 +251,44 @@ function brandIsSite($, all, product) {
   ]
 }
 
-// Checks of the Product markup on a page about one product.
+const priceText = ({ lowPrice, highPrice }) => (lowPrice === highPrice ? `${lowPrice}` : `${lowPrice}-${highPrice}`)
+
+// What two nodes of one product can disagree on. A value only one node gives is no conflict.
+const COMPARED = [
+  ['price', ({ fact }) => (fact.offers && fact.offers.lowPrice !== null ? priceText(fact.offers) : null)],
+  ['currency', ({ fact }) => fact.offers?.priceCurrency ?? null],
+  ['rating', ({ fact }) => (fact.rating ? `${fact.rating.value}` : null)]
+]
+
+// Nodes of one product that disagree, typically the theme's Product markup and the one a reviews app adds. Google
+// picks one of them, so the price or rating shown may be the wrong one.
+function conflicts(nodes) {
+  if (nodes.length < 2) return []
+  const differ = COMPARED.map(([field, read]) => [field, [...new Set(nodes.map(read).filter(Boolean))]]).filter(
+    ([, values]) => values.length > 1
+  )
+  if (differ.length === 0) return []
+  const name = nodes.map(({ fact }) => fact.name).find(Boolean)
+  const what = differ.map(([field, values]) => `${field} (${values.join(' vs ')})`).join(', ')
+  return [
+    seoIssue({
+      type: 'conflicting-product-data',
+      severity: 'warning',
+      source: SOURCES.structuredData,
+      message: `${nodes.length} Product nodes for ${name ? `"${name}"` : 'one product'} disagree on ${what}`,
+      context: name ? `"name": "${name}"` : typeContext(nodes[0])
+    })
+  ]
+}
+
+// Checks of the Product markup. Conflicts are looked for on any page, the other checks only run on a page about one
+// product.
 export function checkProducts($) {
   const all = pageObjects($)
-  const product = soleProduct(byProduct(products(all)))
-  if (!product) return []
-  return [...offerIncomplete(product), ...detailsMissing(product), ...brandIsSite($, all, product)]
+  const groups = byProduct(products(all))
+  const product = soleProduct(groups)
+  const single = product
+    ? [...offerIncomplete(product), ...detailsMissing(product), ...brandIsSite($, all, product)]
+    : []
+  return [...single, ...groups.flatMap(conflicts)]
 }

@@ -121,6 +121,7 @@ const NAMES = [
   'rich.html',
   'product.html',
   'product-variants.html',
+  'product-conflict.html',
   'hreflang.html',
   'hreflang-fi.html',
   'bad-hreflang.html',

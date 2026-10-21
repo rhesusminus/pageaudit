@@ -244,3 +244,39 @@ test('product-brand-is-site: matched against the WebSite, a store type and og:si
   assert.equal(brandIssues(ldJson(product, { '@type': 'Brand', name: 'Hair Co' })).length, 0)
   assert.equal(brandIssues(ldJson(product, { '@type': 'Organization', name: 'Hair Shop' })).length, 0)
 })
+
+test('conflicting-product-data: the theme and a reviews app give a different price and rating', async () => {
+  const conflict = checkProducts(await fixture('product-conflict.html')).filter(
+    (i) => i.type === 'conflicting-product-data'
+  )
+  assert.deepEqual(
+    conflict.map(({ severity, message, context }) => ({ severity, message, context })),
+    [
+      {
+        severity: 'warning',
+        message: '2 Product nodes for "Argan Hair Oil" disagree on price (19.9 vs 24.9), rating (4.2 vs 4.8)',
+        context: '"name": "Argan Hair Oil"'
+      }
+    ]
+  )
+})
+
+test('conflicting-product-data: values only one node gives, and different products, are no conflict', () => {
+  const offer = (price) => ({ '@type': 'Offer', price, priceCurrency: 'EUR' })
+  const quiet = issues(
+    { '@type': 'Product', '@id': '#p', name: 'A', offers: offer(5) },
+    { '@type': 'Product', '@id': '#p', aggregateRating: { ratingValue: 4 } },
+    { '@type': 'Product', name: 'B', offers: offer(7) }
+  )
+  assert.ok(!types(quiet).includes('conflicting-product-data'))
+  // Found on a page with several products too, matched by url without the variant query.
+  const listed = issues(
+    { '@type': 'Product', url: 'https://a.test/p?variant=1', offers: offer(5) },
+    { '@type': 'Product', url: 'https://a.test/p', offers: { ...offer(5), priceCurrency: 'USD' } },
+    { '@type': 'Product', name: 'B', offers: offer(7) }
+  )
+  assert.deepEqual(
+    listed.map((i) => i.message),
+    ['2 Product nodes for one product disagree on currency (EUR vs USD)']
+  )
+})
