@@ -213,6 +213,17 @@ test('headings: h3 before any h2 is flagged, going back up is fine', () => {
   assert.deepEqual(types(checkHeadings(parse('<h3>c</h3><h1>a</h1>'))), ['skipped-heading-level'])
 })
 
+test('headings: a first <h2> is only a missing h1, not a skipped level', () => {
+  assert.deepEqual(types(checkHeadings(parse('<h2>a</h2><h3>b</h3>'))), ['missing-h1'])
+  assert.deepEqual(types(checkHeadings(parse('<h2>a</h2><h1>b</h1>'))), [])
+})
+
+test('headings: a first <h3> skips <h2>', () => {
+  const issues = checkHeadings(parse('<h3>a</h3>'))
+  assert.deepEqual(types(issues), ['missing-h1', 'skipped-heading-level'])
+  assert.equal(issues[1].message, 'Heading level skipped: <h3> after no heading')
+})
+
 const fixture = (name) => parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'))
 const allTypes = ($) => [...checkImages($), ...checkMeta($), ...checkHeadings($)].map((i) => i.type).sort()
 

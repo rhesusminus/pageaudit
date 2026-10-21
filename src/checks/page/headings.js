@@ -43,10 +43,11 @@ function checkH1s($, headings) {
   return []
 }
 
+// The outline starts at level 1, so a first <h2> skips nothing: a missing h1 is reported by checkH1s.
 function checkHeadingOrder($, headings) {
   const issues = []
-  let previous = 0
-  for (const el of headings) {
+  let previous = 1
+  for (const [index, el] of headings.entries()) {
     const level = Number(el.tagName[1])
     if (level > previous + 1) {
       issues.push({
@@ -54,7 +55,7 @@ function checkHeadingOrder($, headings) {
         severity: 'warning',
         category: 'accessibility',
         source: SOURCES.headings,
-        message: `Heading level skipped: <h${level}> after ${previous ? `<h${previous}>` : 'no heading'}`,
+        message: `Heading level skipped: <h${level}> after ${index ? `<h${previous}>` : 'no heading'}`,
         context: truncate(`<h${level}>${collapseWhitespace($(el).text())}</h${level}>`),
         ...evidence($, el)
       })
