@@ -12,6 +12,19 @@ const MAX_ALT = 120
 const MAX_SRC = 2000
 
 const NOT_VISIBLE = new Set(['script', 'style', 'noscript', 'template', 'svg'])
+
+// The text of an element without script, style and noscript content, joined like cheerio's .text(): no space goes
+// between elements, so "<b>Sh</b>op" stays "Shop". domhandler gives script and style their own node types, so walking
+// only into tags leaves them out. Unlike NOT_VISIBLE, which keeps svg out of prose, svg stays in, so the <title> of
+// an icon link still counts as its text. Templates are already removed by parse(). No node gives no text.
+export const visibleText = (node) =>
+  (node?.children ?? [])
+    .map((child) => {
+      if (child.type === 'text') return child.data
+      return child.type === 'tag' && child.name !== 'noscript' ? visibleText(child) : ''
+    })
+    .join('')
+
 const PAGE_CHROME = new Set(['nav', 'header', 'footer', 'aside'])
 const HEADING = /^h[1-6]$/
 const BODY_SKIP = new Set([...NOT_VISIBLE, ...PAGE_CHROME])
@@ -110,7 +123,7 @@ function textBeside(el, direction) {
 
 // The words around an image tell what it shows: its figure caption, or the text just before and after it.
 function imageContext($, el) {
-  const caption = collapseWhitespace($(el).closest('figure').find('figcaption').first().text())
+  const caption = collapseWhitespace(visibleText($(el).closest('figure').find('figcaption').get(0)))
   const text = caption || collapseWhitespace(`${textBeside(el, 'prev')} ${textBeside(el, 'next')}`)
   return limit(text, MAX_IMAGE_TEXT) || null
 }

@@ -204,6 +204,18 @@ test('headings: empty heading is flagged unless it has an image with alt or aria
   assert.deepEqual(types(checkHeadings(parse('<h1 aria-labelledby="t"></h1><p id="t">Title</p>'))), [])
 })
 
+test('headings: a heading that holds only a style, script or noscript is empty', () => {
+  for (const inner of ['<style>.a{}</style>', '<script>x()</script>', '<noscript>Menu</noscript>']) {
+    assert.deepEqual(types(checkHeadings(parse(`<h1>x</h1><h2>${inner}</h2>`))), ['empty-heading'], inner)
+  }
+})
+
+test('headings: multiple-h1 and skipped-level contexts leave out style content', () => {
+  const issues = checkHeadings(parse('<h1><style>.a{}</style>One</h1><h1>Two</h1><h3><style>.b{}</style>Three</h3>'))
+  assert.equal(issues.find((i) => i.type === 'multiple-h1').context, '<h1>One</h1> <h1>Two</h1>')
+  assert.equal(issues.find((i) => i.type === 'skipped-heading-level').context, '<h3>Three</h3>')
+})
+
 test('headings: skipped level is a warning', () => {
   assert.deepEqual(types(checkHeadings(parse('<h1>a</h1><h3>b</h3>'))), ['skipped-heading-level'])
 })
@@ -547,6 +559,12 @@ test('hygiene: an empty app root or a noscript warning with no text is a client-
   ])
 })
 
+test('hygiene: an app root that holds only a style or script is empty', () => {
+  for (const inner of ['<style>.spinner{}</style>', '<script>window.state = {}</script>']) {
+    assert.deepEqual(types(hygiene(`<body><div id="root">${inner}</div></body>`)), ['client-side-rendered'], inner)
+  }
+})
+
 test('hygiene: server rendered pages and short static pages are not shells', () => {
   assert.deepEqual(hygiene(`<body><div id="root"><p>${WORDS}</p></div></body>`), [])
   assert.deepEqual(hygiene('<body><p>Short page.</p></body>'), [])
@@ -752,6 +770,11 @@ test('facts: mainText is the main area without scripts, and words of neighbourin
   assert.equal((await factsOf(html)).mainText, 'Title First Second')
 })
 
+test('facts: h1s leave out style and script content', async () => {
+  const html = '<h1><style>.h{color:red}</style>Title</h1><h1><script>x()</script></h1><h1><b>Sh</b>op</h1>'
+  assert.deepEqual((await factsOf(html)).h1s, ['Title', 'Shop'])
+})
+
 test('facts: mainText without a main area skips navigation, header, footer and aside', async () => {
   const html =
     '<body><header>Brand</header><nav>Menu</nav><div>Body text</div><aside>Ad</aside><footer>Legal</footer></body>'
@@ -815,7 +838,7 @@ test('facts: linkSamples stop at 25 but the counts include every link', async ()
 })
 
 test('facts: imageSamples give the address, alt and the words around the image', async () => {
-  const html = `<body><figure><img src="/a.jpg" alt="  A  cat "><figcaption>Our cat Tom</figcaption></figure>
+  const html = `<body><figure><img src="/a.jpg" alt="  A  cat "><figcaption><style>.c{}</style>Our cat Tom</figcaption></figure>
     <p>Fresh bread <img src="b.png"> every day</p><img src="data:image/gif;base64,${'A'.repeat(200)}" alt=""></body>`
   const { imageSamples } = await factsOf(html)
   assert.deepEqual(imageSamples[0], { src: 'https://a.test/a.jpg', alt: 'A cat', context: 'Our cat Tom' })

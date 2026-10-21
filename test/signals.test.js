@@ -53,6 +53,23 @@ test('signals: a bare page gives nulls, zeros and empty lists', () => {
   assert.deepEqual(signals.jsonLdTypes, [])
 })
 
+test('signals: link and heading text leave out script, style and noscript content', () => {
+  const html =
+    '<a href="/"><style>.logo{width:1px}</style><img src="/logo.png" alt="Logo"></a>' +
+    '<a href="/about"><noscript>click here</noscript>About</a><a href="/shop"><b>Sh</b>op</a>' +
+    '<a href="/cart"><svg><title>Cart</title><path d="M0 0"/></svg></a>' +
+    '<h1><style>.h{}</style>Title<script>x()</script></h1><h2><b>Sh</b>op</h2>'
+  const { linkSamples, headings } = extractSignals(parse(html), PAGE, PAGE)
+  assert.deepEqual(
+    linkSamples.map((link) => link.text),
+    ['Logo', 'About', 'Shop', 'Cart']
+  )
+  assert.deepEqual(
+    headings.map((heading) => heading.text),
+    ['Title', 'Shop']
+  )
+})
+
 test('signals: headings are capped and long text is truncated', () => {
   const html = `<h2>${'x'.repeat(300)}</h2>${'<h3>a</h3>'.repeat(60)}`
   const { headings } = extractSignals(parse(html), PAGE, PAGE)

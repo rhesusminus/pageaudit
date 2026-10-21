@@ -120,6 +120,13 @@ test('names: explicitly hidden descendants do not name a link', () => {
   assert.deepEqual(links('<a href="/"><span aria-hidden="true">x</span> Home</a>'), [])
 })
 
+test('names: script, style and noscript content does not name a link', () => {
+  assert.deepEqual(links('<a href="/a"><style>.a{}</style></a>'), ['link-no-name'])
+  assert.deepEqual(links('<a href="/a"><script>x()</script></a>'), ['link-no-name'])
+  assert.deepEqual(links('<a href="/a"><noscript>click here</noscript></a>'), ['link-no-name'])
+  assert.deepEqual(links('<a href="/a">Read more<noscript> about pricing</noscript></a>'), ['link-generic-text'])
+})
+
 test('labels: an explicit for wins over a wrapping label', () => {
   assert.deepEqual(a11y('<label for="other">Name<input id="n"></label>'), ['form-input-no-label'])
   assert.deepEqual(a11y('<label for="">Name<input id="n"></label>'), ['form-input-no-label'])
