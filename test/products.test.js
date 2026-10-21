@@ -324,3 +324,28 @@ test('products: an offer written as an @id reference is read', () => {
     availability: ['InStock']
   })
 })
+
+test('products: only an Organization or store gives the policies of the shop, and an empty list is none', () => {
+  const policies = (...others) => {
+    const [found] = products({ '@type': 'Product', name: 'X', offers: { '@type': 'Offer', price: 5 } }, ...others)
+    return [found.shipping, found.returnPolicy]
+  }
+  assert.deepEqual(policies({ '@type': 'Offer', hasMerchantReturnPolicy: { '@type': 'MerchantReturnPolicy' } }), [
+    null,
+    null
+  ])
+  assert.deepEqual(policies({ '@type': 'Organization', hasMerchantReturnPolicy: [], hasShippingService: ' ' }), [
+    null,
+    null
+  ])
+  assert.deepEqual(
+    policies({ '@type': 'Organization', hasMerchantReturnPolicy: {}, hasShippingService: [{}, false] }),
+    [null, null]
+  )
+  const emptyShipping = { '@type': 'Offer', price: 5, shippingDetails: {} }
+  assert.equal(products({ '@type': 'Product', name: 'X', offers: emptyShipping })[0].shipping, null)
+  assert.deepEqual(policies({ '@type': 'ClothingStore', hasShippingService: { '@type': 'ShippingService' } }), [
+    'organization',
+    null
+  ])
+})

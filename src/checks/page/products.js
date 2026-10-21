@@ -6,19 +6,26 @@ import { metaContent, ogSelector } from './signals.js'
 
 const MAX_PRODUCTS = 10
 const MAX_AVAILABILITY = 5
-// Types that name the site itself, besides any type ending in Store or Business, such as ClothingStore.
-const SITE_TYPES = new Set(['Organization', 'Corporation', 'WebSite'])
+// The types of the business behind the site, besides any type ending in Store or Business, such as ClothingStore.
+const ORGANIZATION_TYPES = new Set(['Organization', 'Corporation'])
 const IDENTIFIERS = ['gtin', 'gtin8', 'gtin12', 'gtin13', 'gtin14', 'isbn']
 
 const isObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 const objects = (value) => [value].flat().filter(isObject)
-const has = (value) => value !== undefined && value !== null && value !== ''
+// A policy value that says something: a text such as a URL, an object with properties, or a list with one of them.
+// A blank text, an empty object or list and true or false do not. A list inside the list is not looked into, so a
+// deeply nested value cannot overflow the stack.
+const givenItem = (value) =>
+  typeof value === 'string' ? value.trim() !== '' : isObject(value) && Object.keys(value).length > 0
+const given = (value) => (Array.isArray(value) ? value.some(givenItem) : givenItem(value))
 const idOf = (node) => (typeof node['@id'] === 'string' ? node['@id'] : null)
 // An object written inline or as a { @id } reference to another node of the page, followed one step.
 const resolved = (entry, byId) => ({ ...byId.get(idOf(entry)), ...entry })
 
 const isProduct = (node) => typesOf(node).some((type) => type === 'Product' || type === 'ProductGroup')
 const isGroup = (node) => typesOf(node).includes('ProductGroup')
+const isOrganization = (node) =>
+  typesOf(node).some((type) => ORGANIZATION_TYPES.has(type) || /(Store|Business)$/.test(type))
 
 // A price as Google reads it: a number, or a string of digits with a dot for decimals. "19,90" and "1,299.00" are
 // not prices, Google asks for a dot and no thousands separator.
@@ -76,8 +83,8 @@ function rating(node) {
 // Where the shipping or return details are: on an offer, on the Organization (Google reads them there too, usually
 // from the home page), or nowhere on this page. `orgKey` is the Organization property.
 function policyPlace(offers, offerKey, orgKey, nodes) {
-  if (offers.some((offer) => has(offer[offerKey]))) return 'offer'
-  return nodes.some((node) => !isProduct(node) && has(node[orgKey])) ? 'organization' : null
+  if (offers.some((offer) => given(offer[offerKey]))) return 'offer'
+  return nodes.some((node) => isOrganization(node) && given(node[orgKey])) ? 'organization' : null
 }
 
 // The variants of each ProductGroup on the page: its hasVariant entries, inline or { @id } references, and the
@@ -239,9 +246,7 @@ function detailsMissing(product) {
 
 // The names the site goes by: its Organization or store, its WebSite and og:site_name.
 function siteNames($, all) {
-  const site = all.filter((node) =>
-    typesOf(node).some((type) => SITE_TYPES.has(type) || /(Store|Business)$/.test(type))
-  )
+  const site = all.filter((node) => isOrganization(node) || typesOf(node).includes('WebSite'))
   return [...site.map((node) => textValue(node.name)), metaContent($, ogSelector('site_name'))].filter(Boolean)
 }
 
