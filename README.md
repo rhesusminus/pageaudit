@@ -99,7 +99,7 @@ node bin/pageaudit.js --sitemap https://example.com/sitemap.xml --limit 20 --lig
 
 It has a cover with the client, the date, a one-sentence verdict and, with `--lighthouse`, the four average scores. Then a summary of how many pages have problems, a ranked **What to fix** list, a section per page and a short note on how the audit was done. Inputs that were skipped, and a `--limit` that cut the list short, are mentioned in the summary. Findings are written in plain language (`src/advice.js`: what is wrong, why it matters and how to fix it), and the technical message and documentation link stay on each page. The same problem on many pages is one line in the list, with every affected page behind **Show where**. Site-wide problems such as duplicate titles are part of the same list. Severity is shown by a word and a shape, never by color alone.
 
-The evidence behind the findings is in collapsed sections, so the report still reads top down. **Show the element** on a problem shows its CSS selector, its markup and, for length checks, what was found against what was expected (for the first 20 pages of a problem). Each page card has **More about this page** (canonical, viewport, robots, Open Graph, the author and the published and updated dates when the page gives them, structured data, the heading outline, images without alt text and link samples) and the full redirect chain. In the speed and quality test, every finding has a **Show details** section with what it means, the estimated saving and the affected files and elements (the latter only for pages run with `--lighthouse-page`), and the largest element on screen is named. The warnings of the run, such as a redirected test URL or an audit that crashed, are listed after the findings. The Lighthouse version, the device and, with `--lighthouse-runs`, the spread of the scores are noted below it.
+The evidence behind the findings is in collapsed sections, so the report still reads top down. **Show the element** on a problem shows its CSS selector, its markup and, for length checks, what was found against what was expected (for the first 20 pages of a problem). Each page card has **More about this page** (canonical, viewport, robots, Open Graph, the author and the published and updated dates when the page gives them, structured data, the heading outline, images without alt text and link samples) and the full redirect chain. In the speed and quality test, every finding has a **Show details** section with what it means, the estimated saving and the affected files and elements, and the largest element on screen is named. When some pages are picked with `--lighthouse-page`, the other pages only get the short summary, so their findings show no saving or affected files and elements. The warnings of the run, such as a redirected test URL or an audit that crashed, are listed after the findings. The Lighthouse version, the device and, with `--lighthouse-runs`, the spread of the scores are noted below it.
 
 All text taken from audited sites is escaped, and the logo is embedded as a data URI. A logo that cannot be read, or one over the size limit, exits 2 before any page is fetched.
 
@@ -434,7 +434,9 @@ src/
       accname.js        accessibleName(): a simplified accessible name for links and form controls
       hygiene.js        URL, HTML size, mixed content and client-side rendered pages
       robots-header.js  the X-Robots-Tag header
+      snippets.js       nosnippet and max-snippet for Google, noarchive and nocache for Bing
       signals.js        extractSignals() and jsonLdBlocks(): content and metadata signals stored in the facts
+      authorship.js     pageAuthorship(): the JSON-LD nodes, dates and author stored in the facts
       content.js        mainText(), headingExcerpts() and imageSamples(): page text, section excerpts and image context for the facts
       index.js          checkHtml() and extractFacts(): facts for the site checks and the report
     site/               checks across pages, run after every page is done
@@ -465,6 +467,7 @@ test/
   parse.test.js         template removal and the DOM depth cap
   fetch.test.js         fetchPage: redirects, User-Agent, encoding sniffing, errors
   robots.test.js        robots.txt loading and Googlebot matching, and the X-Robots-Tag header
+  snippets.test.js      the snippet and Copilot rules from meta tags and the X-Robots-Tag header
   lighthouse.test.js    trimming a Lighthouse result and running Chrome, with its failures
   lighthouse-issues.test.js  Lighthouse metrics and scores as issues
   report.test.js        the JSON report: summary, rules, ids and capped facts
@@ -476,6 +479,7 @@ test/
   severity.test.js      severity counting and ordering
   html.test.js          HTML report: sections, escaping, self-containment, advice coverage
   signals.test.js       content and metadata signals of a page
+  authorship.test.js    JSON-LD nodes and their @id references, the page dates and author
   headers.test.js       response header checks and the Content-Security-Policy parser
   links.test.js         link targets, the per-host throttle and the link checks
   cli.test.js           run() end to end with --json against the fixtures
@@ -520,8 +524,9 @@ The JSON report is meant to be handed to a human or an LLM for prioritizing fixe
 {
   schemaVersion: 1,
   generatedAt: '2026-10-15T08:00:00.000Z',
-  pages: [{ url, finalUrl, status, redirects: [{ url, status, location }], issues: [...], facts, lighthouse }],
+  pages: [{ url, finalUrl, status, redirects: [{ url, status, location }], issues: [...], facts, content, lighthouse }],
   site: [...],                    // site issues
+  origins: [...],                 // how each origin's robots.txt treats AI crawlers
   skipped: [{ input, source, reason }],
   coverage: { tool, settings, urls, links, notRun: [{ check, reason }] },
   rules: { [type]: { title, why, fix } },
@@ -530,7 +535,7 @@ The JSON report is meant to be handed to a human or an LLM for prioritizing fixe
 }
 ```
 
-`lighthouse` is only present on pages Lighthouse ran for, and `lighthouseAudits` only when an audit is described.
+`lighthouse` is only present on pages Lighthouse ran for, `content` only on pages written with `--content`, and `lighthouseAudits` only when an audit is described.
 
 `coverage` says what the audit looked at, so a model can tell "not found" from "not looked for": the pageaudit version, the `settings` that change what is collected (with the defaults filled in), how many URLs were `found` and `audited` (and whether every sitemap file was read), with `--check-links` how many link targets were `checked` and how many were left past the cap, and `notRun`, the checks that did not run with the reason. `lighthouse` and `links` are listed when they were not asked for, and `orphan-page` when the audit could not tell orphan pages apart, such as after a `--limit` cut.
 
