@@ -343,6 +343,26 @@ test('renderHtml: an issue with an element shows its selector, markup and measur
   assert.doesNotMatch(renderHtml(report), /Show the (element|measurement)/)
 })
 
+test('renderHtml: a problem with advice shows the technical message once, or each one where they differ', () => {
+  const affected = (out) =>
+    out.slice(out.indexOf('<summary>Show where</summary>'), out.indexOf('</ul>', out.indexOf('class="affected"')))
+  const same = renderHtml(
+    wrap([
+      page('https://a.test/1', [issue('missing-alt', 'error')]),
+      page('https://a.test/2', [issue('missing-alt', 'error')])
+    ])
+  )
+  assert.equal(affected(same).match(/Message for missing-alt/g).length, 1)
+  const differ = renderHtml(
+    wrap([
+      page('https://a.test/1', [issue('product-details-missing', 'info', { message: 'Leaves out brand' })]),
+      page('https://a.test/2', [issue('product-details-missing', 'info', { message: 'Leaves out availability' })])
+    ])
+  )
+  assert.match(affected(differ), /<span class="note">Leaves out brand<\/span>/)
+  assert.match(affected(differ), /<span class="note">Leaves out availability<\/span>/)
+})
+
 test('renderHtml: element details are shown for the first 20 hits of a problem only', () => {
   const pages = Array.from({ length: 25 }, (_, i) =>
     page(`https://a.test/${i}`, [issue('missing-alt', 'warning', { selector: 'img', html: '<img>' })])
