@@ -557,6 +557,23 @@
               }
             }
           }
+        },
+        "platform": {
+          "$ref": "#/$defs/platform",
+          "description": "The shop or site builder the page runs on, read from the HTML as served. Added within schemaVersion 1, so older reports may lack it."
+        }
+      }
+    },
+    "platform": {
+      "description": "Shopify, WordPress, Wix, Squarespace or Webflow, from markers such as Shopify.theme, a generator tag or the hosts the page loads files from. Null when the page shows none of them. More names may be added.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["name", "theme"],
+      "properties": {
+        "name": { "type": "string" },
+        "theme": {
+          "$ref": "#/$defs/nullableString",
+          "description": "The Shopify theme the shop's theme was made from (schema_name), or the folder of the WordPress theme. Null when the platform does not say."
         }
       }
     },

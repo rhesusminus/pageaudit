@@ -44,7 +44,8 @@ const facts = {
   jsonLd: [],
   dates: { published: null, modified: null, lastModified: null, sitemapLastmod: null },
   author: null,
-  products: []
+  products: [],
+  platform: null
 }
 const lighthouse = {
   scores: { performance: 95, accessibility: 60, 'best-practices': 30, seo: null },

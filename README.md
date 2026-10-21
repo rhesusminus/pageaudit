@@ -168,6 +168,7 @@ Every issue, page or site, has an `id`, a `type`, a `message` and a `context`. W
 | `dates`                                    | `{ published, modified, lastModified, sitemapLastmod }` as written: the first JSON-LD `datePublished` and `dateModified`, else `article:published_time` and `article:modified_time` (then `og:updated_time`), the `Last-Modified` header (on a page built for every request often just the time it was sent) and the `<lastmod>` of the sitemap entry that listed the page                     |
 | `author`                                   | The `author` meta tag, else the JSON-LD authors of the first node that has any                                                                                                                                                                                                                                                                                                                 |
 | `products`                                 | Up to 10 Product or ProductGroup nodes (a group read with its variants) as `{ types, name, brand, sku, gtin, mpn, image, offers, shipping, returnPolicy, rating }`. `offers` has `count`, `lowPrice`, `highPrice` (prices Google can read: a dot for decimals), `priceCurrency`, `availability`. `shipping` and `returnPolicy` are `offer`, `organization` or `null`. Not read in an ItemList  |
+| `platform`                                 | `{ name, theme }` of the shop or site builder the page runs on: Shopify (`theme` is the theme the shop's theme was made from, such as Dawn), WordPress (`theme` is the theme's folder), Wix, Squarespace or Webflow. `null` when the HTML shows none of them                                                                                                                                   |
 
 ### Lighthouse
 
@@ -445,6 +446,7 @@ src/
       json-ld.js        jsonLdBlocks(), pageObjects() and textValue(): reading the JSON-LD of a page
       authorship.js     pageAuthorship(): the JSON-LD nodes, dates and author stored in the facts
       products.js       pageProducts(): the Product markup stored in the facts
+      platform.js       pagePlatform(): the shop or site builder the page runs on
       content.js        mainText(), headingExcerpts() and imageSamples(): page text, section excerpts and image context for the facts
       index.js          checkHtml() and extractFacts(): facts for the site checks and the report
     site/               checks across pages, run after every page is done
@@ -489,6 +491,7 @@ test/
   signals.test.js       content and metadata signals of a page
   authorship.test.js    JSON-LD nodes and their @id references, the page dates and author
   products.test.js      Product and ProductGroup facts: variants, brands, prices and policies
+  platform.test.js      the platform and theme a page runs on
   headers.test.js       response header checks and the Content-Security-Policy parser
   links.test.js         link targets, the per-host throttle and the link checks
   cli.test.js           run() end to end with --json against the fixtures

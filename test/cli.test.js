@@ -74,7 +74,8 @@ const GOOD_FACTS = {
   jsonLd: [],
   dates: { published: null, modified: null, lastModified: null, sitemapLastmod: null },
   author: null,
-  products: []
+  products: [],
+  platform: null
 }
 
 // How test/fixtures/robots.txt treats AI crawlers when only pages it allows are audited.
