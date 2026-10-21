@@ -1,6 +1,6 @@
 import { withoutFragment } from '../../input/resolve.js'
 import { collapseWhitespace, limit, MAX_URL } from '../../text.js'
-import { headingExcerpts, imageSamples, mainText } from './content.js'
+import { headingExcerpts, imageSamples, mainText, visibleText } from './content.js'
 
 const MAX_HEADINGS = 40
 const MAX_TYPES = 20
@@ -46,9 +46,7 @@ export function baseUrl($, pageUrl) {
 
 // Visible body text only: script, style and noscript content is not read by a visitor.
 export function wordCount($) {
-  const body = $('body').first().clone()
-  body.find('script, style, noscript').remove()
-  const text = collapseWhitespace(body.text())
+  const text = collapseWhitespace(visibleText($('body').get(0)))
   return text ? text.split(' ').length : 0
 }
 
@@ -57,7 +55,11 @@ function headings($) {
   return $('h1, h2, h3, h4, h5, h6')
     .toArray()
     .slice(0, MAX_HEADINGS)
-    .map((el) => ({ level: Number(el.tagName[1]), text: clean($(el).text()) ?? '', excerpt: excerpts.get(el) ?? null }))
+    .map((el) => ({
+      level: Number(el.tagName[1]),
+      text: clean(visibleText(el)) ?? '',
+      excerpt: excerpts.get(el) ?? null
+    }))
 }
 
 // Alternate-language links in <head>, the only place Google reads them.
@@ -94,7 +96,7 @@ function resolvedLinks($, baseUrl, pageUrl) {
 const pageLinks = ($, baseUrl, pageUrl) =>
   resolvedLinks($, baseUrl, pageUrl).map(({ el, href, internal }) => ({
     href,
-    text: clean($(el).text()) ?? clean($(el).find('img[alt]').first().attr('alt')) ?? '',
+    text: clean(visibleText(el)) ?? clean($(el).find('img[alt]').first().attr('alt')) ?? '',
     internal,
     nofollow: /\bnofollow\b/i.test($(el).attr('rel') ?? '')
   }))

@@ -1,6 +1,7 @@
 import { collapseWhitespace } from '../../text.js'
 import { checkA11y } from './a11y.js'
 import { pageAuthorship } from './authorship.js'
+import { visibleText } from './content.js'
 import { checkHeadings } from './headings.js'
 import { checkHreflang } from './hreflang.js'
 import { checkHygiene } from './hygiene.js'
@@ -50,7 +51,7 @@ export function extractFacts($, finalUrl, { robotsHeader = null, lastModified = 
       ...new Set(
         $('h1')
           .toArray()
-          .map((el) => collapseWhitespace($(el).text()))
+          .map((el) => collapseWhitespace(visibleText(el)))
           .filter(Boolean)
       )
     ],

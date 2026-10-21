@@ -752,6 +752,11 @@ test('facts: mainText is the main area without scripts, and words of neighbourin
   assert.equal((await factsOf(html)).mainText, 'Title First Second')
 })
 
+test('facts: h1s leave out style and script content', async () => {
+  const html = '<h1><style>.h{color:red}</style>Title</h1><h1><script>x()</script></h1><h1><b>Sh</b>op</h1>'
+  assert.deepEqual((await factsOf(html)).h1s, ['Title', 'Shop'])
+})
+
 test('facts: mainText without a main area skips navigation, header, footer and aside', async () => {
   const html =
     '<body><header>Brand</header><nav>Menu</nav><div>Body text</div><aside>Ad</aside><footer>Legal</footer></body>'
@@ -815,7 +820,7 @@ test('facts: linkSamples stop at 25 but the counts include every link', async ()
 })
 
 test('facts: imageSamples give the address, alt and the words around the image', async () => {
-  const html = `<body><figure><img src="/a.jpg" alt="  A  cat "><figcaption>Our cat Tom</figcaption></figure>
+  const html = `<body><figure><img src="/a.jpg" alt="  A  cat "><figcaption><style>.c{}</style>Our cat Tom</figcaption></figure>
     <p>Fresh bread <img src="b.png"> every day</p><img src="data:image/gif;base64,${'A'.repeat(200)}" alt=""></body>`
   const { imageSamples } = await factsOf(html)
   assert.deepEqual(imageSamples[0], { src: 'https://a.test/a.jpg', alt: 'A cat', context: 'Our cat Tom' })
