@@ -559,6 +559,12 @@ test('hygiene: an empty app root or a noscript warning with no text is a client-
   ])
 })
 
+test('hygiene: an app root that holds only a style or script is empty', () => {
+  for (const inner of ['<style>.spinner{}</style>', '<script>window.state = {}</script>']) {
+    assert.deepEqual(types(hygiene(`<body><div id="root">${inner}</div></body>`)), ['client-side-rendered'], inner)
+  }
+})
+
 test('hygiene: server rendered pages and short static pages are not shells', () => {
   assert.deepEqual(hygiene(`<body><div id="root"><p>${WORDS}</p></div></body>`), [])
   assert.deepEqual(hygiene('<body><p>Short page.</p></body>'), [])

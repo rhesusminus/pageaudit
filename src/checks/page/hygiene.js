@@ -3,6 +3,7 @@ import { SOURCES } from '../../sources.js'
 import { charCount, collapseWhitespace } from '../../text.js'
 import { evidence } from '../evidence.js'
 import { seoIssue, snippet } from '../snippet.js'
+import { visibleText } from './content.js'
 import { absolute, baseUrl, wordCount } from './signals.js'
 
 // Heuristic: Google gives no limit, but shorter URLs are easier to read and share.
@@ -116,7 +117,7 @@ const hasContentElements = ($) =>
 function checkRenderedInBrowser($) {
   const root = $(APP_ROOT).first()
   const words = wordCount($)
-  const rootIsEmpty = root.length > 0 && collapseWhitespace(root.text()) === ''
+  const rootIsEmpty = root.length > 0 && collapseWhitespace(visibleText(root.get(0))) === ''
   const emptyRoot = rootIsEmpty && !hasContentElements($)
   const noscriptNeedsJs = /enable javascript|requires? javascript|javascript (is )?(required|disabled)/i.test(
     collapseWhitespace($('noscript').text())
