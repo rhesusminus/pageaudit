@@ -266,6 +266,11 @@ export const ADVICE = {
     why: 'Google needs certain fields before it can show a rich result such as price or breadcrumbs, so the page is not eligible without them.',
     fix: 'Add the field named in the technical message to the structured data.'
   },
+  'product-offer-incomplete': {
+    title: 'Product markup lacks what a shopping result needs',
+    why: 'Google shows a product with its price and stock in shopping results only when the markup gives an image, a price above 0 and its currency in an Offer.',
+    fix: 'Add the fields named in the technical message to the Product markup, usually in the theme or the SEO app that writes it.'
+  },
   'long-url': {
     title: 'The web address is long',
     why: 'Long addresses are harder to read, share and remember. Google has no strict limit.',

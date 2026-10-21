@@ -1,4 +1,6 @@
+import { SOURCES } from '../../sources.js'
 import { MAX_URL } from '../../text.js'
+import { seoIssue } from '../snippet.js'
 import { idIndex, nameOf, pageObjects, text, textValue, typesOf } from './json-ld.js'
 
 const MAX_PRODUCTS = 10
@@ -95,7 +97,8 @@ function isVariant(node, groups, byId) {
 const first = (members, read) => members.map(read).find(Boolean) ?? null
 
 // One product of the page with its variants, as the facts describe it, plus what the checks need beyond that:
-// `id` and `url` to tell two nodes of one product apart from two products, and `offerTypes`.
+// `id` and `url` (without its query, which Shopify uses for the variant) to tell two nodes of one product from two
+// products, and the types of its offers.
 function describe(node, variants, nodes, byId) {
   const members = [node, ...variants]
   const offers = members.flatMap((member) => objects(member.offers))
@@ -103,7 +106,7 @@ function describe(node, variants, nodes, byId) {
   const withOffers = [...members, ...offers]
   return {
     id: idOf(node),
-    url: textValue(node.url, MAX_URL),
+    url: textValue(node.url, MAX_URL)?.split(/[?#]/)[0] ?? null,
     offerTypes: offers.map((offer) => typesOf(offer)),
     fact: {
       types: typesOf(node),
@@ -143,3 +146,61 @@ export const pageProducts = ($) =>
   products($)
     .slice(0, MAX_PRODUCTS)
     .map((product) => product.fact)
+
+const sameName = (a, b) => Boolean(a && b) && a.toLowerCase() === b.toLowerCase()
+
+// Two nodes are one product when they share an @id, a url or a name, such as the theme's Product and the one a
+// reviews app adds.
+const sameProduct = (a, b) =>
+  Boolean(a.id && a.id === b.id) || Boolean(a.url && a.url === b.url) || sameName(a.fact.name, b.fact.name)
+
+// The products of the page with the nodes of each one together.
+function byProduct(list) {
+  let groups = []
+  for (const product of list) {
+    const joined = groups.filter((group) => group.some((other) => sameProduct(product, other)))
+    groups = [...groups.filter((group) => !joined.includes(group)), [...joined.flat(), product]]
+  }
+  return groups
+}
+
+// The product a page is about, when it is about one: every product node is the same product and one of them has
+// offers. A collection page lists several products, or none outside an ItemList, so it gets no product checks.
+function soleProduct(groups) {
+  if (groups.length !== 1) return null
+  return groups[0].find((product) => product.fact.offers) ?? null
+}
+
+const typeContext = (product) => `"@type": "${product.fact.types.join(', ')}"`
+
+// What a merchant listing needs besides the name, which missing-schema-property asks for.
+function offerGaps({ fact, offerTypes }) {
+  const gaps = []
+  if (!fact.image) gaps.push('an image')
+  if (!(fact.offers.highPrice > 0)) gaps.push('a price above 0')
+  if (!fact.offers.priceCurrency) gaps.push('a priceCurrency')
+  if (offerTypes.every((types) => types.includes('AggregateOffer')))
+    gaps.push('an Offer (an AggregateOffer only gives a product snippet)')
+  return gaps
+}
+
+function offerIncomplete(product) {
+  const gaps = offerGaps(product)
+  if (gaps.length === 0) return []
+  return [
+    seoIssue({
+      type: 'product-offer-incomplete',
+      severity: 'warning',
+      source: SOURCES.merchantListing,
+      message: `Product markup has offers but lacks ${gaps.join(', ')}, so it cannot show as a merchant listing`,
+      context: typeContext(product)
+    })
+  ]
+}
+
+// Checks of the Product markup on a page about one product.
+export function checkProducts($) {
+  const product = soleProduct(byProduct(products($)))
+  if (!product) return []
+  return offerIncomplete(product)
+}

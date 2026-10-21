@@ -2,12 +2,14 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { parse } from '../src/parse.js'
-import { pageProducts } from '../src/checks/page/products.js'
+import { checkProducts, pageProducts } from '../src/checks/page/products.js'
 
 const ldJson = (...values) =>
   values.map((value) => `<script type="application/ld+json">${JSON.stringify(value)}</script>`).join('')
 const page = (head) => parse(`<html><head>${head}</head><body><p>x</p></body></html>`)
 const products = (...values) => pageProducts(page(ldJson(...values)))
+const issues = (...values) => checkProducts(page(ldJson(...values)))
+const types = (list) => list.map((issue) => issue.type)
 const fixture = async (name) => parse(await readFile(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'))
 
 const product = (fields) => ({
@@ -163,4 +165,44 @@ test('products: an ItemList of products is not read, and the list stops at 10', 
   assert.deepEqual(products(list), [])
   const many = Array.from({ length: 12 }, (_, i) => ({ '@type': 'Product', name: `P${i}` }))
   assert.equal(products({ '@graph': many }).length, 10)
+})
+
+test('product-offer-incomplete: offers without an image, a price above 0 or a currency', () => {
+  const [issue] = issues({ '@type': 'Product', name: 'X', offers: { '@type': 'Offer', price: '0.00' } })
+  assert.equal(issue.type, 'product-offer-incomplete')
+  assert.equal(issue.severity, 'warning')
+  assert.equal(
+    issue.message,
+    'Product markup has offers but lacks an image, a price above 0, a priceCurrency, so it cannot show as a merchant listing'
+  )
+  assert.equal(issue.context, '"@type": "Product"')
+})
+
+test('product-offer-incomplete: an AggregateOffer alone is no merchant listing', () => {
+  const offers = { '@type': 'AggregateOffer', lowPrice: 10, highPrice: 20, priceCurrency: 'EUR' }
+  const [issue] = issues({ '@type': 'Product', name: 'X', image: 'https://a.test/x.jpg', offers })
+  assert.match(issue.message, /lacks an Offer \(an AggregateOffer only gives a product snippet\)/)
+})
+
+test('product checks: complete offers, a product without offers and a collection page are quiet', async () => {
+  assert.ok(!types(checkProducts(await fixture('product.html'))).includes('product-offer-incomplete'))
+  assert.deepEqual(issues({ '@type': 'Product', name: 'X', aggregateRating: { ratingValue: 4 } }), [])
+  const bare = { '@type': 'Offer', price: 0 }
+  assert.deepEqual(
+    issues({
+      '@graph': [
+        { '@type': 'Product', name: 'A', offers: bare },
+        { '@type': 'Product', name: 'B', offers: bare }
+      ]
+    }),
+    []
+  )
+})
+
+test('product checks: two nodes of one product are checked through the one with offers', () => {
+  const found = issues(
+    { '@type': 'Product', name: 'Hair oil', aggregateRating: { ratingValue: 4.5, reviewCount: 3 } },
+    { '@type': 'Product', name: 'hair oil', offers: { '@type': 'Offer', price: 0 } }
+  )
+  assert.deepEqual(types(found), ['product-offer-incomplete'])
 })

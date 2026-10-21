@@ -9,7 +9,7 @@ import { checkImages } from './images.js'
 import { checkIndexing } from './indexing.js'
 import { checkLinks } from './links.js'
 import { canonicalLinks, checkMeta, descriptionValues, titleElement } from './meta.js'
-import { pageProducts } from './products.js'
+import { checkProducts, pageProducts } from './products.js'
 import { absolute, baseUrl, extractSignals } from './signals.js'
 import { checkSnippetControls } from './snippets.js'
 import { checkSocial } from './social.js'
@@ -31,6 +31,7 @@ export const checkHtml = ($, page = {}) => [
   ...checkSnippetControls($, page.robotsHeader ?? null),
   ...checkSocial($),
   ...checkStructuredData($),
+  ...checkProducts($),
   ...checkHreflang($, page),
   ...checkHygiene($, page)
 ]
