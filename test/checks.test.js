@@ -204,6 +204,18 @@ test('headings: empty heading is flagged unless it has an image with alt or aria
   assert.deepEqual(types(checkHeadings(parse('<h1 aria-labelledby="t"></h1><p id="t">Title</p>'))), [])
 })
 
+test('headings: a heading that holds only a style, script or noscript is empty', () => {
+  for (const inner of ['<style>.a{}</style>', '<script>x()</script>', '<noscript>Menu</noscript>']) {
+    assert.deepEqual(types(checkHeadings(parse(`<h1>x</h1><h2>${inner}</h2>`))), ['empty-heading'], inner)
+  }
+})
+
+test('headings: multiple-h1 and skipped-level contexts leave out style content', () => {
+  const issues = checkHeadings(parse('<h1><style>.a{}</style>One</h1><h1>Two</h1><h3><style>.b{}</style>Three</h3>'))
+  assert.equal(issues.find((i) => i.type === 'multiple-h1').context, '<h1>One</h1> <h1>Two</h1>')
+  assert.equal(issues.find((i) => i.type === 'skipped-heading-level').context, '<h3>Three</h3>')
+})
+
 test('headings: skipped level is a warning', () => {
   assert.deepEqual(types(checkHeadings(parse('<h1>a</h1><h3>b</h3>'))), ['skipped-heading-level'])
 })

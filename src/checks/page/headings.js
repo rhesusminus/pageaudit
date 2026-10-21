@@ -2,10 +2,11 @@ import { SOURCES } from '../../sources.js'
 import { collapseWhitespace } from '../../text.js'
 import { evidence, selectorFor } from '../evidence.js'
 import { snippet, truncate } from '../snippet.js'
+import { visibleText } from './content.js'
 
 function hasAccessibleText($, el) {
   const heading = $(el)
-  if (heading.text().trim() || heading.attr('aria-label') || heading.attr('aria-labelledby')) return true
+  if (visibleText(el).trim() || heading.attr('aria-label') || heading.attr('aria-labelledby')) return true
   return heading
     .find('img[alt]')
     .toArray()
@@ -35,7 +36,7 @@ function checkH1s($, headings) {
         category: 'best-practice',
         source: SOURCES.starterGuide,
         message: `${h1s.length} <h1> elements found (Google does not mind, one is the common convention)`,
-        context: truncate(h1s.map((el) => `<h1>${collapseWhitespace($(el).text())}</h1>`).join(' ')),
+        context: truncate(h1s.map((el) => `<h1>${collapseWhitespace(visibleText(el))}</h1>`).join(' ')),
         selector: h1s.map((el) => selectorFor($, el)).join(', ')
       }
     ]
@@ -56,7 +57,7 @@ function checkHeadingOrder($, headings) {
         category: 'accessibility',
         source: SOURCES.headings,
         message: `Heading level skipped: <h${level}> after ${index ? `<h${previous}>` : 'no heading'}`,
-        context: truncate(`<h${level}>${collapseWhitespace($(el).text())}</h${level}>`),
+        context: truncate(`<h${level}>${collapseWhitespace(visibleText(el))}</h${level}>`),
         ...evidence($, el)
       })
     }
