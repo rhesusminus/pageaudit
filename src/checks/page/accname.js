@@ -3,6 +3,7 @@ import { collapseWhitespace } from '../../text.js'
 // A simplified accessible name: what a screen reader would announce for a link or form control.
 // It follows the order of the accessible name spec (aria-labelledby, aria-label, content, title)
 // and honours only explicit hiding (aria-hidden, hidden), since a static check cannot see CSS.
+// Script, style and noscript content is not part of a name: a browser that runs scripts does not show noscript.
 
 const text = (value) => collapseWhitespace(value ?? '')
 
@@ -13,7 +14,7 @@ function contentText($, el, images, includeHidden = false) {
   const parts = []
   const walk = (node) => {
     if (node.type === 'text') parts.push(node.data)
-    if (node.type !== 'tag' || (!includeHidden && isHidden(node))) return
+    if (node.type !== 'tag' || node.name === 'noscript' || (!includeHidden && isHidden(node))) return
     if (node.name === 'img') return void (images && parts.push($(node).attr('alt') ?? ''))
     const label = $(node).attr('aria-label')
     if (label) return void parts.push(label)
