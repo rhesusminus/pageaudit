@@ -31,8 +31,9 @@ const isOrganization = (node) =>
 // not prices, Google asks for a dot and no thousands separator.
 function amount(value) {
   const first = Array.isArray(value) ? value[0] : value
-  if (typeof first === 'number') return Number.isFinite(first) ? first : null
-  return typeof first === 'string' && /^\s*\d+(\.\d+)?\s*$/.test(first) ? Number(first) : null
+  const number = typeof first === 'string' && /^\s*\d+(\.\d+)?\s*$/.test(first) ? Number(first) : first
+  // A string of hundreds of digits is Infinity, which is no price either.
+  return typeof number === 'number' && Number.isFinite(number) ? number : null
 }
 
 const priceSpecification = (offer) => objects(offer.priceSpecification)[0] ?? {}

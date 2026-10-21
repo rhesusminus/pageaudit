@@ -309,6 +309,11 @@ test('products: the price range only covers offers in the currency of the first 
   assert.deepEqual(range(unpricedEur, { '@type': 'Offer', price: 3 }, { '@type': 'Offer', price: 4 }), [3, 4, null])
 })
 
+test('products: a price too long to be a number is no price', () => {
+  const [found] = products({ '@type': 'Product', name: 'X', offers: { '@type': 'Offer', price: '9'.repeat(400) } })
+  assert.equal(found.offers.lowPrice, null)
+})
+
 test('products: an offer written as an @id reference is read', () => {
   const [found] = products({
     '@graph': [
