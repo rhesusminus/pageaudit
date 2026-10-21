@@ -354,3 +354,12 @@ test('products: only an Organization or store gives the policies of the shop, an
     null
   ])
 })
+
+test('product checks: products told apart by a query parameter other than variant are two products', () => {
+  const offer = (price) => ({ '@type': 'Offer', price, priceCurrency: 'EUR' })
+  const found = issues(
+    { '@type': 'Product', url: 'https://a.test/product?id=1', offers: offer(5) },
+    { '@type': 'Product', url: 'https://a.test/product?id=2', offers: offer(9) }
+  )
+  assert.deepEqual(found, [])
+})

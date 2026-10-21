@@ -112,12 +112,24 @@ function isVariant(node, groups, byId) {
   return groups.has(group) || [...groups.values()].some((variants) => id && variants.some((v) => idOf(v) === id))
 }
 
+// The address that names a product. Shopify adds ?variant= for a variant of the same product, other parameters, such
+// as ?id=, can tell products apart, so only that one is dropped.
+function productUrl(value) {
+  try {
+    const url = new URL(value)
+    url.searchParams.delete('variant')
+    url.hash = ''
+    return url.href
+  } catch {
+    return value
+  }
+}
+
 // The first value `read` finds in the product, its variants and, where passed, their offers.
 const first = (members, read) => members.map(read).find(Boolean) ?? null
 
 // One product of the page with its variants, as the facts describe it, plus what the checks need beyond that:
-// `id` and `url` (without its query, which Shopify uses for the variant) to tell two nodes of one product from two
-// products, and the types of its offers.
+// `id` and `url` to tell two nodes of one product from two products, and the types of its offers.
 function describe(node, variants, nodes, byId) {
   const members = [node, ...variants]
   const offers = members.flatMap((member) => objects(member.offers).map((offer) => resolved(offer, byId)))
@@ -125,7 +137,7 @@ function describe(node, variants, nodes, byId) {
   const withOffers = [...members, ...offers]
   return {
     id: idOf(node),
-    url: textValue(node.url, MAX_URL)?.split(/[?#]/)[0] ?? null,
+    url: productUrl(textValue(node.url, MAX_URL)),
     offerTypes: offers.map((offer) => typesOf(offer)),
     fact: {
       types: typesOf(node),
