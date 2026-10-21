@@ -174,7 +174,9 @@ function soleProduct(groups) {
   return groups[0].find((product) => product.fact.offers) ?? null
 }
 
-const typeContext = (product) => `"@type": "${product.fact.types.join(', ')}"`
+// The product an issue is about: its name, else its type. Two pages with the same gaps but different products stay
+// apart in the digest, so each keeps its own message.
+const productContext = ({ fact }) => (fact.name ? `"name": "${fact.name}"` : `"@type": "${fact.types.join(', ')}"`)
 
 // What a merchant listing needs besides the name, which missing-schema-property asks for.
 function offerGaps({ fact, offerTypes }) {
@@ -196,7 +198,7 @@ function offerIncomplete(product) {
       severity: 'warning',
       source: SOURCES.merchantListing,
       message: `Product markup has offers but lacks ${gaps.join(', ')}, so it cannot show as a merchant listing`,
-      context: typeContext(product)
+      context: productContext(product)
     })
   ]
 }
@@ -222,7 +224,7 @@ function detailsMissing(product) {
       severity: 'info',
       source: SOURCES.merchantListing,
       message: `Product markup leaves out ${missing.join(', ')}, which Google recommends for merchant listings`,
-      context: typeContext(product)
+      context: productContext(product)
     })
   ]
 }
@@ -276,7 +278,7 @@ function conflicts(nodes) {
       severity: 'warning',
       source: SOURCES.structuredData,
       message: `${nodes.length} Product nodes for ${name ? `"${name}"` : 'one product'} disagree on ${what}`,
-      context: name ? `"name": "${name}"` : typeContext(nodes[0])
+      context: productContext(nodes.find(({ fact }) => fact.name) ?? nodes[0])
     })
   ]
 }

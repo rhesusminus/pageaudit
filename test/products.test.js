@@ -175,7 +175,8 @@ test('product-offer-incomplete: offers without an image, a price above 0 or a cu
     issue.message,
     'Product markup has offers but lacks an image, a price above 0, a priceCurrency, so it cannot show as a merchant listing'
   )
-  assert.equal(issue.context, '"@type": "Product"')
+  assert.equal(issue.context, '"name": "X"')
+  assert.equal(issues({ '@type': 'Product', offers: { '@type': 'Offer' } })[0].context, '"@type": "Product"')
 })
 
 test('product-offer-incomplete: an AggregateOffer alone is no merchant listing', () => {
@@ -254,8 +255,8 @@ test('conflicting-product-data: the theme and a reviews app give a different pri
     [
       {
         severity: 'warning',
-        message: '2 Product nodes for "Argan Hair Oil" disagree on price (19.9 vs 24.9), rating (4.2 vs 4.8)',
-        context: '"name": "Argan Hair Oil"'
+        message: '2 Product nodes for "Jojoba Hair Serum" disagree on price (19.9 vs 24.9), rating (4.2 vs 4.8)',
+        context: '"name": "Jojoba Hair Serum"'
       }
     ]
   )
