@@ -36,7 +36,9 @@ const ABOUT =
   "file) with the page's main content, the HTML as served before scripts run: read it to judge what the page " +
   'covers, how clearly and how accurately. origins says for each audited origin whether its robots.txt lets the ' +
   'crawlers of AI search products (aiSearch) and the AI training crawlers (aiTraining) read the audited pages, and ' +
-  'the Content-Signal it declares. Blocking training only is a choice that keeps a site in AI search.'
+  'the Content-Signal it declares. Blocking training only is a choice that keeps a site in AI search. ' +
+  'origins also names the platform most of its pages run on, such as Shopify with the theme, or null: say where ' +
+  'a fix is made on that platform, in its theme or settings.'
 
 // The first `max` of a list under `key`, and under `moreKey` how many were left out, when any were.
 function capped(list, max, key, moreKey) {

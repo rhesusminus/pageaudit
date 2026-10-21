@@ -44,7 +44,8 @@ const facts = {
   jsonLd: [],
   dates: { published: null, modified: null, lastModified: null, sitemapLastmod: null },
   author: null,
-  products: []
+  products: [],
+  platform: null
 }
 const lighthouse = {
   scores: { performance: 95, accessibility: 60, 'best-practices': 30, seo: null },
@@ -484,6 +485,15 @@ test('renderHtml: the products row shows each product with its price range, avai
   const shopOut = renderHtml(wrap([shop]))
   assert.match(shopOut, /<strong>Hair oil<\/strong> 19.90-24.00 EUR, InStock <span class="note">brand Acme<\/span>/)
   assert.match(shopOut, /<strong>No name<\/strong> no offers<\/li>/)
+})
+
+test('renderHtml: the platform row names the platform and its theme, and is left out without one', () => {
+  assert.doesNotMatch(renderHtml(report), /<dt>Platform<\/dt>/)
+  const on = (platform) => renderHtml(wrap([page('https://a.test/', [], { facts: { ...facts, platform } })]))
+  assert.match(on({ name: 'Shopify', theme: 'Dawn' }), /<dt>Platform<\/dt><dd>Shopify, theme Dawn<\/dd>/)
+  assert.match(on({ name: 'Wix', theme: null }), /<dt>Platform<\/dt><dd>Wix<\/dd>/)
+  // A report written before platform was added.
+  assert.doesNotMatch(on(undefined), /<dt>Platform<\/dt>/)
 })
 
 test('renderHtml: every redirect hop is listed, with its status', () => {

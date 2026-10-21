@@ -1,5 +1,6 @@
 import { basename, dirname, relative, resolve } from 'node:path'
 import chalk from 'chalk'
+import { originPlatform } from './checks/page/platform.js'
 import { checkLinks } from './checks/site/links.js'
 import { aiCrawlerAccess, checkRobotsTxt } from './checks/site/robots.js'
 import { checkSite } from './checks/site/index.js'
@@ -166,7 +167,7 @@ function addSitemapDates(pages, sitemapFiles) {
 
 // Reads the robots.txt files of the audited sites and checks them and the sitemaps against them, with a spinner
 // because a slow host can take a while. Each robots.txt is read once for all checks. Returns the issues and
-// `origins`, how each audited origin treats the AI crawlers.
+// `origins`, how each audited origin treats the AI crawlers and the platform its pages run on.
 async function checkRobotsAndSitemaps(pages, inputs, options, { progress, pace }) {
   const load = cachedRobotsLoader((origin) => loadRobots(origin, { beforeHop: pace }))
   const loaded = pages.some((page) => page.status === 200 && page.finalUrl)
@@ -178,7 +179,8 @@ async function checkRobotsAndSitemaps(pages, inputs, options, { progress, pace }
       ...(await checkSitemapHosts(inputs.sitemapFiles, { load })),
       ...(options.sitemaps.length ? [] : await checkSitemapDeclared(pages, { load }))
     ]
-    return { issues, origins: await aiCrawlerAccess(pages, { load }) }
+    const origins = await aiCrawlerAccess(pages, { load })
+    return { issues, origins: origins.map((entry) => ({ ...entry, platform: originPlatform(pages, entry.origin) })) }
   } finally {
     spinner.stop()
   }
