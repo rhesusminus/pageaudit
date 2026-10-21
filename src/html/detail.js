@@ -187,6 +187,10 @@ function productList(products = []) {
   </ul>`
 }
 
+// The platform as "Shopify, theme Dawn". Reports from before platform was added have none.
+const platformText = (platform) =>
+  platform ? [platform.name, platform.theme && `theme ${platform.theme}`].filter(Boolean).join(', ') : ''
+
 // Rows of the collapsed "More about this page" block: [name, value], with empty values left out.
 function moreRows(facts) {
   const { openGraph: og } = facts
@@ -197,6 +201,8 @@ function moreRows(facts) {
     og.type && `type: ${og.type}`
   ].filter(Boolean)
   return [
+    // Most pages show no platform pageaudit knows, which is not a problem, so the row is only there when one is found.
+    ['Platform', platformText(facts.platform)],
     ['Mobile viewport', orMissing(facts.viewport)],
     ['Robots', facts.robots ?? 'Not set'],
     // Most sites send no X-Robots-Tag, so the row is only there when one was sent.

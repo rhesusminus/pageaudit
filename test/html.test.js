@@ -487,6 +487,15 @@ test('renderHtml: the products row shows each product with its price range, avai
   assert.match(shopOut, /<strong>No name<\/strong> no offers<\/li>/)
 })
 
+test('renderHtml: the platform row names the platform and its theme, and is left out without one', () => {
+  assert.doesNotMatch(renderHtml(report), /<dt>Platform<\/dt>/)
+  const on = (platform) => renderHtml(wrap([page('https://a.test/', [], { facts: { ...facts, platform } })]))
+  assert.match(on({ name: 'Shopify', theme: 'Dawn' }), /<dt>Platform<\/dt><dd>Shopify, theme Dawn<\/dd>/)
+  assert.match(on({ name: 'Wix', theme: null }), /<dt>Platform<\/dt><dd>Wix<\/dd>/)
+  // A report written before platform was added.
+  assert.doesNotMatch(on(undefined), /<dt>Platform<\/dt>/)
+})
+
 test('renderHtml: every redirect hop is listed, with its status', () => {
   const hops = [
     { url: 'http://a.test/', status: 301, location: 'https://a.test/' },
