@@ -50,7 +50,8 @@ Options:
   --lighthouse-runs <n>
                        run Lighthouse n times per page (1 to ${MAX_LIGHTHOUSE_RUNS}, default 1) and keep the median run, since single runs vary
   --check-links        also check where the internal links of the audited pages lead: broken links, redirects,
-                       and with a whole --sitemap audited, pages no other page links to
+                       addresses whose canonical is another page, and with a whole --sitemap audited, pages no
+                       other page links to
   --fail-on <level>    exit 1 on any "error" (default) or on any "warning" or error
   --out <path>         also write the JSON report to a file, for example to hand to Claude
   --digest <path>      also write a short form of the JSON report, for Claude to read first on a large audit

@@ -274,6 +274,46 @@ test('checkLinks: broken, unreachable and redirecting targets, one issue each wi
   ])
 })
 
+test('checkLinks: a target whose canonical is another page is one issue, a trailing slash or a redirect is not', () => {
+  const targets = [
+    'https://a.test/collections/hair/products/oil',
+    'https://a.test/products/oil?utm_source=menu',
+    'https://a.test/self',
+    'https://a.test/moved',
+    'https://a.test/gone',
+    'https://a.test/none',
+    'https://a.test/script'
+  ]
+  const pages = [page('https://a.test/1', targets), page('https://a.test/2', [targets[0]])]
+  const outcomes = outcomesOf([
+    ['https://a.test/collections/hair/products/oil', { status: 200, canonical: 'https://a.test/products/oil' }],
+    ['https://a.test/products/oil?utm_source=menu', { status: 200, canonical: 'https://a.test/products/oil' }],
+    ['https://a.test/self', { status: 200, canonical: 'https://a.test/self/' }],
+    [
+      'https://a.test/moved',
+      { status: 200, finalUrl: 'https://a.test/new', redirects: [{ status: 301 }], canonical: 'https://a.test/x' }
+    ],
+    ['https://a.test/gone', { status: 404, canonical: 'https://a.test/x' }],
+    ['https://a.test/none', { status: 200, canonical: null }],
+    ['https://a.test/script', { status: 200, canonical: 'javascript:alert(1)' }],
+    ...pages.map((p) => [p.url, { status: 200 }])
+  ])
+  assert.deepEqual(brief(checkLinks(pages, outcomes)), [
+    [
+      'link-to-non-canonical',
+      'https://a.test/collections/hair/products/oil -> canonical https://a.test/products/oil',
+      ['https://a.test/1', 'https://a.test/2']
+    ],
+    [
+      'link-to-non-canonical',
+      'https://a.test/products/oil?utm_source=menu -> canonical https://a.test/products/oil',
+      ['https://a.test/1']
+    ],
+    ['link-to-redirect', 'https://a.test/moved -> https://a.test/new (301)', ['https://a.test/1']],
+    ['broken-link', 'https://a.test/gone (HTTP 404)', ['https://a.test/1']]
+  ])
+})
+
 test('checkLinks: login pages and rate limits are not broken, and a redirect to an error is only the error', () => {
   const targets = ['https://a.test/401', 'https://a.test/403', 'https://a.test/429', 'https://a.test/old']
   const outcomes = outcomesOf([

@@ -34,6 +34,13 @@ function targetIssue(url, outcome) {
   // Every hop's status, so a chain of redirects reads as one: (301, 302).
   const hops = redirects.map((redirect) => redirect.status).join(', ')
   if (redirects.length && status < 400) return { type: 'link-to-redirect', context: `${where} (${hops})` }
+  // A page that names another address as its canonical is a duplicate, such as a product reached through a collection
+  // or with a tracking parameter. Its trailing slash does not make it one, see pageKey(). Only a web address is one to
+  // link to: a javascript: or mailto: canonical is a broken tag, which the page checks report when it is audited.
+  const { canonical } = outcome
+  if (status === 200 && /^https?:\/\//i.test(canonical ?? '') && pageKey(canonical) !== pageKey(finalUrl)) {
+    return { type: 'link-to-non-canonical', context: `${address(url)} -> canonical ${address(canonical)}` }
+  }
   return null
 }
 
@@ -52,6 +59,11 @@ const TARGET_RULES = {
     severity: 'info',
     source: SOURCES.redirects,
     message: 'An internal link points to an address that redirects, link to the final address instead'
+  },
+  'link-to-non-canonical': {
+    severity: 'info',
+    source: SOURCES.canonical,
+    message: 'An internal link points to an address whose canonical is another page, link to the canonical instead'
   }
 }
 
