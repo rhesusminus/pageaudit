@@ -526,7 +526,7 @@
                   "count": { "type": "integer", "minimum": 1 },
                   "lowPrice": {
                     "type": ["number", "null"],
-                    "description": "The lowest price, null when no offer gives one Google can read (digits with a dot for decimals)."
+                    "description": "The lowest price of the offers in priceCurrency, the currency of the first offer with a price (all prices when no priced offer names one). Null when no offer gives a price Google can read (digits with a dot for decimals)."
                   },
                   "highPrice": { "type": ["number", "null"] },
                   "priceCurrency": { "$ref": "#/$defs/nullableString" },

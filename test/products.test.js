@@ -288,3 +288,23 @@ test('products: a page with more offers than a function takes arguments keeps it
   assert.equal(found.offers.lowPrice, 1)
   assert.equal(found.offers.highPrice, 50)
 })
+
+test('products: the price range only covers offers in the currency of the first priced offer', () => {
+  const range = (...offers) => {
+    const [found] = products({ '@type': 'Product', name: 'X', offers })
+    return [found.offers.lowPrice, found.offers.highPrice, found.offers.priceCurrency]
+  }
+  assert.deepEqual(
+    range(
+      { '@type': 'Offer', price: 5, priceCurrency: 'EUR' },
+      { '@type': 'Offer', price: 10, priceCurrency: 'USD' },
+      { '@type': 'Offer', price: 7 },
+      { '@type': 'Offer', price: 6, priceCurrency: 'EUR' }
+    ),
+    [5, 6, 'EUR']
+  )
+  // An offer without a price does not choose the currency, and a range without one has none.
+  const unpricedEur = { '@type': 'Offer', priceCurrency: 'EUR' }
+  assert.deepEqual(range(unpricedEur, { '@type': 'Offer', price: 8, priceCurrency: 'USD' }), [8, 8, 'USD'])
+  assert.deepEqual(range(unpricedEur, { '@type': 'Offer', price: 3 }, { '@type': 'Offer', price: 4 }), [3, 4, null])
+})

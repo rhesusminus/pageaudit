@@ -47,15 +47,20 @@ function imageUrl(value) {
   return null
 }
 
-// The extremes are found with reduce, a spread of a page's worth of prices can exceed the argument limit.
+// The price range is in the first currency an offer with a price gives: offers in another currency or without one
+// are left out, their prices do not compare. When no priced offer names a currency, the range covers every price and
+// has none. With no price Google can read, the currency is the first one any offer gives. The extremes are found with
+// reduce, a spread of a page's worth of prices can exceed the argument limit.
 function offerSummary(offers) {
   if (offers.length === 0) return null
-  const prices = offers.flatMap(offerPrices)
+  const priced = offers.filter((offer) => offerPrices(offer).length > 0)
+  const rangeCurrency = priced.map(offerCurrency).find(Boolean) ?? null
+  const prices = priced.filter((offer) => offerCurrency(offer) === rangeCurrency).flatMap(offerPrices)
   return {
     count: offers.length,
     lowPrice: prices.length ? prices.reduce((a, b) => Math.min(a, b)) : null,
     highPrice: prices.length ? prices.reduce((a, b) => Math.max(a, b)) : null,
-    priceCurrency: offers.map(offerCurrency).find(Boolean) ?? null,
+    priceCurrency: prices.length ? rangeCurrency : (offers.map(offerCurrency).find(Boolean) ?? null),
     availability: [...new Set(offers.map(availability).filter(Boolean))].slice(0, MAX_AVAILABILITY)
   }
 }
