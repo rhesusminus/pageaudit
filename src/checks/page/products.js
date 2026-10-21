@@ -129,7 +129,7 @@ function productUrl(value) {
 const first = (members, read) => members.map(read).find(Boolean) ?? null
 
 // One product of the page with its variants, as the facts describe it, plus what the checks need beyond that:
-// `id` and `url` to tell two nodes of one product from two products, and the types of its offers.
+// `id` and `url` to tell two nodes of one product from two products, and its offers, each checked on its own.
 function describe(node, variants, nodes, byId) {
   const members = [node, ...variants]
   const offers = members.flatMap((member) => objects(member.offers).map((offer) => resolved(offer, byId)))
@@ -138,7 +138,7 @@ function describe(node, variants, nodes, byId) {
   return {
     id: idOf(node),
     url: productUrl(textValue(node.url, MAX_URL)),
-    offerTypes: offers.map((offer) => typesOf(offer)),
+    offers,
     fact: {
       types: typesOf(node),
       name: textValue(node.name),
@@ -206,14 +206,18 @@ function soleProduct(groups) {
 // apart in the digest, so each keeps its own message.
 const productContext = ({ fact }) => (fact.name ? `"name": "${fact.name}"` : `"@type": "${fact.types.join(', ')}"`)
 
-// What a merchant listing needs besides the name, which missing-schema-property asks for.
-function offerGaps({ fact, offerTypes }) {
-  const gaps = []
-  if (!fact.image) gaps.push('an image')
-  if (!(fact.offers.highPrice > 0)) gaps.push('a price above 0')
-  if (!fact.offers.priceCurrency) gaps.push('a priceCurrency')
-  if (offerTypes.every((types) => types.includes('AggregateOffer')))
-    gaps.push('an Offer (an AggregateOffer only gives a product snippet)')
+const isAggregate = (offer) => typesOf(offer).includes('AggregateOffer')
+
+// What a merchant listing needs besides the name, which missing-schema-property asks for. Only an Offer counts, an
+// AggregateOffer only gives a product snippet, and the price and its currency count only when one Offer gives both.
+function offerGaps({ fact, offers }) {
+  const listed = offers.filter((offer) => !isAggregate(offer))
+  const priced = listed.filter((offer) => offerPrices(offer).some((price) => price > 0))
+  const gaps = fact.image ? [] : ['an image']
+  if (listed.length === 0) return [...gaps, 'an Offer (an AggregateOffer only gives a product snippet)']
+  if (priced.length === 0) gaps.push('a price above 0')
+  if (priced.length > 0 && !priced.some(offerCurrency)) gaps.push('a priceCurrency in the Offer with the price')
+  if (priced.length === 0 && !listed.some(offerCurrency)) gaps.push('a priceCurrency')
   return gaps
 }
 

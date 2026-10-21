@@ -355,6 +355,31 @@ test('products: only an Organization or store gives the policies of the shop, an
   ])
 })
 
+test('product-offer-incomplete: the price and its currency must be in the same Offer', () => {
+  const [issue] = issues({
+    '@type': 'Product',
+    name: 'X',
+    image: 'https://a.test/x.jpg',
+    offers: [
+      { '@type': 'Offer', price: 5 },
+      { '@type': 'Offer', priceCurrency: 'EUR' }
+    ]
+  })
+  assert.equal(issue.type, 'product-offer-incomplete')
+  assert.match(issue.message, /lacks a priceCurrency in the Offer with the price,/)
+  // An AggregateOffer with a price and currency does not complete an Offer that lacks the currency.
+  const [mixed] = issues({
+    '@type': 'Product',
+    name: 'X',
+    image: 'https://a.test/x.jpg',
+    offers: [
+      { '@type': 'AggregateOffer', lowPrice: 10, priceCurrency: 'EUR' },
+      { '@type': 'Offer', price: 5 }
+    ]
+  })
+  assert.match(mixed.message, /lacks a priceCurrency in the Offer with the price,/)
+})
+
 test('product checks: products told apart by a query parameter other than variant are two products', () => {
   const offer = (price) => ({ '@type': 'Offer', price, priceCurrency: 'EUR' })
   const found = issues(
