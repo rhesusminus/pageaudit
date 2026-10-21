@@ -276,6 +276,11 @@ export const ADVICE = {
     why: 'Google recommends the brand, a product code such as the GTIN barcode, availability, shipping and returns. Shopping results show them, and the product can match more searches.',
     fix: 'Add the fields named in the technical message. Shipping and returns may instead be set once on the Organization markup of the home page, or in Merchant Center, in which case they can be left off the product.'
   },
+  'product-brand-is-site': {
+    title: 'The product brand is the name of the shop',
+    why: 'Google matches products by brand and product code. A shop name as the brand of products made by others hides the real brand that shoppers search for.',
+    fix: 'Set the brand to the maker of the product. On Shopify, the brand comes from the product vendor. If the shop makes the product itself, the shop name is right and this can be ignored.'
+  },
   'long-url': {
     title: 'The web address is long',
     why: 'Long addresses are harder to read, share and remember. Google has no strict limit.',

@@ -2,9 +2,12 @@ import { SOURCES } from '../../sources.js'
 import { MAX_URL } from '../../text.js'
 import { seoIssue } from '../snippet.js'
 import { idIndex, nameOf, pageObjects, text, textValue, typesOf } from './json-ld.js'
+import { metaContent, ogSelector } from './signals.js'
 
 const MAX_PRODUCTS = 10
 const MAX_AVAILABILITY = 5
+// Types that name the site itself, besides any type ending in Store or Business, such as ClothingStore.
+const SITE_TYPES = new Set(['Organization', 'Corporation', 'WebSite'])
 const IDENTIFIERS = ['gtin', 'gtin8', 'gtin12', 'gtin13', 'gtin14', 'isbn']
 
 const isObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -130,9 +133,9 @@ function describe(node, variants, nodes, byId) {
 }
 
 // Every product of the page, a ProductGroup with its variants counted once. Only nodes at the top of a JSON-LD block
-// or in its @graph are read, so the products of an ItemList on a collection page are not.
-function products($) {
-  const all = pageObjects($)
+// or in its @graph are read, so the products of an ItemList on a collection page are not. `all` is every JSON-LD
+// object of the page.
+function products(all) {
   const nodes = all.filter((node) => typesOf(node).length > 0)
   const byId = idIndex(all)
   const groups = variantsByGroup(nodes, byId)
@@ -143,7 +146,7 @@ function products($) {
 
 // What the Product markup of the page says, at most MAX_PRODUCTS products.
 export const pageProducts = ($) =>
-  products($)
+  products(pageObjects($))
     .slice(0, MAX_PRODUCTS)
     .map((product) => product.fact)
 
@@ -224,9 +227,34 @@ function detailsMissing(product) {
   ]
 }
 
+// The names the site goes by: its Organization or store, its WebSite and og:site_name.
+function siteNames($, all) {
+  const site = all.filter((node) =>
+    typesOf(node).some((type) => SITE_TYPES.has(type) || /(Store|Business)$/.test(type))
+  )
+  return [...site.map((node) => textValue(node.name)), metaContent($, ogSelector('site_name'))].filter(Boolean)
+}
+
+// The brand of a store's own products is often the store, so this is only a hint. On Shopify the brand is the
+// vendor, which is the store name until it is set.
+function brandIsSite($, all, product) {
+  const brand = product.fact.brand
+  if (!brand || !siteNames($, all).some((name) => sameName(name, brand))) return []
+  return [
+    seoIssue({
+      type: 'product-brand-is-site',
+      severity: 'info',
+      source: SOURCES.merchantListing,
+      message: `The Product brand "${brand}" is the name of the site, not of the maker`,
+      context: `"brand": "${brand}"`
+    })
+  ]
+}
+
 // Checks of the Product markup on a page about one product.
 export function checkProducts($) {
-  const product = soleProduct(byProduct(products($)))
+  const all = pageObjects($)
+  const product = soleProduct(byProduct(products(all)))
   if (!product) return []
-  return [...offerIncomplete(product), ...detailsMissing(product)]
+  return [...offerIncomplete(product), ...detailsMissing(product), ...brandIsSite($, all, product)]
 }

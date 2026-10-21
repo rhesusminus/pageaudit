@@ -226,3 +226,21 @@ test('product-details-missing: a group with the details on its variants and the 
     /out brand, an identifier \(gtin or mpn\), availability, shippingDetails, hasMerchantReturnPolicy,/
   )
 })
+
+test('product-brand-is-site: the Shopify vendor left as the store name', async () => {
+  const issue = checkProducts(await fixture('product.html')).find((i) => i.type === 'product-brand-is-site')
+  assert.equal(issue.severity, 'info')
+  assert.equal(issue.message, 'The Product brand "Example Store" is the name of the site, not of the maker')
+  assert.equal(issue.context, '"brand": "Example Store"')
+})
+
+test('product-brand-is-site: matched against the WebSite, a store type and og:site_name, in any case', () => {
+  const product = { '@type': 'Product', name: 'X', brand: 'Hair  Co', offers: { '@type': 'Offer', price: 5 } }
+  const brandIssues = (head) => types(checkProducts(page(head))).filter((type) => type === 'product-brand-is-site')
+  assert.equal(brandIssues(ldJson(product, { '@type': 'WebSite', name: 'hair co' })).length, 1)
+  assert.equal(brandIssues(ldJson(product, { '@type': 'HealthAndBeautyBusiness', name: 'Hair Co' })).length, 1)
+  assert.equal(brandIssues(ldJson(product) + '<meta property="og:site_name" content="Hair Co">').length, 1)
+  // A Brand node is the brand itself, not the site.
+  assert.equal(brandIssues(ldJson(product, { '@type': 'Brand', name: 'Hair Co' })).length, 0)
+  assert.equal(brandIssues(ldJson(product, { '@type': 'Organization', name: 'Hair Shop' })).length, 0)
+})
