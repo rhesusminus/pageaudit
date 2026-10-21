@@ -434,7 +434,9 @@ src/
       accname.js        accessibleName(): a simplified accessible name for links and form controls
       hygiene.js        URL, HTML size, mixed content and client-side rendered pages
       robots-header.js  the X-Robots-Tag header
+      snippets.js       nosnippet and max-snippet for Google, noarchive and nocache for Bing
       signals.js        extractSignals() and jsonLdBlocks(): content and metadata signals stored in the facts
+      authorship.js     pageAuthorship(): the JSON-LD nodes, dates and author stored in the facts
       content.js        mainText(), headingExcerpts() and imageSamples(): page text, section excerpts and image context for the facts
       index.js          checkHtml() and extractFacts(): facts for the site checks and the report
     site/               checks across pages, run after every page is done
@@ -465,6 +467,7 @@ test/
   parse.test.js         template removal and the DOM depth cap
   fetch.test.js         fetchPage: redirects, User-Agent, encoding sniffing, errors
   robots.test.js        robots.txt loading and Googlebot matching, and the X-Robots-Tag header
+  snippets.test.js      the snippet and Copilot rules from meta tags and the X-Robots-Tag header
   lighthouse.test.js    trimming a Lighthouse result and running Chrome, with its failures
   lighthouse-issues.test.js  Lighthouse metrics and scores as issues
   report.test.js        the JSON report: summary, rules, ids and capped facts
@@ -476,6 +479,7 @@ test/
   severity.test.js      severity counting and ordering
   html.test.js          HTML report: sections, escaping, self-containment, advice coverage
   signals.test.js       content and metadata signals of a page
+  authorship.test.js    JSON-LD nodes and their @id references, the page dates and author
   headers.test.js       response header checks and the Content-Security-Policy parser
   links.test.js         link targets, the per-host throttle and the link checks
   cli.test.js           run() end to end with --json against the fixtures
@@ -520,8 +524,9 @@ The JSON report is meant to be handed to a human or an LLM for prioritizing fixe
 {
   schemaVersion: 1,
   generatedAt: '2026-10-15T08:00:00.000Z',
-  pages: [{ url, finalUrl, status, redirects: [{ url, status, location }], issues: [...], facts, lighthouse }],
+  pages: [{ url, finalUrl, status, redirects: [{ url, status, location }], issues: [...], facts, content, lighthouse }],
   site: [...],                    // site issues
+  origins: [...],                 // how each origin's robots.txt treats AI crawlers
   skipped: [{ input, source, reason }],
   coverage: { tool, settings, urls, links, notRun: [{ check, reason }] },
   rules: { [type]: { title, why, fix } },
@@ -530,7 +535,7 @@ The JSON report is meant to be handed to a human or an LLM for prioritizing fixe
 }
 ```
 
-`lighthouse` is only present on pages Lighthouse ran for, and `lighthouseAudits` only when an audit is described.
+`lighthouse` is only present on pages Lighthouse ran for, `content` only on pages written with `--content`, and `lighthouseAudits` only when an audit is described.
 
 `coverage` says what the audit looked at, so a model can tell "not found" from "not looked for": the pageaudit version, the `settings` that change what is collected (with the defaults filled in), how many URLs were `found` and `audited` (and whether every sitemap file was read), with `--check-links` how many link targets were `checked` and how many were left past the cap, and `notRun`, the checks that did not run with the reason. `lighthouse` and `links` are listed when they were not asked for, and `orphan-page` when the audit could not tell orphan pages apart, such as after a `--limit` cut.
 
