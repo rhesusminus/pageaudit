@@ -1,6 +1,6 @@
 import { SOURCES } from '../../sources.js'
 import { seoIssue } from '../snippet.js'
-import { jsonLdBlocks, jsonLdNodes, typesOf } from './signals.js'
+import { jsonLdBlocks, jsonLdNodes, typesOf } from './json-ld.js'
 
 const URL_PROPERTIES = ['url', 'image', 'logo', 'sameAs', 'contentUrl', 'item']
 const MAX_NESTING = 4

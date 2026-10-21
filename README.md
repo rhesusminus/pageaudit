@@ -435,7 +435,8 @@ src/
       hygiene.js        URL, HTML size, mixed content and client-side rendered pages
       robots-header.js  the X-Robots-Tag header
       snippets.js       nosnippet and max-snippet for Google, noarchive and nocache for Bing
-      signals.js        extractSignals() and jsonLdBlocks(): content and metadata signals stored in the facts
+      signals.js        extractSignals(): content and metadata signals stored in the facts
+      json-ld.js        jsonLdBlocks(), pageObjects() and textValue(): reading the JSON-LD of a page
       authorship.js     pageAuthorship(): the JSON-LD nodes, dates and author stored in the facts
       content.js        mainText(), headingExcerpts() and imageSamples(): page text, section excerpts and image context for the facts
       index.js          checkHtml() and extractFacts(): facts for the site checks and the report

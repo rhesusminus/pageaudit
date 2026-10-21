@@ -1,10 +1,10 @@
 import { withoutFragment } from '../../input/resolve.js'
 import { collapseWhitespace, limit, MAX_URL } from '../../text.js'
 import { headingExcerpts, imageSamples, mainText, visibleText } from './content.js'
+import { jsonLdBlocks, jsonLdNodes, typesOf } from './json-ld.js'
 
 const MAX_HEADINGS = 40
 const MAX_TYPES = 20
-const MAX_JSON_LD_DEPTH = 4
 
 export function absolute(href, base) {
   try {
@@ -129,33 +129,6 @@ function openGraph($) {
     type: og('type'),
     url: og('url', MAX_URL)
   }
-}
-
-export const typesOf = (node) => [node['@type']].flat().filter((type) => typeof type === 'string')
-
-// Every object in a JSON-LD value, looking inside arrays and @graph. A node need not have a @type, an author that
-// another node refers to by @id often has only a name.
-export function jsonLdObjects(value, depth = 0) {
-  if (!value || typeof value !== 'object' || depth > MAX_JSON_LD_DEPTH) return []
-  if (Array.isArray(value)) return value.flatMap((item) => jsonLdObjects(item, depth + 1))
-  return [value, ...jsonLdObjects(value['@graph'], depth + 1)]
-}
-
-// Every object with a usable @type in a JSON-LD value, looking inside arrays and @graph.
-export const jsonLdNodes = (value) => jsonLdObjects(value).filter((node) => typesOf(node).length > 0)
-
-// Every JSON-LD script as { value } when it parses or { error, text } when it does not.
-export function jsonLdBlocks($) {
-  return $('script[type="application/ld+json" i]')
-    .toArray()
-    .map((el) => {
-      const text = $(el).text()
-      try {
-        return { value: JSON.parse(text), text }
-      } catch (err) {
-        return { error: err.message, text }
-      }
-    })
 }
 
 // Invalid JSON-LD is ignored here, the structured data check reports it.
