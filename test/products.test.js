@@ -281,3 +281,10 @@ test('conflicting-product-data: values only one node gives, and different produc
     ['2 Product nodes for one product disagree on currency (EUR vs USD)']
   )
 })
+
+test('products: a page with more offers than a function takes arguments keeps its facts', () => {
+  const offers = Array.from({ length: 200000 }, (_, i) => ({ price: (i % 50) + 1 }))
+  const [found] = products({ '@type': 'Product', name: 'X', offers })
+  assert.equal(found.offers.lowPrice, 1)
+  assert.equal(found.offers.highPrice, 50)
+})

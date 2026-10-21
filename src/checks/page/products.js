@@ -47,13 +47,14 @@ function imageUrl(value) {
   return null
 }
 
+// The extremes are found with reduce, a spread of a page's worth of prices can exceed the argument limit.
 function offerSummary(offers) {
   if (offers.length === 0) return null
   const prices = offers.flatMap(offerPrices)
   return {
     count: offers.length,
-    lowPrice: prices.length ? Math.min(...prices) : null,
-    highPrice: prices.length ? Math.max(...prices) : null,
+    lowPrice: prices.length ? prices.reduce((a, b) => Math.min(a, b)) : null,
+    highPrice: prices.length ? prices.reduce((a, b) => Math.max(a, b)) : null,
     priceCurrency: offers.map(offerCurrency).find(Boolean) ?? null,
     availability: [...new Set(offers.map(availability).filter(Boolean))].slice(0, MAX_AVAILABILITY)
   }
