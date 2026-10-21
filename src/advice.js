@@ -271,6 +271,11 @@ export const ADVICE = {
     why: 'Google shows a product with its price and stock in shopping results only when the markup gives an image, a price above 0 and its currency in an Offer.',
     fix: 'Add the fields named in the technical message to the Product markup, usually in the theme or the SEO app that writes it.'
   },
+  'product-details-missing': {
+    title: 'Product markup leaves out details shoppers compare',
+    why: 'Google recommends the brand, a product code such as the GTIN barcode, availability, shipping and returns. Shopping results show them, and the product can match more searches.',
+    fix: 'Add the fields named in the technical message. Shipping and returns may instead be set once on the Organization markup of the home page, or in Merchant Center, in which case they can be left off the product.'
+  },
   'long-url': {
     title: 'The web address is long',
     why: 'Long addresses are harder to read, share and remember. Google has no strict limit.',

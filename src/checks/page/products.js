@@ -198,9 +198,35 @@ function offerIncomplete(product) {
   ]
 }
 
+// The fields Google recommends for a merchant listing that the product does not give. Shipping and returns can also
+// be on the Organization markup of another page, such as the home page, which a page check cannot see.
+function missingDetails({ fact }) {
+  const missing = []
+  if (!fact.brand) missing.push('brand')
+  if (!fact.gtin && !fact.mpn) missing.push('an identifier (gtin or mpn)')
+  if (fact.offers.availability.length === 0) missing.push('availability')
+  if (!fact.shipping) missing.push('shippingDetails')
+  if (!fact.returnPolicy) missing.push('hasMerchantReturnPolicy')
+  return missing
+}
+
+function detailsMissing(product) {
+  const missing = missingDetails(product)
+  if (missing.length === 0) return []
+  return [
+    seoIssue({
+      type: 'product-details-missing',
+      severity: 'info',
+      source: SOURCES.merchantListing,
+      message: `Product markup leaves out ${missing.join(', ')}, which Google recommends for merchant listings`,
+      context: typeContext(product)
+    })
+  ]
+}
+
 // Checks of the Product markup on a page about one product.
 export function checkProducts($) {
   const product = soleProduct(byProduct(products($)))
   if (!product) return []
-  return offerIncomplete(product)
+  return [...offerIncomplete(product), ...detailsMissing(product)]
 }

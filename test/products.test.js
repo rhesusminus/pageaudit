@@ -204,5 +204,25 @@ test('product checks: two nodes of one product are checked through the one with 
     { '@type': 'Product', name: 'Hair oil', aggregateRating: { ratingValue: 4.5, reviewCount: 3 } },
     { '@type': 'Product', name: 'hair oil', offers: { '@type': 'Offer', price: 0 } }
   )
-  assert.deepEqual(types(found), ['product-offer-incomplete'])
+  assert.deepEqual(types(found), ['product-offer-incomplete', 'product-details-missing'])
+})
+
+test('product-details-missing: the Shopify product lacks a GTIN, shipping and returns', async () => {
+  const issue = checkProducts(await fixture('product.html')).find((i) => i.type === 'product-details-missing')
+  assert.equal(issue.severity, 'info')
+  assert.equal(
+    issue.message,
+    'Product markup leaves out an identifier (gtin or mpn), shippingDetails, hasMerchantReturnPolicy, which Google recommends for merchant listings'
+  )
+})
+
+test('product-details-missing: a group with the details on its variants and the Organization is complete', async () => {
+  assert.deepEqual(checkProducts(await fixture('product-variants.html')), [])
+  const [bare] = issues({ '@type': 'Product', name: 'X', offers: { '@type': 'Offer' } }).filter(
+    (i) => i.type === 'product-details-missing'
+  )
+  assert.match(
+    bare.message,
+    /out brand, an identifier \(gtin or mpn\), availability, shippingDetails, hasMerchantReturnPolicy,/
+  )
 })
