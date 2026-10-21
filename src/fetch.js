@@ -180,6 +180,19 @@ function decode(bytes, contentType) {
   return new TextDecoder(encoding).decode(bytes)
 }
 
+// The HTML of an answer to request(), decoded: at most the first HTML_MAX_BYTES, `truncated` true when there was more
+// and `bodyBytes` the decompressed size read. Null, with the body discarded, unless the answer is a 200 with an HTML
+// content type.
+export async function readHtml(res) {
+  const contentType = res.headers.get('content-type') ?? ''
+  if (res.status !== 200 || !/html/i.test(contentType)) {
+    await res.discard()
+    return null
+  }
+  const body = await res.read(HTML_MAX_BYTES)
+  return { html: decode(body.bytes, contentType), truncated: body.truncated, bodyBytes: body.bytes.length }
+}
+
 // The response headers the header checks and the page facts read, lowercase. A header that was not sent is left out.
 const CHECKED_HEADERS = [
   'strict-transport-security',
@@ -202,28 +215,17 @@ const checkedHeaders = (headers) =>
 // headers holds the CHECKED_HEADERS that were sent, and bodyBytes the decompressed size of the html (null without html).
 export async function fetchPage(url, { timeout, beforeHop } = {}) {
   const res = await request(url, { timeout, beforeHop, accept: 'text/html,application/xhtml+xml' })
-  const contentType = res.headers.get('content-type') ?? ''
-  let html = null
-  let bodyBytes = null
-  let truncated = false
-  if (res.status === 200 && /html/i.test(contentType)) {
-    const body = await res.read(HTML_MAX_BYTES)
-    html = decode(body.bytes, contentType)
-    bodyBytes = body.bytes.length
-    truncated = body.truncated
-  } else {
-    await res.discard()
-  }
+  const body = await readHtml(res)
   return {
     url,
     finalUrl: res.finalUrl,
     status: res.status,
     redirects: res.redirects,
-    contentType,
-    html,
-    truncated,
+    contentType: res.headers.get('content-type') ?? '',
+    html: body?.html ?? null,
+    truncated: body?.truncated ?? false,
     robotsHeader: res.headers.get('x-robots-tag'),
     headers: checkedHeaders(res.headers),
-    bodyBytes
+    bodyBytes: body?.bodyBytes ?? null
   }
 }
