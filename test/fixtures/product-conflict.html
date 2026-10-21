@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jojoba Hair Serum - Example Store</title>
+  <meta name="description" content="A light jojoba hair serum that tames frizz and adds shine without weighing hair down.">
+  <link rel="canonical" href="https://fixtures.test/product-conflict.html">
+  <!-- The theme's Product markup, with an old price and a rating from a reviews app that was removed. -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": "Jojoba Hair Serum",
+    "url": "https://fixtures.test/product-conflict.html",
+    "image": "https://fixtures.test/cdn/shop/files/hair-serum.jpg",
+    "brand": { "@type": "Brand", "name": "Acme Labs" },
+    "gtin13": "6410000000037",
+    "aggregateRating": { "@type": "AggregateRating", "ratingValue": "4.2", "reviewCount": "10" },
+    "offers": { "@type": "Offer", "price": "19.90", "priceCurrency": "EUR", "availability": "https://schema.org/InStock" }
+  }
+  </script>
+  <!-- The Product markup of a reviews app, for the same product with the current price. -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": "Jojoba Hair Serum",
+    "url": "https://fixtures.test/product-conflict.html?variant=1",
+    "aggregateRating": { "@type": "AggregateRating", "ratingValue": "4.8", "reviewCount": "12" },
+    "offers": { "@type": "Offer", "price": "24.90", "priceCurrency": "EUR" }
+  }
+  </script>
+</head>
+<body>
+<main>
+  <h1>Jojoba Hair Serum</h1>
+  <p>A light jojoba hair serum that tames frizz and adds shine without weighing hair down.</p>
+  <img src="/cdn/shop/files/hair-serum.jpg" alt="Bottle of jojoba hair serum" width="600" height="600">
+</main>
+</body>
+</html>

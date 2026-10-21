@@ -168,6 +168,25 @@ function linkList({ linkSamples, links }) {
   </ul>`
 }
 
+// Both ends of a range with cents when either has them, so 19.90-24.00 does not read as 19.90-24.
+function priceRange({ lowPrice, highPrice, priceCurrency }) {
+  if (lowPrice === null) return 'no price'
+  const digits = Number.isInteger(lowPrice) && Number.isInteger(highPrice) ? 0 : 2
+  const range =
+    lowPrice === highPrice ? lowPrice.toFixed(digits) : `${lowPrice.toFixed(digits)}-${highPrice.toFixed(digits)}`
+  return priceCurrency ? `${range} ${priceCurrency}` : range
+}
+
+// What the Product markup says about each product: its price and availability, and the brand as a note.
+function productList(products = []) {
+  if (!products.length) return ''
+  const offer = ({ offers }) =>
+    offers ? [priceRange(offers), offers.availability.join(', ')].filter(Boolean).join(', ') : 'no offers'
+  return markup`<ul class="outline">
+    ${products.map((p) => markup`<li><strong>${p.name ?? 'No name'}</strong> ${offer(p)}${p.brand ? markup` <span class="note">brand ${p.brand}</span>` : ''}</li>`)}
+  </ul>`
+}
+
 // Rows of the collapsed "More about this page" block: [name, value], with empty values left out.
 function moreRows(facts) {
   const { openGraph: og } = facts
@@ -190,6 +209,8 @@ function moreRows(facts) {
     ['Updated', facts.dates.modified ? formatPageDate(facts.dates.modified) : ''],
     // No check asks for structured data, so its absence is not styled as a problem.
     ['Structured data', facts.jsonLdTypes.length ? facts.jsonLdTypes.join(', ') : 'None found'],
+    // Only shops have products, so the row is only there when the page has Product markup.
+    ['Products', productList(facts.products)],
     // Most sites have one language, so no hreflang links is not a problem either.
     [
       'Language versions',

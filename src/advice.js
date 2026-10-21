@@ -266,6 +266,26 @@ export const ADVICE = {
     why: 'Google needs certain fields before it can show a rich result such as price or breadcrumbs, so the page is not eligible without them.',
     fix: 'Add the field named in the technical message to the structured data.'
   },
+  'product-offer-incomplete': {
+    title: 'Product markup lacks what a shopping result needs',
+    why: 'Google shows a product with its price and stock in shopping results only when the markup gives an image, a price above 0 and its currency in an Offer.',
+    fix: 'Add the fields named in the technical message to the Product markup, usually in the theme or the SEO app that writes it.'
+  },
+  'product-details-missing': {
+    title: 'Product markup leaves out details shoppers compare',
+    why: 'Google recommends the brand, a product code such as the GTIN barcode, availability, shipping and returns. Shopping results show them, and the product can match more searches.',
+    fix: 'Add the fields named in the technical message. Shipping and returns may instead be set once on the Organization markup of the home page, or in Merchant Center, in which case they can be left off the product.'
+  },
+  'product-brand-is-site': {
+    title: 'The product brand is the name of the shop',
+    why: 'Google matches products by brand and product code. A shop name as the brand of products made by others hides the real brand that shoppers search for.',
+    fix: 'Set the brand to the maker of the product. On Shopify, the brand comes from the product vendor. If the shop makes the product itself, the shop name is right and this can be ignored.'
+  },
+  'conflicting-product-data': {
+    title: 'The page describes one product twice, differently',
+    why: 'Two pieces of Product markup give a different price or rating for the same product, often the theme and an app. Google picks one, so the price or stars in search results may be wrong.',
+    fix: 'Keep one source of Product markup. Turn off the markup in the app or the theme, or make both read the same price and reviews.'
+  },
   'long-url': {
     title: 'The web address is long',
     why: 'Long addresses are harder to read, share and remember. Google has no strict limit.',

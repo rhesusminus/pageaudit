@@ -482,6 +482,81 @@
         "author": {
           "$ref": "#/$defs/nullableString",
           "description": "The author meta tag, else the JSON-LD authors of the first node that has any."
+        },
+        "products": {
+          "description": "What the JSON-LD Product and ProductGroup nodes of the page say, at most 10. A ProductGroup is one product, its variants read with it. Only nodes at the top of a block or in its @graph count, so the products of an ItemList are not here. Added within schemaVersion 1, so older reports may lack it.",
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "types",
+              "name",
+              "brand",
+              "sku",
+              "gtin",
+              "mpn",
+              "image",
+              "offers",
+              "shipping",
+              "returnPolicy",
+              "rating"
+            ],
+            "properties": {
+              "types": { "type": "array", "items": { "type": "string" } },
+              "name": { "$ref": "#/$defs/nullableString" },
+              "brand": {
+                "$ref": "#/$defs/nullableString",
+                "description": "The brand name, an @id reference to another node of the page resolved."
+              },
+              "sku": { "$ref": "#/$defs/nullableString" },
+              "gtin": {
+                "$ref": "#/$defs/nullableString",
+                "description": "The first non-empty gtin, gtin8, gtin12, gtin13, gtin14 or isbn of the product, its variants or their offers."
+              },
+              "mpn": { "$ref": "#/$defs/nullableString" },
+              "image": { "$ref": "#/$defs/nullableString", "description": "The first image address." },
+              "offers": {
+                "description": "The offers of the product and its variants, null when it has none.",
+                "type": ["object", "null"],
+                "additionalProperties": false,
+                "required": ["count", "lowPrice", "highPrice", "priceCurrency", "availability"],
+                "properties": {
+                  "count": { "type": "integer", "minimum": 1 },
+                  "lowPrice": {
+                    "type": ["number", "null"],
+                    "description": "The lowest price, null when no offer gives one Google can read (digits with a dot for decimals)."
+                  },
+                  "highPrice": { "type": ["number", "null"] },
+                  "priceCurrency": { "$ref": "#/$defs/nullableString" },
+                  "availability": {
+                    "type": "array",
+                    "maxItems": 5,
+                    "items": { "type": "string" },
+                    "description": "The distinct availability values, such as InStock, without the schema.org prefix."
+                  }
+                }
+              },
+              "shipping": {
+                "enum": ["offer", "organization", null],
+                "description": "Where the page gives shipping details: on an offer (shippingDetails), on the Organization (hasShippingService), or nowhere."
+              },
+              "returnPolicy": {
+                "enum": ["offer", "organization", null],
+                "description": "Where the page gives a return policy (hasMerchantReturnPolicy): on an offer, on the Organization, or nowhere."
+              },
+              "rating": {
+                "type": ["object", "null"],
+                "additionalProperties": false,
+                "required": ["value", "count"],
+                "properties": {
+                  "value": { "type": "number" },
+                  "count": { "type": ["number", "null"] }
+                }
+              }
+            }
+          }
         }
       }
     },

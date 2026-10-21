@@ -112,8 +112,10 @@ export function healthSection(health, { pages }, inputs) {
 // Evidence is shown for the first hits only, so a problem on hundreds of pages stays readable.
 const MAX_EVIDENCE_HITS = 20
 
-function affectedItem(hit, group, showEvidence) {
-  const note = hit.message === group.message ? '' : hit.message
+// Where the hits of a problem say different things, such as which fields a markup leaves out, each hit shows its own
+// message, except one the heading already shows. One message shared by every hit is shown once, see fixItem().
+function affectedItem(hit, { headline, mixed }, showEvidence) {
+  const note = mixed && hit.message !== headline ? hit.message : ''
   return markup`<li>
     ${hit.context ? markup`<code>${hit.context}</code>` : ''}
     <span class="urls">${hit.urls.map((url) => link(url))}</span>
@@ -124,6 +126,11 @@ function affectedItem(hit, group, showEvidence) {
 
 function fixItem(group, index) {
   const advice = adviceFor(group.type)
+  // With advice, the heading is its title, so the message of the hits is not on the card yet.
+  const messages = {
+    headline: advice ? null : group.message,
+    mixed: group.hits.some((hit) => hit.message !== group.message)
+  }
   return markup`<li class="fix">
     <span class="fix-num" aria-hidden="true">${index + 1}</span>
     <div class="fix-body">
@@ -139,8 +146,9 @@ function fixItem(group, index) {
       }
       <details>
         <summary>Show where</summary>
+        ${advice && !messages.mixed ? markup`<p class="note">${group.message}</p>` : ''}
         <ul class="affected">
-          ${group.hits.map((hit, i) => affectedItem(hit, group, i < MAX_EVIDENCE_HITS))}
+          ${group.hits.map((hit, i) => affectedItem(hit, messages, i < MAX_EVIDENCE_HITS))}
         </ul>
         ${
           group.hits.slice(MAX_EVIDENCE_HITS).some(hasEvidence)

@@ -43,7 +43,8 @@ const facts = {
   hreflang: [{ lang: 'fi', href: 'https://a.test/fi' }],
   jsonLd: [],
   dates: { published: null, modified: null, lastModified: null, sitemapLastmod: null },
-  author: null
+  author: null,
+  products: []
 }
 const lighthouse = {
   scores: { performance: 95, accessibility: 60, 'best-practices': 30, seo: null },
@@ -342,6 +343,26 @@ test('renderHtml: an issue with an element shows its selector, markup and measur
   assert.doesNotMatch(renderHtml(report), /Show the (element|measurement)/)
 })
 
+test('renderHtml: a problem with advice shows the technical message once, or each one where they differ', () => {
+  const affected = (out) =>
+    out.slice(out.indexOf('<summary>Show where</summary>'), out.indexOf('</ul>', out.indexOf('class="affected"')))
+  const same = renderHtml(
+    wrap([
+      page('https://a.test/1', [issue('missing-alt', 'error')]),
+      page('https://a.test/2', [issue('missing-alt', 'error')])
+    ])
+  )
+  assert.equal(affected(same).match(/Message for missing-alt/g).length, 1)
+  const differ = renderHtml(
+    wrap([
+      page('https://a.test/1', [issue('product-details-missing', 'info', { message: 'Leaves out brand' })]),
+      page('https://a.test/2', [issue('product-details-missing', 'info', { message: 'Leaves out availability' })])
+    ])
+  )
+  assert.match(affected(differ), /<span class="note">Leaves out brand<\/span>/)
+  assert.match(affected(differ), /<span class="note">Leaves out availability<\/span>/)
+})
+
 test('renderHtml: element details are shown for the first 20 hits of a problem only', () => {
   const pages = Array.from({ length: 25 }, (_, i) =>
     page(`https://a.test/${i}`, [issue('missing-alt', 'warning', { selector: 'img', html: '<img>' })])
@@ -439,6 +460,30 @@ test('renderHtml: "More about this page" lists the facts that are not shown at f
     facts: null
   })
   assert.doesNotMatch(renderHtml(wrap([failed])), /More about this page/)
+})
+
+test('renderHtml: the products row shows each product with its price range, availability and brand', () => {
+  // The row is only there when the page has Product markup.
+  assert.doesNotMatch(renderHtml(report), /<dt>Products<\/dt>/)
+  const product = {
+    types: ['Product'],
+    name: 'Hair oil',
+    brand: 'Acme',
+    sku: null,
+    gtin: null,
+    mpn: null,
+    image: null,
+    offers: { count: 2, lowPrice: 19.9, highPrice: 24, priceCurrency: 'EUR', availability: ['InStock'] },
+    shipping: null,
+    returnPolicy: null,
+    rating: null
+  }
+  const shop = page('https://a.test/', [], {
+    facts: { ...facts, products: [product, { ...product, name: null, brand: null, offers: null }] }
+  })
+  const shopOut = renderHtml(wrap([shop]))
+  assert.match(shopOut, /<strong>Hair oil<\/strong> 19.90-24.00 EUR, InStock <span class="note">brand Acme<\/span>/)
+  assert.match(shopOut, /<strong>No name<\/strong> no offers<\/li>/)
 })
 
 test('renderHtml: every redirect hop is listed, with its status', () => {

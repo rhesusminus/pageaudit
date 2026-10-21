@@ -9,6 +9,7 @@ import { checkImages } from './images.js'
 import { checkIndexing } from './indexing.js'
 import { checkLinks } from './links.js'
 import { canonicalLinks, checkMeta, descriptionValues, titleElement } from './meta.js'
+import { checkProducts, pageProducts } from './products.js'
 import { absolute, baseUrl, extractSignals } from './signals.js'
 import { checkSnippetControls } from './snippets.js'
 import { checkSocial } from './social.js'
@@ -30,6 +31,7 @@ export const checkHtml = ($, page = {}) => [
   ...checkSnippetControls($, page.robotsHeader ?? null),
   ...checkSocial($),
   ...checkStructuredData($),
+  ...checkProducts($),
   ...checkHreflang($, page),
   ...checkHygiene($, page)
 ]
@@ -60,6 +62,7 @@ export function extractFacts($, finalUrl, { robotsHeader = null, lastModified = 
     jsonLd,
     // sitemapLastmod is filled in once the audit knows which sitemap listed the page, see addSitemapDates().
     dates: { ...dates, sitemapLastmod: null },
-    author
+    author,
+    products: pageProducts($)
   }
 }

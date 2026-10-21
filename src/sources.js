@@ -23,6 +23,7 @@ export const SOURCES = {
   structuredData: 'https://developers.google.com/search/docs/appearance/structured-data/intro-structured-data',
   searchGallery: 'https://developers.google.com/search/docs/appearance/structured-data/search-gallery',
   productSnippet: 'https://developers.google.com/search/docs/appearance/structured-data/product-snippet',
+  merchantListing: 'https://developers.google.com/search/docs/appearance/structured-data/merchant-listing',
   breadcrumb: 'https://developers.google.com/search/docs/appearance/structured-data/breadcrumb',
   urlStructure: 'https://developers.google.com/search/docs/crawling-indexing/url-structure',
   googlebot: 'https://developers.google.com/search/docs/crawling-indexing/googlebot',
