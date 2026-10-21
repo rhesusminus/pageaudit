@@ -281,3 +281,125 @@ test('conflicting-product-data: values only one node gives, and different produc
     ['2 Product nodes for one product disagree on currency (EUR vs USD)']
   )
 })
+
+test('products: a page with more offers than a function takes arguments keeps its facts', () => {
+  const offers = Array.from({ length: 200000 }, (_, i) => ({ price: (i % 50) + 1 }))
+  const [found] = products({ '@type': 'Product', name: 'X', offers })
+  assert.equal(found.offers.lowPrice, 1)
+  assert.equal(found.offers.highPrice, 50)
+})
+
+test('products: the price range only covers offers in the currency of the first priced offer', () => {
+  const range = (...offers) => {
+    const [found] = products({ '@type': 'Product', name: 'X', offers })
+    return [found.offers.lowPrice, found.offers.highPrice, found.offers.priceCurrency]
+  }
+  assert.deepEqual(
+    range(
+      { '@type': 'Offer', price: 5, priceCurrency: 'EUR' },
+      { '@type': 'Offer', price: 10, priceCurrency: 'USD' },
+      { '@type': 'Offer', price: 7 },
+      { '@type': 'Offer', price: 6, priceCurrency: 'EUR' }
+    ),
+    [5, 6, 'EUR']
+  )
+  // An offer without a price does not choose the currency, and a range without one has none.
+  const unpricedEur = { '@type': 'Offer', priceCurrency: 'EUR' }
+  assert.deepEqual(range(unpricedEur, { '@type': 'Offer', price: 8, priceCurrency: 'USD' }), [8, 8, 'USD'])
+  assert.deepEqual(range(unpricedEur, { '@type': 'Offer', price: 3 }, { '@type': 'Offer', price: 4 }), [3, 4, null])
+})
+
+test('products: a price too long to be a number is no price', () => {
+  const [found] = products({ '@type': 'Product', name: 'X', offers: { '@type': 'Offer', price: '9'.repeat(400) } })
+  assert.equal(found.offers.lowPrice, null)
+})
+
+test('products: an offer written as an @id reference is read', () => {
+  const [found] = products({
+    '@graph': [
+      { '@type': 'Product', name: 'X', offers: { '@id': '#offer' } },
+      { '@type': 'Offer', '@id': '#offer', price: 12, priceCurrency: 'EUR', availability: 'InStock' }
+    ]
+  })
+  assert.deepEqual(found.offers, {
+    count: 1,
+    lowPrice: 12,
+    highPrice: 12,
+    priceCurrency: 'EUR',
+    availability: ['InStock']
+  })
+})
+
+test('products: only an Organization or store gives the policies of the shop, and an empty list is none', () => {
+  const policies = (...others) => {
+    const [found] = products({ '@type': 'Product', name: 'X', offers: { '@type': 'Offer', price: 5 } }, ...others)
+    return [found.shipping, found.returnPolicy]
+  }
+  assert.deepEqual(policies({ '@type': 'Offer', hasMerchantReturnPolicy: { '@type': 'MerchantReturnPolicy' } }), [
+    null,
+    null
+  ])
+  assert.deepEqual(policies({ '@type': 'Organization', hasMerchantReturnPolicy: [], hasShippingService: ' ' }), [
+    null,
+    null
+  ])
+  assert.deepEqual(
+    policies({ '@type': 'Organization', hasMerchantReturnPolicy: {}, hasShippingService: [{}, false] }),
+    [null, null]
+  )
+  const emptyShipping = { '@type': 'Offer', price: 5, shippingDetails: {} }
+  assert.equal(products({ '@type': 'Product', name: 'X', offers: emptyShipping })[0].shipping, null)
+  assert.deepEqual(policies({ '@type': 'ClothingStore', hasShippingService: { '@type': 'ShippingService' } }), [
+    'organization',
+    null
+  ])
+})
+
+test('product-offer-incomplete: the price and its currency must be in the same Offer', () => {
+  const [issue] = issues({
+    '@type': 'Product',
+    name: 'X',
+    image: 'https://a.test/x.jpg',
+    offers: [
+      { '@type': 'Offer', price: 5 },
+      { '@type': 'Offer', priceCurrency: 'EUR' }
+    ]
+  })
+  assert.equal(issue.type, 'product-offer-incomplete')
+  assert.match(issue.message, /lacks a priceCurrency in the Offer with the price,/)
+  // An AggregateOffer with a price and currency does not complete an Offer that lacks the currency.
+  const [mixed] = issues({
+    '@type': 'Product',
+    name: 'X',
+    image: 'https://a.test/x.jpg',
+    offers: [
+      { '@type': 'AggregateOffer', lowPrice: 10, priceCurrency: 'EUR' },
+      { '@type': 'Offer', price: 5 }
+    ]
+  })
+  assert.match(mixed.message, /lacks a priceCurrency in the Offer with the price,/)
+})
+
+test('product checks: every node of the product is checked, whatever their order', () => {
+  const complete = {
+    '@type': 'Product',
+    name: 'X',
+    image: 'https://a.test/x.jpg',
+    offers: { '@type': 'Offer', price: 5, priceCurrency: 'EUR' }
+  }
+  const incomplete = { '@type': 'Product', name: 'X', offers: { '@type': 'Offer', price: 5, priceCurrency: 'EUR' } }
+  const found = (...nodes) => types(issues(...nodes)).sort()
+  assert.ok(found(complete, incomplete).includes('product-offer-incomplete'))
+  assert.deepEqual(found(complete, incomplete), found(incomplete, complete))
+  // Two nodes with the same gaps give one issue.
+  assert.equal(types(issues(incomplete, incomplete)).filter((t) => t === 'product-offer-incomplete').length, 1)
+})
+
+test('product checks: products told apart by a query parameter other than variant are two products', () => {
+  const offer = (price) => ({ '@type': 'Offer', price, priceCurrency: 'EUR' })
+  const found = issues(
+    { '@type': 'Product', url: 'https://a.test/product?id=1', offers: offer(5) },
+    { '@type': 'Product', url: 'https://a.test/product?id=2', offers: offer(9) }
+  )
+  assert.deepEqual(found, [])
+})

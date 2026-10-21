@@ -6,24 +6,34 @@ import { metaContent, ogSelector } from './signals.js'
 
 const MAX_PRODUCTS = 10
 const MAX_AVAILABILITY = 5
-// Types that name the site itself, besides any type ending in Store or Business, such as ClothingStore.
-const SITE_TYPES = new Set(['Organization', 'Corporation', 'WebSite'])
+// The types of the business behind the site, besides any type ending in Store or Business, such as ClothingStore.
+const ORGANIZATION_TYPES = new Set(['Organization', 'Corporation'])
 const IDENTIFIERS = ['gtin', 'gtin8', 'gtin12', 'gtin13', 'gtin14', 'isbn']
 
 const isObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 const objects = (value) => [value].flat().filter(isObject)
-const has = (value) => value !== undefined && value !== null && value !== ''
+// A policy value that says something: a text such as a URL, an object with properties, or a list with one of them.
+// A blank text, an empty object or list and true or false do not. A list inside the list is not looked into, so a
+// deeply nested value cannot overflow the stack.
+const givenItem = (value) =>
+  typeof value === 'string' ? value.trim() !== '' : isObject(value) && Object.keys(value).length > 0
+const given = (value) => (Array.isArray(value) ? value.some(givenItem) : givenItem(value))
 const idOf = (node) => (typeof node['@id'] === 'string' ? node['@id'] : null)
+// An object written inline or as a { @id } reference to another node of the page, followed one step.
+const resolved = (entry, byId) => ({ ...byId.get(idOf(entry)), ...entry })
 
 const isProduct = (node) => typesOf(node).some((type) => type === 'Product' || type === 'ProductGroup')
 const isGroup = (node) => typesOf(node).includes('ProductGroup')
+const isOrganization = (node) =>
+  typesOf(node).some((type) => ORGANIZATION_TYPES.has(type) || /(Store|Business)$/.test(type))
 
 // A price as Google reads it: a number, or a string of digits with a dot for decimals. "19,90" and "1,299.00" are
 // not prices, Google asks for a dot and no thousands separator.
 function amount(value) {
   const first = Array.isArray(value) ? value[0] : value
-  if (typeof first === 'number') return Number.isFinite(first) ? first : null
-  return typeof first === 'string' && /^\s*\d+(\.\d+)?\s*$/.test(first) ? Number(first) : null
+  const number = typeof first === 'string' && /^\s*\d+(\.\d+)?\s*$/.test(first) ? Number(first) : first
+  // A string of hundreds of digits is Infinity, which is no price either.
+  return typeof number === 'number' && Number.isFinite(number) ? number : null
 }
 
 const priceSpecification = (offer) => objects(offer.priceSpecification)[0] ?? {}
@@ -47,14 +57,20 @@ function imageUrl(value) {
   return null
 }
 
+// The price range is in the first currency an offer with a price gives: offers in another currency or without one
+// are left out, their prices do not compare. When no priced offer names a currency, the range covers every price and
+// has none. With no price Google can read, the currency is the first one any offer gives. The extremes are found with
+// reduce, a spread of a page's worth of prices can exceed the argument limit.
 function offerSummary(offers) {
   if (offers.length === 0) return null
-  const prices = offers.flatMap(offerPrices)
+  const priced = offers.filter((offer) => offerPrices(offer).length > 0)
+  const rangeCurrency = priced.map(offerCurrency).find(Boolean) ?? null
+  const prices = priced.filter((offer) => offerCurrency(offer) === rangeCurrency).flatMap(offerPrices)
   return {
     count: offers.length,
-    lowPrice: prices.length ? Math.min(...prices) : null,
-    highPrice: prices.length ? Math.max(...prices) : null,
-    priceCurrency: offers.map(offerCurrency).find(Boolean) ?? null,
+    lowPrice: prices.length ? prices.reduce((a, b) => Math.min(a, b)) : null,
+    highPrice: prices.length ? prices.reduce((a, b) => Math.max(a, b)) : null,
+    priceCurrency: prices.length ? rangeCurrency : (offers.map(offerCurrency).find(Boolean) ?? null),
     availability: [...new Set(offers.map(availability).filter(Boolean))].slice(0, MAX_AVAILABILITY)
   }
 }
@@ -68,8 +84,8 @@ function rating(node) {
 // Where the shipping or return details are: on an offer, on the Organization (Google reads them there too, usually
 // from the home page), or nowhere on this page. `orgKey` is the Organization property.
 function policyPlace(offers, offerKey, orgKey, nodes) {
-  if (offers.some((offer) => has(offer[offerKey]))) return 'offer'
-  return nodes.some((node) => !isProduct(node) && has(node[orgKey])) ? 'organization' : null
+  if (offers.some((offer) => given(offer[offerKey]))) return 'offer'
+  return nodes.some((node) => isOrganization(node) && given(node[orgKey])) ? 'organization' : null
 }
 
 // The variants of each ProductGroup on the page: its hasVariant entries, inline or { @id } references, and the
@@ -77,7 +93,7 @@ function policyPlace(offers, offerKey, orgKey, nodes) {
 function variantsByGroup(nodes, byId) {
   const groups = new Map(nodes.filter(isGroup).map((group) => [group, []]))
   for (const [group, variants] of groups) {
-    for (const entry of objects(group.hasVariant)) variants.push({ ...byId.get(idOf(entry)), ...entry })
+    for (const entry of objects(group.hasVariant)) variants.push(resolved(entry, byId))
   }
   for (const node of nodes.filter((n) => isProduct(n) && !isGroup(n))) {
     const group = byId.get(objects(node.isVariantOf).map(idOf)[0])
@@ -96,21 +112,33 @@ function isVariant(node, groups, byId) {
   return groups.has(group) || [...groups.values()].some((variants) => id && variants.some((v) => idOf(v) === id))
 }
 
+// The address that names a product. Shopify adds ?variant= for a variant of the same product, other parameters, such
+// as ?id=, can tell products apart, so only that one is dropped.
+function productUrl(value) {
+  try {
+    const url = new URL(value)
+    url.searchParams.delete('variant')
+    url.hash = ''
+    return url.href
+  } catch {
+    return value
+  }
+}
+
 // The first value `read` finds in the product, its variants and, where passed, their offers.
 const first = (members, read) => members.map(read).find(Boolean) ?? null
 
 // One product of the page with its variants, as the facts describe it, plus what the checks need beyond that:
-// `id` and `url` (without its query, which Shopify uses for the variant) to tell two nodes of one product from two
-// products, and the types of its offers.
+// `id` and `url` to tell two nodes of one product from two products, and its offers, each checked on its own.
 function describe(node, variants, nodes, byId) {
   const members = [node, ...variants]
-  const offers = members.flatMap((member) => objects(member.offers))
+  const offers = members.flatMap((member) => objects(member.offers).map((offer) => resolved(offer, byId)))
   // Shopify themes write the sku and barcode of each variant on its offer.
   const withOffers = [...members, ...offers]
   return {
     id: idOf(node),
-    url: textValue(node.url, MAX_URL)?.split(/[?#]/)[0] ?? null,
-    offerTypes: offers.map((offer) => typesOf(offer)),
+    url: productUrl(textValue(node.url, MAX_URL)),
+    offers,
     fact: {
       types: typesOf(node),
       name: textValue(node.name),
@@ -167,25 +195,27 @@ function byProduct(list) {
   return groups
 }
 
-// The product a page is about, when it is about one: every product node is the same product and one of them has
-// offers. A collection page lists several products, or none outside an ItemList, so it gets no product checks.
-function soleProduct(groups) {
-  if (groups.length !== 1) return null
-  return groups[0].find((product) => product.fact.offers) ?? null
-}
+// The nodes with offers of the product a page is about, when it is about one: every product node is the same
+// product. Google reads each node, so an incomplete one counts even next to a complete one. A collection page lists
+// several products, or none outside an ItemList, so it gets no product checks.
+const soleProductNodes = (groups) => (groups.length === 1 ? groups[0].filter((product) => product.fact.offers) : [])
 
 // The product an issue is about: its name, else its type. Two pages with the same gaps but different products stay
 // apart in the digest, so each keeps its own message.
 const productContext = ({ fact }) => (fact.name ? `"name": "${fact.name}"` : `"@type": "${fact.types.join(', ')}"`)
 
-// What a merchant listing needs besides the name, which missing-schema-property asks for.
-function offerGaps({ fact, offerTypes }) {
-  const gaps = []
-  if (!fact.image) gaps.push('an image')
-  if (!(fact.offers.highPrice > 0)) gaps.push('a price above 0')
-  if (!fact.offers.priceCurrency) gaps.push('a priceCurrency')
-  if (offerTypes.every((types) => types.includes('AggregateOffer')))
-    gaps.push('an Offer (an AggregateOffer only gives a product snippet)')
+const isAggregate = (offer) => typesOf(offer).includes('AggregateOffer')
+
+// What a merchant listing needs besides the name, which missing-schema-property asks for. Only an Offer counts, an
+// AggregateOffer only gives a product snippet, and the price and its currency count only when one Offer gives both.
+function offerGaps({ fact, offers }) {
+  const listed = offers.filter((offer) => !isAggregate(offer))
+  const priced = listed.filter((offer) => offerPrices(offer).some((price) => price > 0))
+  const gaps = fact.image ? [] : ['an image']
+  if (listed.length === 0) return [...gaps, 'an Offer (an AggregateOffer only gives a product snippet)']
+  if (priced.length === 0) gaps.push('a price above 0')
+  if (priced.length > 0 && !priced.some(offerCurrency)) gaps.push('a priceCurrency in the Offer with the price')
+  if (priced.length === 0 && !listed.some(offerCurrency)) gaps.push('a priceCurrency')
   return gaps
 }
 
@@ -231,9 +261,7 @@ function detailsMissing(product) {
 
 // The names the site goes by: its Organization or store, its WebSite and og:site_name.
 function siteNames($, all) {
-  const site = all.filter((node) =>
-    typesOf(node).some((type) => SITE_TYPES.has(type) || /(Store|Business)$/.test(type))
-  )
+  const site = all.filter((node) => isOrganization(node) || typesOf(node).includes('WebSite'))
   return [...site.map((node) => textValue(node.name)), metaContent($, ogSelector('site_name'))].filter(Boolean)
 }
 
@@ -283,14 +311,21 @@ function conflicts(nodes) {
   ]
 }
 
+// Two nodes of one product with the same gaps give one issue.
+const distinct = (issues) =>
+  issues.filter(
+    (issue, i) => issues.findIndex((other) => other.type === issue.type && other.message === issue.message) === i
+  )
+
 // Checks of the Product markup. Conflicts are looked for on any page, the other checks only run on a page about one
 // product.
 export function checkProducts($) {
   const all = pageObjects($)
   const groups = byProduct(products(all))
-  const product = soleProduct(groups)
-  const single = product
-    ? [...offerIncomplete(product), ...detailsMissing(product), ...brandIsSite($, all, product)]
-    : []
-  return [...single, ...groups.flatMap(conflicts)]
+  const single = soleProductNodes(groups).flatMap((product) => [
+    ...offerIncomplete(product),
+    ...detailsMissing(product),
+    ...brandIsSite($, all, product)
+  ])
+  return [...distinct(single), ...groups.flatMap(conflicts)]
 }
