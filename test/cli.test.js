@@ -90,7 +90,8 @@ const FIXTURE_ORIGIN = {
     'Applebot-Extended': 'allowed',
     CCBot: 'allowed'
   },
-  contentSignal: 'search=yes, ai-train=no'
+  contentSignal: 'search=yes, ai-train=no',
+  platform: null
 }
 
 // The coverage of a run with no option that changes what is collected. The tests run with --delay 0.
@@ -1060,6 +1061,19 @@ test('cli: a page robots.txt keeps from an AI search crawler is reported, and or
   assert.deepEqual(report.origins, [partial])
   assert.ok(report.rules['ai-search-blocked'].fix.includes('OAI-SearchBot'))
   assert.deepEqual(JSON.parse(await readFile(digestPath, 'utf8')).origins, [partial])
+})
+
+test('cli: origins name the platform the pages run on, in the report and the digest', async (t) => {
+  const dir = await tempDir(t)
+  const digestPath = join(dir, 'digest.json')
+  const { report } = await runJson(t, [fixtureUrl('good.html'), fixtureUrl('product.html'), '--digest', digestPath])
+  const shopify = { name: 'Shopify', theme: 'Dawn' }
+  assert.deepEqual(
+    report.pages.map((page) => page.facts.platform),
+    [null, shopify]
+  )
+  assert.deepEqual(report.origins, [{ ...FIXTURE_ORIGIN, platform: shopify }])
+  assert.deepEqual(JSON.parse(await readFile(digestPath, 'utf8')).origins, report.origins)
 })
 
 test('cli: snippet rules from the meta tag and the X-Robots-Tag header become issues and facts', async (t) => {

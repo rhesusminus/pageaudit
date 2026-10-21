@@ -112,3 +112,25 @@ export function pagePlatform($) {
   const platform = PLATFORMS.find(({ found }) => found(page))
   return platform ? { name: platform.name, theme: platform.theme?.(page) ?? null } : null
 }
+
+// The most common of `values`, the first one seen on a tie, or undefined when there are none.
+function mostCommon(values) {
+  const counts = new Map()
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1)
+  let top
+  for (const [value, count] of counts) if (top === undefined || count > counts.get(top)) top = value
+  return top
+}
+
+// The platform found on most of the loaded pages of an origin, with the theme most of those pages name, the first one
+// seen on a tie. Null when no page shows a platform. A page that names no theme still counts for its platform. Pages
+// count by their final URL, like the robots.txt of an origin does, see loadedByOrigin() in robots.js.
+export function originPlatform(pages, origin) {
+  const found = pages
+    .filter((page) => page.facts?.platform && page.status === 200 && new URL(page.finalUrl).origin === origin)
+    .map((page) => page.facts.platform)
+  const name = mostCommon(found.map((platform) => platform.name))
+  if (name === undefined) return null
+  const themes = found.filter((platform) => platform.name === name && platform.theme).map((platform) => platform.theme)
+  return { name, theme: mostCommon(themes) ?? null }
+}

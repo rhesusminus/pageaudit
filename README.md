@@ -149,6 +149,8 @@ Every issue, page or site, has an `id`, a `type`, a `message` and a `context`. W
 
 **AI crawlers.** The top-level `origins` list says, for each origin the audited pages ended up on, how its `robots.txt` treats AI crawlers, so a model can tell a site kept out of AI search from one that only opted out of training. `robotsTxt` is `ok`, `missing` (no file, everything allowed), `unreachable` or `failed`. `aiSearch` covers the crawlers that find pages for AI search answers (`OAI-SearchBot`, `Claude-SearchBot`, `PerplexityBot`) and `aiTraining` the tokens for training only (`GPTBot`, `ClaudeBot`, `Google-Extended`, `Applebot-Extended`, `CCBot`), each as `allowed`, `blocked` or `partial` over the audited pages of the origin, and `null` when the file could not be read. `contentSignal` is the `Content-Signal` value for every crawler, such as `search=yes, ai-train=no` from Cloudflare's managed `robots.txt`, or `null`. Pages kept from an AI search crawler while Googlebot may crawl them are also an `ai-search-blocked` issue.
 
+**Platform.** Each `origins` entry also has `platform`, the shop or site builder most of the origin's audited pages run on, as in their `facts.platform`, or `null`. The digest has no page facts, so this is where a model reading it learns that the fix for a Shopify store goes in the theme.
+
 | `facts` field                              | Meaning                                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `title`, `description`, `h1s`, `canonical` | The values the site checks compare (the canonical is resolved to an absolute URL, and `h1s` leave out script, style and noscript text)                                                                                                                                                                                                                                                         |
@@ -538,7 +540,7 @@ The JSON report is meant to be handed to a human or an LLM for prioritizing fixe
   generatedAt: '2026-10-15T08:00:00.000Z',
   pages: [{ url, finalUrl, status, redirects: [{ url, status, location }], issues: [...], facts, content, lighthouse }],
   site: [...],                    // site issues
-  origins: [...],                 // how each origin's robots.txt treats AI crawlers
+  origins: [...],                 // how each origin's robots.txt treats AI crawlers, and its platform
   skipped: [{ input, source, reason }],
   coverage: { tool, settings, urls, links, notRun: [{ check, reason }] },
   rules: { [type]: { title, why, fix } },

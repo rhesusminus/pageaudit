@@ -16,7 +16,7 @@
       "items": { "$ref": "#/$defs/siteIssue" }
     },
     "origins": {
-      "description": "How the robots.txt of each origin that pages ended up on treats AI crawlers, over the pages audited there. Always written by the CLI.",
+      "description": "What the audit found about each origin that pages ended up on: how its robots.txt treats AI crawlers over the pages audited there, and the platform they run on. Always written by the CLI.",
       "type": "array",
       "items": { "$ref": "#/$defs/origin" }
     },
@@ -68,6 +68,10 @@
         "contentSignal": {
           "$ref": "#/$defs/nullableString",
           "description": "The Content-Signal value for every crawler, such as search=yes, ai-train=no. Null when there is none."
+        },
+        "platform": {
+          "$ref": "#/$defs/platform",
+          "description": "The platform found on most of the origin's audited pages, see facts.platform. Null when none shows one. Added within schemaVersion 1, so older reports may lack it."
         }
       }
     },

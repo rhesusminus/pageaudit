@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { parse } from '../src/parse.js'
-import { pagePlatform } from '../src/checks/page/platform.js'
+import { originPlatform, pagePlatform } from '../src/checks/page/platform.js'
 
 const platform = (head, html = '') =>
   pagePlatform(parse(`<html${html}><head>${head}</head><body><p>x</p></body></html>`))
@@ -103,4 +103,52 @@ test('platform: a page with none of the markers, or only look-alikes, has none',
     null
   )
   assert.equal(platform('<script src="https://evilcdn.shopify.com.test/x.js"></script>'), null)
+})
+
+const loaded = (url, platform, status = 200) => ({
+  url,
+  finalUrl: url,
+  status,
+  facts: status === 200 ? { platform } : null
+})
+const DAWN = { name: 'Shopify', theme: 'Dawn' }
+const REFRESH = { name: 'Shopify', theme: 'Refresh' }
+
+test('originPlatform: the platform of most pages wins, a page without one does not vote', () => {
+  const pages = [
+    loaded('https://shop.test/', REFRESH),
+    loaded('https://shop.test/a', DAWN),
+    loaded('https://shop.test/b', DAWN),
+    loaded('https://shop.test/c', null),
+    loaded('https://shop.test/d', null)
+  ]
+  assert.deepEqual(originPlatform(pages, 'https://shop.test'), DAWN)
+})
+
+test('originPlatform: pages that name no theme still count for their platform, which takes the theme of the others', () => {
+  const pages = [
+    loaded('https://shop.test/', DAWN),
+    loaded('https://shop.test/a', { name: 'Shopify', theme: null }),
+    loaded('https://shop.test/b', { name: 'Shopify', theme: null }),
+    loaded('https://shop.test/c', DAWN),
+    ...['d', 'e', 'f'].map((path) => loaded(`https://shop.test/${path}`, { name: 'WordPress', theme: null }))
+  ]
+  assert.deepEqual(originPlatform(pages, 'https://shop.test'), DAWN)
+  const noTheme = { name: 'Shopify', theme: null }
+  assert.deepEqual(originPlatform([loaded('https://shop.test/', noTheme)], 'https://shop.test'), noTheme)
+})
+
+test('originPlatform: a tie goes to the first page, and only pages that loaded on the origin count', () => {
+  const pages = [
+    loaded('https://shop.test/', REFRESH),
+    loaded('https://shop.test/a', DAWN),
+    loaded('https://blog.test/', { name: 'WordPress', theme: null }),
+    loaded('https://blog.test/b', { name: 'WordPress', theme: null })
+  ]
+  assert.deepEqual(originPlatform(pages, 'https://shop.test'), REFRESH)
+  assert.deepEqual(originPlatform(pages, 'https://blog.test'), { name: 'WordPress', theme: null })
+  // A page that redirected counts on the origin it ended up on, and a page that did not load not at all.
+  const moved = { ...loaded('https://old.test/', DAWN), finalUrl: 'https://shop.test/' }
+  assert.equal(originPlatform([moved, loaded('https://old.test/x', DAWN, 404)], 'https://old.test'), null)
+  assert.deepEqual(originPlatform([moved], 'https://shop.test'), DAWN)
 })
