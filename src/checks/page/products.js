@@ -195,12 +195,10 @@ function byProduct(list) {
   return groups
 }
 
-// The product a page is about, when it is about one: every product node is the same product and one of them has
-// offers. A collection page lists several products, or none outside an ItemList, so it gets no product checks.
-function soleProduct(groups) {
-  if (groups.length !== 1) return null
-  return groups[0].find((product) => product.fact.offers) ?? null
-}
+// The nodes with offers of the product a page is about, when it is about one: every product node is the same
+// product. Google reads each node, so an incomplete one counts even next to a complete one. A collection page lists
+// several products, or none outside an ItemList, so it gets no product checks.
+const soleProductNodes = (groups) => (groups.length === 1 ? groups[0].filter((product) => product.fact.offers) : [])
 
 // The product an issue is about: its name, else its type. Two pages with the same gaps but different products stay
 // apart in the digest, so each keeps its own message.
@@ -313,14 +311,21 @@ function conflicts(nodes) {
   ]
 }
 
+// Two nodes of one product with the same gaps give one issue.
+const distinct = (issues) =>
+  issues.filter(
+    (issue, i) => issues.findIndex((other) => other.type === issue.type && other.message === issue.message) === i
+  )
+
 // Checks of the Product markup. Conflicts are looked for on any page, the other checks only run on a page about one
 // product.
 export function checkProducts($) {
   const all = pageObjects($)
   const groups = byProduct(products(all))
-  const product = soleProduct(groups)
-  const single = product
-    ? [...offerIncomplete(product), ...detailsMissing(product), ...brandIsSite($, all, product)]
-    : []
-  return [...single, ...groups.flatMap(conflicts)]
+  const single = soleProductNodes(groups).flatMap((product) => [
+    ...offerIncomplete(product),
+    ...detailsMissing(product),
+    ...brandIsSite($, all, product)
+  ])
+  return [...distinct(single), ...groups.flatMap(conflicts)]
 }

@@ -380,6 +380,21 @@ test('product-offer-incomplete: the price and its currency must be in the same O
   assert.match(mixed.message, /lacks a priceCurrency in the Offer with the price,/)
 })
 
+test('product checks: every node of the product is checked, whatever their order', () => {
+  const complete = {
+    '@type': 'Product',
+    name: 'X',
+    image: 'https://a.test/x.jpg',
+    offers: { '@type': 'Offer', price: 5, priceCurrency: 'EUR' }
+  }
+  const incomplete = { '@type': 'Product', name: 'X', offers: { '@type': 'Offer', price: 5, priceCurrency: 'EUR' } }
+  const found = (...nodes) => types(issues(...nodes)).sort()
+  assert.ok(found(complete, incomplete).includes('product-offer-incomplete'))
+  assert.deepEqual(found(complete, incomplete), found(incomplete, complete))
+  // Two nodes with the same gaps give one issue.
+  assert.equal(types(issues(incomplete, incomplete)).filter((t) => t === 'product-offer-incomplete').length, 1)
+})
+
 test('product checks: products told apart by a query parameter other than variant are two products', () => {
   const offer = (price) => ({ '@type': 'Offer', price, priceCurrency: 'EUR' })
   const found = issues(
