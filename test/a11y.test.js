@@ -1,9 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { parse } from '../src/parse.js'
 import { checkA11y } from '../src/checks/page/a11y.js'
 import { checkLinks } from '../src/checks/page/links.js'
 import { checkImages } from '../src/checks/page/images.js'
+import { checkHtml } from '../src/checks/page/index.js'
 
 const types = (issues) => issues.map((i) => i.type)
 const a11y = (html) => types(checkA11y(parse(`<main>${html}</main>`)))
@@ -161,4 +163,56 @@ test('images: a hidden image with alt does not stop empty-alt-in-link for a visi
   const img = (attrs, alt) => `<img ${attrs} src="/a.png" alt="${alt}" width="1" height="1">`
   const html = `<a href="/">${img('aria-hidden="true"', 'Home')}${img('', '')}</a>`
   assert.deepEqual(types(checkImages(parse(html))), ['empty-alt-in-link'])
+})
+
+test('names: text, aria-label, title or alt set by script names a link', () => {
+  assert.deepEqual(links('<a href="/" v-text="label"></a>'), [])
+  assert.deepEqual(links('<a href="/" :aria-label="label"></a>'), [])
+  assert.deepEqual(links('<a href="/" [attr.title]="label"></a>'), [])
+  assert.deepEqual(links('<a href="/"><span x-text="label"></span></a>'), [])
+  assert.deepEqual(links('<a href="/" aria-labelledby="l"></a><span id="l" ng-bind="label"></span>'), [])
+  assert.deepEqual(
+    links('<a href="/" aria-labelledby="l"></a><img id="l" src="/a.png" alt="" :aria-label="label">'),
+    []
+  )
+  assert.deepEqual(links('<a href="/"><span aria-hidden="true" v-text="label"></span></a>'), ['link-no-name'])
+  assert.deepEqual(links('<a href="/"><noscript><span v-text="label"></span></noscript></a>'), ['link-no-name'])
+})
+
+test('names: link text set by script is not judged for its wording', () => {
+  assert.deepEqual(links('<a href="/a" v-text="label">Read more</a>'), [])
+  assert.deepEqual(links('<a href="/a">Read <span x-text="label">more</span></a>'), [])
+  assert.deepEqual(links('<a href="/a" :class="c">Read more</a>'), ['link-generic-text'])
+})
+
+test('names: a link named by script leaves its decorative image alone', () => {
+  const html = '<a href="/" :aria-label="label"><img src="/a.png" alt="" width="1" height="1"></a>'
+  assert.deepEqual(types(checkImages(parse(html))), ['empty-alt'])
+})
+
+test('forms: a name set by script names a field, v-model alone does not', () => {
+  assert.deepEqual(a11y('<input :aria-label="label">'), [])
+  assert.deepEqual(a11y('<input x-bind:title="label">'), [])
+  assert.deepEqual(a11y('<label for="n" v-text="label"></label><input id="n">'), [])
+  assert.deepEqual(a11y('<label><span x-text="label"></span><input></label>'), [])
+  assert.deepEqual(a11y('<select v-model="shop"><option v-for="s in shops" :value="s.id">a</option></select>'), [
+    'form-input-no-label'
+  ])
+  // A field's own content is not its name.
+  assert.deepEqual(a11y('<textarea v-text="note"></textarea>'), ['form-input-no-label'])
+})
+
+test('names: a shop page whose images, alts and headings are set by Vue and Alpine', async () => {
+  const html = await readFile(new URL('./fixtures/script-bindings.html', import.meta.url), 'utf8')
+  const found = types(checkHtml(parse(html)))
+  const watched = ['missing-src', 'missing-alt', 'empty-alt', 'empty-alt-in-link', 'empty-heading', 'link-no-name']
+  assert.deepEqual(
+    found.filter((type) => watched.includes(type)),
+    []
+  )
+  // The country list has no label, v-model does not give it one.
+  assert.deepEqual(
+    found.filter((type) => type === 'form-input-no-label'),
+    ['form-input-no-label']
+  )
 })

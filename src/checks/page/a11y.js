@@ -1,7 +1,7 @@
 import { SOURCES } from '../../sources.js'
 import { evidence } from '../evidence.js'
 import { seoIssue, snippet } from '../snippet.js'
-import { accessibleName, hasBrokenLabelledBy } from './accname.js'
+import { accessibleName, hasBrokenLabelledBy, namedByScript } from './accname.js'
 
 const CONTROLS = 'input:not([type=hidden], [type=submit], [type=button], [type=reset], [type=image]), select, textarea'
 const ID_REFERENCES = ['aria-labelledby', 'aria-describedby', 'aria-controls', 'aria-owns', 'for']
@@ -23,18 +23,17 @@ function labelsFor($, el) {
     })
 }
 
-// A control is named by its label, aria-labelledby, aria-label or title.
-function controlName($, el) {
-  const fromLabel = labelsFor($, el)
-    .map((label) => accessibleName($, label))
-    .find(Boolean)
-  return fromLabel || accessibleName($, el, { content: false })
+// A control is named by its label, aria-labelledby, aria-label or title, in the HTML or set by script.
+function hasName($, el) {
+  const labels = labelsFor($, el)
+  if (labels.some((label) => accessibleName($, label) || namedByScript($, label))) return true
+  return Boolean(accessibleName($, el, { content: false })) || namedByScript($, el, { content: false })
 }
 
 function checkFormLabels($) {
   return $(CONTROLS)
     .toArray()
-    .filter((el) => $(el).attr('aria-hidden') !== 'true' && !controlName($, el))
+    .filter((el) => $(el).attr('aria-hidden') !== 'true' && !hasName($, el))
     .map((el) =>
       issue($, el, {
         type: 'form-input-no-label',

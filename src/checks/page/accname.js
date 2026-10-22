@@ -1,4 +1,5 @@
 import { collapseWhitespace } from '../../text.js'
+import { hasBoundText, isBound } from './bindings.js'
 
 // A simplified accessible name: what a screen reader would announce for a link or form control.
 // It follows the order of the accessible name spec (aria-labelledby, aria-label, content, title)
@@ -32,14 +33,19 @@ function contentText($, el, images, includeHidden = false) {
 const referencedText = ($, target) =>
   target.is('img') ? text(target.attr('alt')) : contentText($, target.get(0), true, isHidden(target.get(0)))
 
-// The text of the elements an aria-labelledby points to, hidden ones included. Ids that do not exist, or that point
-// at empty elements, give nothing. A referenced element's own aria-labelledby is not followed, so references cannot loop.
+// The elements an aria-labelledby points to. Ids that do not exist give nothing.
+const labelledByTargets = ($, el) =>
+  ($(el).attr('aria-labelledby') ?? '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((id) => $(`[id="${id.replace(/["\\]/g, '\\$&')}"]`).first())
+    .filter((target) => target.length)
+
+// The text of the elements an aria-labelledby points to, hidden ones included. Targets that are empty give nothing.
+// A referenced element's own aria-labelledby is not followed, so references cannot loop.
 function labelledByText($, el) {
-  const ids = ($(el).attr('aria-labelledby') ?? '').split(/\s+/).filter(Boolean)
   return text(
-    ids
-      .map((id) => $(`[id="${id.replace(/["\\]/g, '\\$&')}"]`).first())
-      .filter((target) => target.length)
+    labelledByTargets($, el)
       .map((target) => text(target.attr('aria-label')) || referencedText($, target))
       .join(' ')
   )
@@ -61,6 +67,26 @@ export function accessibleName($, el, { images = true, content = true } = {}) {
   const label = text(own.attr('aria-label'))
   if (label) return label
   return (content && contentText($, el, images)) || text(own.attr('title'))
+}
+
+// Content with text or a name set by script, see bindings.js. It mirrors contentText: explicitly hidden subtrees and
+// noscript add nothing, and an image counts through its alt.
+function boundContent(node, images, includeHidden = false) {
+  if (node.type !== 'tag' || node.name === 'noscript' || (!includeHidden && isHidden(node))) return false
+  if (node.name === 'img') return images && isBound(node, 'alt')
+  if (hasBoundText(node) || isBound(node, 'aria-label')) return true
+  return node.children.some((child) => boundContent(child, images, includeHidden))
+}
+
+// True when a framework fills in the name accessibleName looks for, with the same options. Its value is unknown here,
+// but a screen reader reads the rendered page.
+export function namedByScript($, el, { images = true, content = true } = {}) {
+  if (['aria-label', 'aria-labelledby', 'title'].some((name) => isBound(el, name))) return true
+  // A referenced element names with its own aria-label first, images included, as in labelledByText.
+  const targets = labelledByTargets($, el).map((target) => target.get(0))
+  const boundTarget = (target) => isBound(target, 'aria-label') || boundContent(target, true, isHidden(target))
+  if (targets.some(boundTarget)) return true
+  return content && (hasBoundText(el) || el.children.some((child) => boundContent(child, images)))
 }
 
 // Names that stay empty only because an aria-labelledby points nowhere, for a clearer message.

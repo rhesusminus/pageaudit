@@ -39,6 +39,11 @@ test('signals: word count ignores scripts, links count by site and skip non-page
   assert.deepEqual(signals.images, { total: 3, missingAlt: 1 })
 })
 
+test('signals: an alt set by script is not missing', () => {
+  const signals = extractSignals(parse('<img src="a.jpg" :alt="t"><img src="b.jpg">'), BASE, PAGE)
+  assert.deepEqual(signals.images, { total: 2, missingAlt: 1 })
+})
+
 test('signals: JSON-LD types come from @graph and arrays, and invalid JSON is ignored', async () => {
   const signals = extractSignals(await load('rich.html'), BASE, PAGE)
   assert.deepEqual(signals.jsonLdTypes, ['Organization', 'Product', 'Thing'])

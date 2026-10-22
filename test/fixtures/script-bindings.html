@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shoes made from natural materials</title>
+  <meta name="description" content="Comfortable shoes made from wool, tree fibre and sugarcane, with free shipping and returns on every order.">
+  <link rel="canonical" href="https://shop.test/">
+</head>
+<body>
+<main>
+  <h1>Shoes made from natural materials</h1>
+  <section x-data="carousel">
+    <h2 v-text="modalSettings.recommendationsTitle"></h2>
+    <div>
+      <a class="absolute inset-0" href="/products/womens-cruiser-slip-on-canvas">
+        <img alt="Women's Canvas Cruiser Slip On - Warm White (Natural White Sole)" class="absolute inset-0 z-0 h-full w-full" :class="cardRefs['7205190238288']?.isHovering &amp;&amp; cardRefs['7205190238288']?.galleryIndex > 0 ? 'opacity-0' : 'opacity-100'" width="1024" height="1024" loading="eager" :src="(cardRefs['7205190238288']?.selectedImage?.src || '//shop.test/cdn/shop/files/cruiser-slip-on.png')">
+        <img :src="cardRefs['7205190238288']?.galleryImages?.[cardRefs['7205190238288']?.galleryIndex]" alt="Women's Canvas Cruiser Slip On - Warm White (Natural White Sole)" class="absolute inset-0 z-[1] h-full w-full opacity-0" width="1024" height="1024" loading="lazy" fetchpriority="low">
+      </a>
+      <h3 class="text-base" v-text="productsData[0].title"></h3>
+    </div>
+  </section>
+  <div class="flex flex-1 items-start gap-4">
+    <img v-if="addedProduct.image" :src="addedProduct.image" :alt="addedProduct.title" class="size-24 flex-shrink-0 object-contain" width="96" height="96">
+  </div>
+  <button type="button">
+    <img :src="`//shop.test/flags/${userCountryIso?.toLowerCase()}.svg?width=150`" width="150" height="150" :alt="userCountryIso">
+  </button>
+  <select data-testid="country-selector" v-model="userSelectedShop" @change="handleShopSelection(userSelectedShop)">
+    <option v-for="shop in availableShops" :key="shop.id" :value="shop.id">Finland</option>
+  </select>
+</main>
+</body>
+</html>

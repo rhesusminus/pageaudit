@@ -1,7 +1,7 @@
 import { SOURCES } from '../../sources.js'
 import { evidence } from '../evidence.js'
 import { seoIssue, snippet } from '../snippet.js'
-import { accessibleName, visibleImages } from './accname.js'
+import { accessibleName, namedByScript, visibleImages } from './accname.js'
 
 const GENERIC_TEXT = new Set(['click here', 'here', 'read more', 'more', 'learn more', 'link', 'this link'])
 
@@ -25,7 +25,7 @@ const isPlaceholderHref = (href) => href === '#' || /^javascript:/i.test(href)
 
 // A link whose only content is an image is reported by the image checks, so it is skipped here.
 function checkName($, el, name) {
-  if (name || visibleImages($, el).length) return []
+  if (name || visibleImages($, el).length || namedByScript($, el, { images: false })) return []
   return [
     issue($, el, {
       type: 'link-no-name',
@@ -35,8 +35,9 @@ function checkName($, el, name) {
   ]
 }
 
+// Text set by script replaces or adds to the text in the HTML, so the wording cannot be judged.
 function checkText($, el, name) {
-  if (!GENERIC_TEXT.has(normalize(name))) return []
+  if (!GENERIC_TEXT.has(normalize(name)) || namedByScript($, el, { images: false })) return []
   return [
     issue($, el, {
       type: 'link-generic-text',
