@@ -82,8 +82,10 @@ function boundContent(node, images, includeHidden = false) {
 // but a screen reader reads the rendered page.
 export function namedByScript($, el, { images = true, content = true } = {}) {
   if (['aria-label', 'aria-labelledby', 'title'].some((name) => isBound(el, name))) return true
+  // A referenced element names with its own aria-label first, images included, as in labelledByText.
   const targets = labelledByTargets($, el).map((target) => target.get(0))
-  if (targets.some((target) => boundContent(target, true, isHidden(target)))) return true
+  const boundTarget = (target) => isBound(target, 'aria-label') || boundContent(target, true, isHidden(target))
+  if (targets.some(boundTarget)) return true
   return content && (hasBoundText(el) || el.children.some((child) => boundContent(child, images)))
 }
 

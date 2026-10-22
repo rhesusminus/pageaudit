@@ -93,6 +93,11 @@ test('images: an alt set by script is not judged', () => {
   assert.deepEqual(types(checkImages(parse(next))), ['empty-alt'])
 })
 
+test('images: the file name of a src that script replaces is not judged', () => {
+  const html = '<img src="/a/image1.jpg" :src="product.image" alt="image1" width="1" height="1">'
+  assert.deepEqual(types(checkImages(parse(html))), [])
+})
+
 test('images: dimensions set by script are still missing, the image loads before the script runs', () => {
   const issues = checkImages(parse('<img src="a.jpg" alt="ok" :width="w" :height="h">'))
   assert.deepEqual(types(issues), ['missing-dimensions'])
@@ -246,6 +251,8 @@ test('headings: a heading whose text or name is set by script is not empty', () 
   assert.deepEqual(headings('<h2 v-text="title"></h2>'), [])
   assert.deepEqual(headings('<h2><span x-text="title"></span></h2>'), [])
   assert.deepEqual(headings('<h2 :aria-label="title"></h2>'), [])
+  assert.deepEqual(headings('<h2 ng-bind="title"></h2>'), [])
+  assert.deepEqual(headings('<h2 data-ng-bind="title"></h2>'), [])
   assert.deepEqual(headings('<h2><img src="a.png" :alt="title"></h2>'), [])
   assert.deepEqual(headings('<h2 :class="c"></h2>'), ['empty-heading'])
   assert.deepEqual(headings('<h2><span aria-hidden="true" v-text="title"></span></h2>'), ['empty-heading'])

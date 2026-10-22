@@ -120,10 +120,10 @@ export function checkImages($) {
   const issues = []
   $('img').each((_, el) => {
     const img = $(el)
-    // An alt set by script replaces the one in the HTML, so neither can be judged.
+    // A src or alt set by script replaces the one in the HTML, so neither can be judged.
     const boundAlt = isBound(el, 'alt')
     const alt = boundAlt ? undefined : img.attr('alt')
-    const src = (img.attr('src') ?? '').trim()
+    const src = isBound(el, 'src') ? '' : (img.attr('src') ?? '').trim()
     const found = [
       ...(boundAlt ? [] : checkAlt($, el, alt)),
       ...checkSrc(img, src),

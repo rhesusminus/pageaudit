@@ -171,8 +171,18 @@ test('names: text, aria-label, title or alt set by script names a link', () => {
   assert.deepEqual(links('<a href="/" [attr.title]="label"></a>'), [])
   assert.deepEqual(links('<a href="/"><span x-text="label"></span></a>'), [])
   assert.deepEqual(links('<a href="/" aria-labelledby="l"></a><span id="l" ng-bind="label"></span>'), [])
+  assert.deepEqual(
+    links('<a href="/" aria-labelledby="l"></a><img id="l" src="/a.png" alt="" :aria-label="label">'),
+    []
+  )
   assert.deepEqual(links('<a href="/"><span aria-hidden="true" v-text="label"></span></a>'), ['link-no-name'])
   assert.deepEqual(links('<a href="/"><noscript><span v-text="label"></span></noscript></a>'), ['link-no-name'])
+})
+
+test('names: link text set by script is not judged for its wording', () => {
+  assert.deepEqual(links('<a href="/a" v-text="label">Read more</a>'), [])
+  assert.deepEqual(links('<a href="/a">Read <span x-text="label">more</span></a>'), [])
+  assert.deepEqual(links('<a href="/a" :class="c">Read more</a>'), ['link-generic-text'])
 })
 
 test('names: a link named by script leaves its decorative image alone', () => {

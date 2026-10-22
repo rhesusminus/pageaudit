@@ -6,7 +6,7 @@
 
 const ANGULARJS_SHORTHANDS = new Set(['src', 'srcset', 'href'])
 
-const BOUND_TEXT = [
+const BOUND_TEXT = new Set([
   'v-text',
   'v-html',
   'x-text',
@@ -16,7 +16,7 @@ const BOUND_TEXT = [
   '[textcontent]',
   '[innertext]',
   '[innerhtml]'
-]
+])
 
 // The attribute that an attribute name binds, or null. htmlparser2 gives names in lower case.
 function boundName(attr) {
@@ -32,5 +32,6 @@ function boundName(attr) {
 
 export const isBound = (node, name) => Object.keys(node?.attribs ?? {}).some((attr) => boundName(attr) === name)
 
-// The element's content is set by script, replacing what the HTML holds.
-export const hasBoundText = (node) => BOUND_TEXT.some((attr) => node?.attribs?.[attr] !== undefined)
+// The element's content is set by script, replacing what the HTML holds. AngularJS also reads `data-ng-bind`.
+export const hasBoundText = (node) =>
+  Object.keys(node?.attribs ?? {}).some((attr) => BOUND_TEXT.has(attr.replace(/^data-(?=ng-)/, '')))
