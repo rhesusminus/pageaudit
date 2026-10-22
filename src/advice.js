@@ -68,7 +68,7 @@ export const ADVICE = {
   },
   'double-escaped-text': {
     title: 'Text in the title or description is escaped twice',
-    why: 'Search results show the code, such as &lt; or &amp;, instead of the character it stands for. This usually happens when a theme or plugin escapes a value that was already escaped.',
+    why: 'Search results and link previews show the code, such as &lt; or &amp;, instead of the character it stands for. This usually happens when a theme or plugin escapes a value that was already escaped.',
     fix: 'Find where the text is escaped a second time and escape it only once. If the page is about HTML and means to show the code, no action is needed.'
   },
   'missing-canonical': {

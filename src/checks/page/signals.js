@@ -16,7 +16,8 @@ export function absolute(href, base) {
 
 // Facebook's scraper also accepts name= instead of property=, and some themes write twitter:card as a property, so both count.
 export const ogSelector = (name) => `meta[property="og:${name}" i], meta[name="og:${name}" i]`
-export const TWITTER_CARD = 'meta[name="twitter:card" i], meta[property="twitter:card" i]'
+export const twitterSelector = (name) => `meta[name="twitter:${name}" i], meta[property="twitter:${name}" i]`
+export const TWITTER_CARD = twitterSelector('card')
 
 const MAX_TEXT = 120
 

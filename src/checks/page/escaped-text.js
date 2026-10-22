@@ -3,6 +3,7 @@ import { charCount, collapseWhitespace, htmlEntities } from '../../text.js'
 import { evidence } from '../evidence.js'
 import { MAX_CONTEXT, seoIssue } from '../snippet.js'
 import { titleElement } from './meta.js'
+import { ogSelector, twitterSelector } from './signals.js'
 
 // The first tag of `selector` with a non-empty content, as checkDescription() picks it. Read whole, a value cut at
 // the display cap could lose the entity.
@@ -40,7 +41,16 @@ function contextOf($, el, entity) {
   return `${chars.slice(0, head).join('')}...${chars.slice(end - tail, end).join('')}${more}`
 }
 
-// The text search results show for a page, with where it comes from and how much a mistake in it matters.
+// Link preview text on social and chat apps, only info like the other social checks.
+const preview = (label, selector) => ({
+  label,
+  severity: 'info',
+  source: SOURCES.openGraph,
+  read: ($) => firstContent($, selector)
+})
+
+// The text search results and link previews show for a page, with where it comes from and how much a mistake in it
+// matters.
 const FIELDS = [
   {
     label: 'Title',
@@ -56,11 +66,15 @@ const FIELDS = [
     severity: 'warning',
     source: SOURCES.snippet,
     read: ($) => firstContent($, 'meta[name="description" i]')
-  }
+  },
+  preview('og:title', ogSelector('title')),
+  preview('og:description', ogSelector('description')),
+  preview('twitter:title', twitterSelector('title')),
+  preview('twitter:description', twitterSelector('description'))
 ]
 
-// Text that still holds an entity such as &lt; after the browser decoded it was escaped twice, so results show the
-// code instead of the character.
+// Text that still holds an entity such as &lt; after the browser decoded it was escaped twice, so results and
+// previews show the code instead of the character.
 export function checkEscapedText($) {
   return FIELDS.flatMap(({ label, severity, source, read }) => {
     const found = read($)

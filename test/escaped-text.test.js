@@ -23,13 +23,15 @@ test('htmlEntities: an ampersand that starts no real entity is plain text', () =
   assert.deepEqual(htmlEntities('AT&T, R&D; &foo; &amp without a semicolon, & alone'), [])
 })
 
-test('double-escaped-text: an entity left in the decoded title and description', async () => {
+test('double-escaped-text: an entity left in the decoded title, description and preview text', async () => {
   const issues = checkEscapedText(await fixture('escaped.html'))
   assert.deepEqual(
     issues.map(({ type, severity, category, actual }) => [type, severity, category, actual]),
     [
       ['double-escaped-text', 'warning', 'seo', '&amp;'],
-      ['double-escaped-text', 'warning', 'seo', '&lt;']
+      ['double-escaped-text', 'warning', 'seo', '&lt;'],
+      ['double-escaped-text', 'info', 'seo', '&lt;'],
+      ['double-escaped-text', 'info', 'seo', '&amp;']
     ]
   )
   assert.equal(issues[0].message, 'Title shows &amp; as text (escaped twice)')
@@ -38,6 +40,9 @@ test('double-escaped-text: an entity left in the decoded title and description',
   assert.equal(issues[0].selector, 'html > head > title')
   assert.match(issues[0].source, /title-link/)
   assert.match(issues[1].source, /snippet/)
+  assert.equal(issues[2].message, 'og:description shows &lt; as text (escaped twice)')
+  assert.equal(issues[3].message, 'twitter:title shows &amp; as text (escaped twice)')
+  assert.match(issues[3].source, /ogp\.me/)
 })
 
 test('double-escaped-text: text escaped once is fine', () => {
@@ -93,5 +98,19 @@ test('double-escaped-text: several entities in one field are one issue', () => {
 
 test('double-escaped-text: part of the page checks', async () => {
   const types = checkHtml(await fixture('escaped.html')).map((issue) => issue.type)
-  assert.equal(types.filter((type) => type === 'double-escaped-text').length, 2)
+  assert.equal(types.filter((type) => type === 'double-escaped-text').length, 4)
+})
+
+test('double-escaped-text: preview tags written with name= or property=, the first non-empty one checked', () => {
+  const head =
+    '<meta name="og:title" content=""><meta name="og:title" content="A &amp;amp; B">' +
+    '<meta property="twitter:description" content="Tips &amp;#8226; more">'
+  const issues = checkEscapedText(page(head))
+  assert.deepEqual(
+    issues.map((issue) => [issue.message, issue.severity]),
+    [
+      ['og:title shows &amp; as text (escaped twice)', 'info'],
+      ['twitter:description shows &#8226; as text (escaped twice)', 'info']
+    ]
+  )
 })
