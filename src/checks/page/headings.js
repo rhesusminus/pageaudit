@@ -2,11 +2,13 @@ import { SOURCES } from '../../sources.js'
 import { collapseWhitespace } from '../../text.js'
 import { evidence, selectorFor } from '../evidence.js'
 import { snippet, truncate } from '../snippet.js'
+import { namedByScript } from './accname.js'
 import { visibleText } from './content.js'
 
 function hasAccessibleText($, el) {
   const heading = $(el)
   if (visibleText(el).trim() || heading.attr('aria-label') || heading.attr('aria-labelledby')) return true
+  if (namedByScript($, el)) return true
   return heading
     .find('img[alt]')
     .toArray()

@@ -241,6 +241,16 @@ test('headings: empty heading is flagged unless it has an image with alt or aria
   assert.deepEqual(types(checkHeadings(parse('<h1 aria-labelledby="t"></h1><p id="t">Title</p>'))), [])
 })
 
+test('headings: a heading whose text or name is set by script is not empty', () => {
+  const headings = (html) => types(checkHeadings(parse(`<h1>Title</h1>${html}`)))
+  assert.deepEqual(headings('<h2 v-text="title"></h2>'), [])
+  assert.deepEqual(headings('<h2><span x-text="title"></span></h2>'), [])
+  assert.deepEqual(headings('<h2 :aria-label="title"></h2>'), [])
+  assert.deepEqual(headings('<h2><img src="a.png" :alt="title"></h2>'), [])
+  assert.deepEqual(headings('<h2 :class="c"></h2>'), ['empty-heading'])
+  assert.deepEqual(headings('<h2><span aria-hidden="true" v-text="title"></span></h2>'), ['empty-heading'])
+})
+
 test('headings: a heading that holds only a style, script or noscript is empty', () => {
   for (const inner of ['<style>.a{}</style>', '<script>x()</script>', '<noscript>Menu</noscript>']) {
     assert.deepEqual(types(checkHeadings(parse(`<h1>x</h1><h2>${inner}</h2>`))), ['empty-heading'], inner)
