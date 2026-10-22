@@ -2,6 +2,7 @@ import { SOURCES } from '../../sources.js'
 import { withEvidence } from '../evidence.js'
 import { snippet } from '../snippet.js'
 import { accessibleName, visibleImages } from './accname.js'
+import { isBound } from './bindings.js'
 
 const GENERIC_NAME = /^(img|image|pic|picture|photo|dsc|dscn|untitled|screenshot)[-_ ]?\d*$/i
 
@@ -21,7 +22,7 @@ function isOnlyLinkContent($, el) {
   if (!link.length) return false
   if (accessibleName($, link.get(0), { images: false })) return false
   const images = visibleImages($, link.get(0))
-  return images[0] === el && images.every((img) => ($(img).attr('alt') ?? '').trim() === '')
+  return images[0] === el && images.every((img) => ($(img).attr('alt') ?? '').trim() === '' && !isBound(img, 'alt'))
 }
 
 function checkAlt($, el, alt) {
@@ -59,8 +60,10 @@ function checkAlt($, el, alt) {
   ]
 }
 
+// A src set by script is found by Google, which renders the page.
 function checkSrc(img, src) {
-  if (src || img.attr('srcset')) return []
+  const el = img.get(0)
+  if (src || img.attr('srcset') || isBound(el, 'src') || isBound(el, 'srcset')) return []
   return [
     {
       type: 'missing-src',
@@ -116,9 +119,16 @@ export function checkImages($) {
   const issues = []
   $('img').each((_, el) => {
     const img = $(el)
-    const alt = img.attr('alt')
+    // An alt set by script replaces the one in the HTML, so neither can be judged.
+    const boundAlt = isBound(el, 'alt')
+    const alt = boundAlt ? undefined : img.attr('alt')
     const src = (img.attr('src') ?? '').trim()
-    const found = [...checkAlt($, el, alt), ...checkSrc(img, src), ...checkFileName(src, alt), ...checkDimensions(img)]
+    const found = [
+      ...(boundAlt ? [] : checkAlt($, el, alt)),
+      ...checkSrc(img, src),
+      ...checkFileName(src, alt),
+      ...checkDimensions(img)
+    ]
     if (!found.length) return
     const context = snippet($, el)
     issues.push(

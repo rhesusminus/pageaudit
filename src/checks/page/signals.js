@@ -1,5 +1,6 @@
 import { withoutFragment } from '../../input/resolve.js'
 import { collapseWhitespace, limit, MAX_URL } from '../../text.js'
+import { isBound } from './bindings.js'
 import { headingExcerpts, imageSamples, mainText, visibleText } from './content.js'
 import { jsonLdBlocks, jsonLdNodes, typesOf } from './json-ld.js'
 
@@ -118,7 +119,8 @@ function linkCounts(all) {
 
 function images($) {
   const all = $('img').toArray()
-  return { total: all.length, missingAlt: all.filter((el) => $(el).attr('alt') === undefined).length }
+  const missing = (el) => $(el).attr('alt') === undefined && !isBound(el, 'alt')
+  return { total: all.length, missingAlt: all.filter(missing).length }
 }
 
 function openGraph($) {

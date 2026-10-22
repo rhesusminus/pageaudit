@@ -61,6 +61,43 @@ test('images: missing src is flagged unless srcset is present', () => {
   assert.deepEqual(types(checkImages(parse('<img srcset="a.jpg 1x" alt="x" width="1" height="1">'))), [])
 })
 
+test('images: a src or srcset set by script is not missing', () => {
+  const issues = (attrs) => types(checkImages(parse(`<img ${attrs} alt="x" width="1" height="1">`)))
+  for (const attrs of [
+    ':src="a"',
+    ':src.prop="a"',
+    'v-bind:src="a"',
+    'x-bind:src="a"',
+    '[src]="a"',
+    '[attr.src]="a"'
+  ]) {
+    assert.deepEqual(issues(attrs), [], attrs)
+  }
+  assert.deepEqual(issues('ng-src="{{a}}"'), [])
+  assert.deepEqual(issues(':srcset="a"'), [])
+  assert.deepEqual(issues(':class="a"'), ['missing-src'])
+  assert.deepEqual(issues('ng-class="a"'), ['missing-src'])
+  // A lazy loading library's data-src is a convention, not a binding.
+  assert.deepEqual(issues('data-src="a.jpg"'), ['missing-src'])
+})
+
+test('images: an alt set by script is not judged', () => {
+  const issues = (attrs) => types(checkImages(parse(`<img src="/a/puppy.jpg" ${attrs} width="1" height="1">`)))
+  assert.deepEqual(issues(':alt="title"'), [])
+  assert.deepEqual(issues('alt="" :alt="title"'), [])
+  assert.deepEqual(issues('alt="puppy" x-bind:alt="title"'), [])
+  assert.deepEqual(issues('ng-attr-alt="{{title}}"'), [])
+  assert.deepEqual(types(checkImages(parse('<a href="/"><img src="a.svg" :alt="t" width="1" height="1"></a>'))), [])
+  const next =
+    '<a href="/"><img src="a.svg" alt="" width="1" height="1"><img src="b.svg" :alt="t" width="1" height="1"></a>'
+  assert.deepEqual(types(checkImages(parse(next))), ['empty-alt'])
+})
+
+test('images: dimensions set by script are still missing, the image loads before the script runs', () => {
+  const issues = checkImages(parse('<img src="a.jpg" alt="ok" :width="w" :height="h">'))
+  assert.deepEqual(types(issues), ['missing-dimensions'])
+})
+
 test('images: missing dimensions is a warning', () => {
   const issues = checkImages(parse('<img src="a.jpg" alt="ok" width="1">'))
   assert.deepEqual(types(issues), ['missing-dimensions'])
