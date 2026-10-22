@@ -2,7 +2,9 @@
 
 > **Note:** this project is my testing ground for agentic coding. It was planned and built together with an AI coding agent (Claude Code), from plans written in a chat (in `docs/`, starting with `docs/seo-harness-plan.md`) through implementation, tests and git workflow. Treat it as an experiment, not a polished product.
 
-A small Node.js CLI that fetches one or more pages, parses the static HTML and reports basic SEO/HTML issues: images, meta tags, headings and the HTTP response of each page, plus cross-page checks such as duplicate titles. Lighthouse and checking where internal links lead are opt-in. Besides the terminal report it can write a JSON report, a short digest of it and the content of each page as Markdown for Claude to read, and an HTML report for customers.
+A Node.js CLI for auditing pages from URLs, URL files or sitemaps. It checks static HTML and HTTP responses for SEO, accessibility and site health issues, including metadata, headings, images, structured data, product markup, canonical and hreflang links, security headers and indexing controls. It also reports duplicate content signals across pages and how robots.txt treats search and AI crawlers. Lighthouse performance audits and internal link target checks are opt-in.
+
+Run it with no arguments for an interactive setup, or pass options for scripts and CI. Results are available as a terminal report, a self-contained HTML report for customers, JSON, a compact digest and page content as Markdown for review by a person or an AI coding agent.
 
 ## Usage
 
