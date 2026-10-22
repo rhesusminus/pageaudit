@@ -37,14 +37,20 @@ export const checkHtml = ($, page = {}) => [
   ...checkHygiene($, page)
 ]
 
+// The canonical URL of a page: the first non-empty canonical link in <head>, resolved against <base> like a browser
+// would, or null. The facts and the link targets of --check-links read it the same way.
+export function pageCanonical($, finalUrl) {
+  const href = canonicalLinks($)
+    .map((el) => ($(el).attr('href') ?? '').trim())
+    .find(Boolean)
+  return href ? absolute(href, baseUrl($, finalUrl)) : null
+}
+
 // The values the site checks compare across pages, plus content signals for the
 // report. Empty values are null so a missing title is never reported as a duplicate
 // of another missing title. `response` holds what the response said about the page: `robotsHeader`, the X-Robots-Tag
 // value, and `lastModified`, the Last-Modified header, each null or left out when not sent.
 export function extractFacts($, finalUrl, { robotsHeader = null, lastModified = null } = {}) {
-  const href = canonicalLinks($)
-    .map((el) => ($(el).attr('href') ?? '').trim())
-    .find(Boolean)
   const base = baseUrl($, finalUrl)
   const { jsonLd, dates, author } = pageAuthorship($, lastModified)
   return {
@@ -58,7 +64,7 @@ export function extractFacts($, finalUrl, { robotsHeader = null, lastModified = 
           .filter(Boolean)
       )
     ],
-    canonical: href ? absolute(href, base) : null,
+    canonical: pageCanonical($, finalUrl),
     ...extractSignals($, base, finalUrl, robotsHeader),
     jsonLd,
     // sitemapLastmod is filled in once the audit knows which sitemap listed the page, see addSitemapDates().

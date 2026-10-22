@@ -21,17 +21,28 @@ const page = (url, links = [], fields = {}) => ({
   ...fields
 })
 
-// A request stub that answers from a table of { status, finalUrl, redirects } or throws { reason }, and records calls.
+// A request stub that answers from a table of { status, finalUrl, redirects, html, contentType } or throws
+// { reason }, and records calls. An answer with html is an HTML page, one without is a plain text body.
 function stubRequest(table) {
   const calls = []
   const request = async (url) => {
     calls.push(url)
-    const answer = table[url] ?? { status: 200 }
+    const { html = null, contentType, ...answer } = { status: 200, ...table[url] }
     if (answer.reason) throw Object.assign(new Error('fetch failed'), { reason: answer.reason })
-    return { finalUrl: url, redirects: [], ...answer, discard: async () => {} }
+    const type = contentType ?? (html === null ? 'text/plain' : 'text/html; charset=utf-8')
+    return {
+      finalUrl: url,
+      redirects: [],
+      ...answer,
+      headers: new Headers({ 'content-type': type }),
+      read: async () => ({ bytes: Buffer.from(html ?? ''), truncated: false }),
+      discard: async () => {}
+    }
   }
   return { request, calls }
 }
+
+const withCanonical = (href) => `<html><head><link rel="canonical" href="${href}"></head><body></body></html>`
 
 const outcomesOf = (entries) =>
   new Map(entries.map(([url, outcome]) => [url, { finalUrl: url, redirects: [], ...outcome }]))
@@ -79,7 +90,12 @@ test('checkLinkTargets: audited pages cost no request, by the URL given or the f
   assert.deepEqual(calls, ['https://a.test/other'])
   assert.equal(unchecked, 0)
   assert.equal(outcomes.get('https://a.test/old').redirects.length, 1)
-  assert.deepEqual(outcomes.get('https://a.test/new'), { status: 200, finalUrl: 'https://a.test/new', redirects: [] })
+  assert.deepEqual(outcomes.get('https://a.test/new'), {
+    status: 200,
+    finalUrl: 'https://a.test/new',
+    redirects: [],
+    canonical: null
+  })
   assert.match(outcomes.get('https://a.test/gone').failed, /could not be fetched/)
 })
 
@@ -116,12 +132,78 @@ test('checkLinkTargets: a failed request becomes an outcome with the reason', as
   assert.deepEqual(outcomes.get('https://a.test/slow'), { failed: 'timed out after 15s' })
 })
 
+test('checkLinkTargets: an HTML target gives its canonical, resolved like an audited page, other answers none', async () => {
+  const { request } = stubRequest({
+    'https://a.test/collections/hair/products/oil': { html: withCanonical('/products/oil') },
+    'https://a.test/plain': { html: '<html><head><title>No canonical</title></head></html>' },
+    'https://a.test/file.pdf': { contentType: 'application/pdf' },
+    'https://a.test/missing': { status: 404, html: withCanonical('/elsewhere') }
+  })
+  const targets = Object.keys({
+    'https://a.test/collections/hair/products/oil': 0,
+    'https://a.test/plain': 0,
+    'https://a.test/file.pdf': 0,
+    'https://a.test/missing': 0
+  })
+  const { outcomes } = await checkLinkTargets([page('https://a.test/', targets)], { request, pace: noPace })
+  assert.deepEqual(
+    targets.map((url) => outcomes.get(url).canonical),
+    ['https://a.test/products/oil', null, null, null]
+  )
+})
+
+test('checkLinkTargets: an audited target gives the canonical of its facts, and a body that fails is a failed target', async () => {
+  const audited = page('https://a.test/b', [], { facts: { canonical: 'https://a.test/c' } })
+  const request = async (url) => ({
+    status: 200,
+    finalUrl: url,
+    redirects: [],
+    headers: new Headers({ 'content-type': 'text/html' }),
+    read: async () => {
+      throw new Error('timed out after 15s')
+    },
+    discard: async () => {}
+  })
+  const { outcomes } = await checkLinkTargets(
+    [page('https://a.test/', ['https://a.test/b', 'https://a.test/slow-body']), audited],
+    { request, pace: noPace }
+  )
+  assert.equal(outcomes.get('https://a.test/b').canonical, 'https://a.test/c')
+  assert.deepEqual(outcomes.get('https://a.test/slow-body'), { failed: 'timed out after 15s' })
+})
+
+test('checkLinkTargets: a target that redirected is not read, and HTML is asked for first', async () => {
+  const accepted = []
+  let read = false
+  const request = async (url, { accept }) => {
+    accepted.push(accept)
+    return {
+      status: 200,
+      finalUrl: 'https://a.test/new',
+      redirects: [{ url, status: 301, location: 'https://a.test/new' }],
+      headers: new Headers({ 'content-type': 'text/html' }),
+      read: async () => {
+        read = true
+        return { bytes: Buffer.from(''), truncated: false }
+      },
+      discard: async () => {}
+    }
+  }
+  const { outcomes } = await checkLinkTargets([page('https://a.test/', ['https://a.test/old'])], {
+    request,
+    pace: noPace
+  })
+  assert.equal(outcomes.get('https://a.test/old').canonical, null)
+  assert.equal(read, false)
+  assert.deepEqual(accepted, ['text/html,application/xhtml+xml,*/*;q=0.8'])
+})
+
 test('checkLinkTargets: pace is awaited before every request it makes, redirect hops included', async () => {
   const pace = async () => {}
   const passed = []
   const request = async (url, { beforeHop }) => {
     passed.push(beforeHop)
-    return { status: 200, finalUrl: url, redirects: [], discard: async () => {} }
+    return { status: 200, finalUrl: url, redirects: [], headers: new Headers(), discard: async () => {} }
   }
   await checkLinkTargets([page('https://a.test/', ['https://a.test/x', 'https://a.test/y'])], { request, pace })
   assert.deepEqual(passed, [pace, pace])
@@ -189,6 +271,46 @@ test('checkLinks: broken, unreachable and redirecting targets, one issue each wi
     ['link-target-unreachable', 'https://a.test/slow (timed out after 15s)', ['https://a.test/1']],
     ['link-to-redirect', 'https://a.test/moved -> https://a.test/moved/ (301)', ['https://a.test/1']],
     ['link-to-redirect', 'https://a.test/chain -> https://a.test/end (301, 302)', ['https://a.test/1']]
+  ])
+})
+
+test('checkLinks: a target whose canonical is another page is one issue, a trailing slash or a redirect is not', () => {
+  const targets = [
+    'https://a.test/collections/hair/products/oil',
+    'https://a.test/products/oil?utm_source=menu',
+    'https://a.test/self',
+    'https://a.test/moved',
+    'https://a.test/gone',
+    'https://a.test/none',
+    'https://a.test/script'
+  ]
+  const pages = [page('https://a.test/1', targets), page('https://a.test/2', [targets[0]])]
+  const outcomes = outcomesOf([
+    ['https://a.test/collections/hair/products/oil', { status: 200, canonical: 'https://a.test/products/oil' }],
+    ['https://a.test/products/oil?utm_source=menu', { status: 200, canonical: 'https://a.test/products/oil' }],
+    ['https://a.test/self', { status: 200, canonical: 'https://a.test/self/' }],
+    [
+      'https://a.test/moved',
+      { status: 200, finalUrl: 'https://a.test/new', redirects: [{ status: 301 }], canonical: 'https://a.test/x' }
+    ],
+    ['https://a.test/gone', { status: 404, canonical: 'https://a.test/x' }],
+    ['https://a.test/none', { status: 200, canonical: null }],
+    ['https://a.test/script', { status: 200, canonical: 'javascript:alert(1)' }],
+    ...pages.map((p) => [p.url, { status: 200 }])
+  ])
+  assert.deepEqual(brief(checkLinks(pages, outcomes)), [
+    [
+      'link-to-non-canonical',
+      'https://a.test/collections/hair/products/oil -> canonical https://a.test/products/oil',
+      ['https://a.test/1', 'https://a.test/2']
+    ],
+    [
+      'link-to-non-canonical',
+      'https://a.test/products/oil?utm_source=menu -> canonical https://a.test/products/oil',
+      ['https://a.test/1']
+    ],
+    ['link-to-redirect', 'https://a.test/moved -> https://a.test/new (301)', ['https://a.test/1']],
+    ['broken-link', 'https://a.test/gone (HTTP 404)', ['https://a.test/1']]
   ])
 })
 

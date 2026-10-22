@@ -1231,7 +1231,7 @@ test('cli: response headers are judged once per origin, and the secure fixture d
   assert.ok(report.pages.every((page) => !('response' in page)))
 })
 
-test('cli: --check-links reports broken, unreachable and redirecting internal links, without it no link is requested', async (t) => {
+test('cli: --check-links reports broken, unreachable, redirecting and non-canonical internal links, without it no link is requested', async (t) => {
   const links = fixtureUrl('links.html')
   const plain = await runJson(t, [fixtureUrl('good.html'), links])
   assert.ok(plain.report.site.every((issue) => !/link|orphan/.test(issue.type)))
@@ -1249,6 +1249,7 @@ test('cli: --check-links reports broken, unreachable and redirecting internal li
     [
       ['broken-link', [links]],
       ['link-to-redirect', [links]],
+      ['link-to-non-canonical', [links]],
       ['link-target-unreachable', [links]],
       ['link-target-unreachable', [links]],
       ['broken-link', [links]]
@@ -1257,6 +1258,10 @@ test('cli: --check-links reports broken, unreachable and redirecting internal li
   assert.match(
     report.site.find((issue) => issue.type === 'link-to-redirect').context,
     /redirect-once -> .*good\.html \(301\)/
+  )
+  assert.equal(
+    report.site.find((issue) => issue.type === 'link-to-non-canonical').context,
+    `${fixtureUrl('collection-product.html')} -> canonical ${fixtureUrl('product.html')}`
   )
   // The link to the audited good.html is not requested again: its two requests are the audit and the end of
   // /redirect-once. The external link is not requested, and the long address is requested whole.

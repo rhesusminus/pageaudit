@@ -1,6 +1,8 @@
 import { hostThrottle, mapLimited } from './concurrency.js'
-import { DEFAULT_TIMEOUT_MS, request as defaultRequest } from './fetch.js'
+import { pageCanonical } from './checks/page/index.js'
+import { DEFAULT_TIMEOUT_MS, readHtml, request as defaultRequest } from './fetch.js'
 import { withoutFragment } from './input/resolve.js'
+import { parse } from './parse.js'
 import { DEFAULT_CONCURRENCY, DEFAULT_DELAY_MS, linksUnread } from './runner.js'
 
 // Most internal links are the same navigation on every page, so this covers a large site. Past it the targets linked
@@ -19,7 +21,8 @@ export function linkTargets(pages) {
   return [...from].map(([url, pages]) => ({ url, from: pages })).sort((a, b) => b.from.length - a.from.length)
 }
 
-// What the audit already knows about a URL, so a link to an audited page costs no request. An address that
+// What the audit already knows about a URL, so a link to an audited page costs no request. Its canonical is the one in
+// its facts. An address that
 // redirected is known under the URL it was given as, and the page it ended on under its final URL, which can carry
 // the fragment of a redirect location.
 function auditedOutcomes(pages) {
@@ -29,25 +32,49 @@ function auditedOutcomes(pages) {
       known.set(page.url, { failed: 'the page could not be fetched, see its fetch-failed issue' })
       continue
     }
-    known.set(page.url, { status: page.status, finalUrl: page.finalUrl, redirects: page.redirects })
+    const canonical = page.facts?.canonical ?? null
+    known.set(page.url, { status: page.status, finalUrl: page.finalUrl, redirects: page.redirects, canonical })
     const finalUrl = withoutFragment(page.finalUrl)
-    if (!known.has(finalUrl)) known.set(finalUrl, { status: page.status, finalUrl: page.finalUrl, redirects: [] })
+    if (!known.has(finalUrl)) {
+      known.set(finalUrl, { status: page.status, finalUrl: page.finalUrl, redirects: [], canonical })
+    }
   }
   return known
 }
 
-// A GET, not a HEAD: many servers answer HEAD with 404 or 405 for pages that work. The body is not read.
+// The canonical of a link target that answered with HTML, read like an audited page's, or null. A target that
+// redirected is reported as a redirect, so its body is not read. A body that fails to arrive throws: the target did not
+// load, like one whose request failed, and its canonical was not checked.
+async function targetCanonical(res) {
+  if (res.redirects.length) {
+    await res.discard()
+    return null
+  }
+  const body = await readHtml(res)
+  return body && pageCanonical(parse(body.html), res.finalUrl)
+}
+
+// A GET, not a HEAD: many servers answer HEAD with 404 or 405 for pages that work. Only an HTML body is read, for its
+// canonical, so the request count stays the same. HTML is asked for first, like a browser does, so a server that picks
+// the format by the Accept header answers with the page an audit would see, and any other file still loads.
+const TARGET_ACCEPT = 'text/html,application/xhtml+xml,*/*;q=0.8'
+
 async function fetchOutcome(url, { request, timeout, beforeHop }) {
   try {
-    const res = await request(url, { accept: '*/*', timeout, beforeHop })
-    await res.discard()
-    return { status: res.status, finalUrl: res.finalUrl, redirects: res.redirects }
+    const res = await request(url, { accept: TARGET_ACCEPT, timeout, beforeHop })
+    return {
+      status: res.status,
+      finalUrl: res.finalUrl,
+      redirects: res.redirects,
+      canonical: await targetCanonical(res)
+    }
   } catch (err) {
     return { failed: err.reason ?? err.message }
   }
 }
 
-// Finds out where every internal link target leads: { status, finalUrl, redirects } or { failed: reason }, by URL.
+// Finds out where every internal link target leads: { status, finalUrl, redirects, canonical } or { failed: reason },
+// by URL. canonical is the target's canonical URL, null when it has none or did not answer with HTML.
 // Requests use the same concurrency as the audit, and `pace(url)`, the per-host spacing the whole run shares, is
 // awaited before each of them, redirect hops included.
 // `checked` counts the targets requested, `unchecked` the ones past `max`, and `unread` the audited pages whose own

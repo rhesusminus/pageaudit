@@ -381,6 +381,11 @@ export const ADVICE = {
     why: 'The link still works, but every click and every Google visit takes an extra step through the redirect before reaching the page.',
     fix: 'Change the link to point straight at the final address shown in the report.'
   },
+  'link-to-non-canonical': {
+    title: 'Links point to a duplicate of a page',
+    why: 'The linked address says another address is the real page, its canonical. Google lists the canonical, so every link to the duplicate sends crawlers to a page that is not shown and makes the preferred address less clear.',
+    fix: 'Change the link to the canonical address shown in the report. On Shopify, collection pages link to /collections/<collection>/products/<product> when the product card in the theme uses "within: collection": remove it so they link to /products/<product>. A link whose parameter picks what the visitor sees, such as a preselected product variant, can be kept.'
+  },
   'orphan-page': {
     title: 'Pages that no other page links to',
     why: 'Visitors cannot reach these pages by clicking through the site, and Google finds them only through the sitemap, with no links telling it what the pages are about or how they relate to the rest of the site.',

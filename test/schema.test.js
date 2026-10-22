@@ -183,7 +183,7 @@ test('schema: a report with every kind of page, issue and Lighthouse level match
   assert.ok(report.site.length > 0 && report.skipped.length > 0)
   const siteTypes = new Set(report.site.map((issue) => issue.type))
   // No orphan-page: the /timeout page's links are unknown, so it is rightly not looked for. Its shape is the same.
-  for (const type of ['broken-link', 'link-target-unreachable', 'link-to-redirect']) {
+  for (const type of ['broken-link', 'link-target-unreachable', 'link-to-redirect', 'link-to-non-canonical']) {
     assert.ok(siteTypes.has(type), type)
   }
   assert.ok(report.pages.flatMap((p) => p.issues).some((i) => i.selector && i.html && i.parentHtml))
