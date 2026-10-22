@@ -2,6 +2,7 @@ import { collapseWhitespace } from '../../text.js'
 import { checkA11y } from './a11y.js'
 import { pageAuthorship } from './authorship.js'
 import { visibleText } from './content.js'
+import { checkEscapedText } from './escaped-text.js'
 import { checkHeadings } from './headings.js'
 import { checkHreflang } from './hreflang.js'
 import { checkHygiene } from './hygiene.js'
@@ -27,6 +28,7 @@ export const checkHtml = ($, page = {}) => [
   ...checkA11y($),
   ...checkLinks($),
   ...checkMeta($),
+  ...checkEscapedText($),
   ...checkHeadings($),
   ...checkIndexing($),
   ...checkSnippetControls($, page.robotsHeader ?? null),

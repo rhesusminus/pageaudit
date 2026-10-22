@@ -66,6 +66,11 @@ export const ADVICE = {
     why: 'Only one is used, and it is not always the one you wanted.',
     fix: 'Keep a single meta description tag.'
   },
+  'double-escaped-text': {
+    title: 'Text in the title or description is escaped twice',
+    why: 'Search results show the code, such as &lt; or &amp;, instead of the character it stands for. This usually happens when a theme or plugin escapes a value that was already escaped.',
+    fix: 'Find where the text is escaped a second time and escape it only once. If the page is about HTML and means to show the code, no action is needed.'
+  },
   'missing-canonical': {
     title: 'The page has no canonical address',
     why: 'When the same page can be reached at several addresses, search engines have to guess which one to list.',
