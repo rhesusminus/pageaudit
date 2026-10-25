@@ -545,11 +545,13 @@ test('structured data: relative URLs are flagged in strings, arrays and image ob
 })
 
 test('structured data: values nested far deeper than real markup are cut off, not recursed into', () => {
-  const nest = (leaf, wrap, depth) => Array.from({ length: depth }).reduce((value) => wrap(value), leaf)
-  const arrays = nest('/logo.png', (value) => [value], 5000)
-  const objects = nest('/logo.png', (value) => ({ url: value }), 5000)
+  // Build JSON text directly: JSON.stringify can overflow the runner's stack before the checker runs.
+  const depth = 5000
+  const arrays = '['.repeat(depth) + '"/logo.png"' + ']'.repeat(depth)
+  const objects = '{"url":'.repeat(depth) + '"/logo.png"' + '}'.repeat(depth)
   for (const image of [arrays, objects]) {
-    assert.doesNotThrow(() => checkStructuredData(ld({ ...CONTEXT, '@type': 'Thing', image })))
+    const json = `{"@context":"https://schema.org","@type":"Thing","image":${image}}`
+    assert.deepEqual(checkStructuredData(ld(json)), [])
   }
   // Within the limit the relative URL is still found.
   const shallow = checkStructuredData(ld({ ...CONTEXT, '@type': 'Thing', image: [{ url: '/logo.png' }] }))
