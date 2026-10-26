@@ -34,6 +34,7 @@ const SPACE = ' '
 // The last question, whether to run the audit now: Enter keeps the preselected Yes, the right arrow moves to No.
 const RUN = ENTER
 const LATER = '\u001B[C' + ENTER
+const TAB = '\t'
 
 // The time the tests' setup starts, so the suggested report names are known: a.test-2026-10-26-1430.html.
 const NOW = new Date(2026, 9, 26, 14, 30)
@@ -438,6 +439,19 @@ test('wizard: an answer of only spaces takes the default path', async (t) => {
     '--out',
     `${STEM}.json`
   ])
+})
+
+test('wizard: Tab puts the suggested name in to be edited, and only into an empty answer', async (t) => {
+  const dir = tempDir(t)
+  const cwd = process.cwd()
+  process.chdir(dir)
+  t.after(() => process.chdir(cwd))
+  const jsonOnly = DOWN + SPACE + ENTER
+  const { args, shown } = await askShown(...ONE_PAGE, jsonOnly, TAB, '\u007F\u007F\u007F\u007Fx.json\r', RUN)
+  assert.deepEqual(args, ['https://a.test/', '--out', `${STEM}.x.json`])
+  assert.match(shown, /Enter to use it, Tab to edit it/)
+  assert.deepEqual(await ask(...ONE_PAGE, jsonOnly, TAB, ENTER, RUN), ['https://a.test/', '--out', `${STEM}.json`])
+  assert.deepEqual(await ask(...ONE_PAGE, jsonOnly, 'r', TAB, '.json\r', RUN), ['https://a.test/', '--out', 'r.json'])
 })
 
 test('wizard: all report files of a setup are suggested one name, also when the URL file changes', async (t) => {

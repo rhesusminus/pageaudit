@@ -8,6 +8,7 @@ import { parseUrlList } from './input/file.js'
 import { normalize } from './input/resolve.js'
 import { OPTIONS } from './options.js'
 import { sameFile } from './output.js'
+import { suggest } from './suggest-prompt.js'
 
 // The setup is asked only when nothing was given and a person is at the terminal, so scripts, pipes and CI keep
 // getting the usage error.
@@ -271,10 +272,9 @@ async function askAll(questions) {
 // path or clack's cancel symbol.
 async function askContentFolder(defaultPath, taken, streams) {
   const check = (value) => checkContentFolder(value) ?? taken(value)
-  const answer = await text({
+  const answer = await suggest({
     message: 'Which folder should the page content go in?',
-    placeholder: defaultPath,
-    defaultValue: defaultPath,
+    suggestion: defaultPath,
     validate: (value) => check(value?.trim() ? value : defaultPath),
     ...streams
   })
@@ -285,10 +285,9 @@ async function askContentFolder(defaultPath, taken, streams) {
 // path again. Returns the trimmed path or clack's cancel symbol.
 async function askReportPath({ message, defaultPath, validate }, streams) {
   for (;;) {
-    const answer = await text({
+    const answer = await suggest({
       message,
-      placeholder: defaultPath,
-      defaultValue: defaultPath,
+      suggestion: defaultPath,
       // clack checks the empty input before it becomes the default, so the default is what gets checked.
       validate: (value) => validate(value?.trim() ? value : defaultPath),
       ...streams

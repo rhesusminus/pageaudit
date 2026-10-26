@@ -24,7 +24,8 @@
     "*.{json,md,yml}": "prettier --write"
   },
   "dependencies": {
-    "@clack/prompts": "^1.8.1",
+    "@clack/core": "1.5.1",
+    "@clack/prompts": "1.8.1",
     "chalk": "^6.0.0",
     "cheerio": "^1.2.0",
     "chrome-launcher": "^1.2.2",
