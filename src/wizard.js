@@ -1,9 +1,10 @@
-import { accessSync, constants, existsSync, statSync } from 'node:fs'
+import { accessSync, constants, existsSync, readFileSync, statSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { cancel, confirm, intro, isCancel, log, multiselect, outro, select, text } from '@clack/prompts'
 import stringWidth from 'string-width'
 import { logoType, MAX_LOGO_BYTES } from './html/logo.js'
 import { DEFAULT_TITLE } from './html/render.js'
+import { parseUrlList } from './input/file.js'
 import { normalize } from './input/resolve.js'
 import { OPTIONS } from './options.js'
 import { sameFile } from './output.js'
@@ -150,6 +151,46 @@ const REPORTS = {
   content: { label: 'Page content', hint: 'the text of each page as Markdown, for Claude' }
 }
 
+// The URLs the source names. A URL file is read for them, it was checked to be readable when it was entered.
+function sourceUrls(source, input) {
+  if (source !== 'file') return words(input)
+  try {
+    const path = input.trim()
+    return parseUrlList(readFileSync(path, 'utf8'), path).flatMap((entry) => (entry.rejected ? [] : [entry.value]))
+  } catch {
+    return []
+  }
+}
+
+// The host of a URL that can be audited, or undefined.
+function hostOf(value) {
+  try {
+    return new URL(normalize(value).url).hostname
+  } catch {
+    return undefined
+  }
+}
+
+// The site part of a suggested report name: the host of the first URL that can be audited, without www. Characters a
+// file name should not have, like the brackets and colons of an IPv6 address, become one dash.
+function siteName(source, input) {
+  const host = sourceUrls(source, input).map(hostOf).find(Boolean)
+  const name = host
+    ?.replace(/^www\./, '')
+    .replaceAll(/[^a-z0-9.-]+/g, '-')
+    .replaceAll(/^-|-$/g, '')
+  return name || 'report'
+}
+
+const pad = (n) => String(n).padStart(2, '0')
+
+// The name the report files of an audit are suggested, without the extension: the site, then the local date and
+// time, such as example.com-2026-10-26-1430. The time has no colons, so the name works on every system.
+export function reportStem({ source, input }, now) {
+  const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+  return `${siteName(source, input)}-${date}-${pad(now.getHours())}${pad(now.getMinutes())}`
+}
+
 // The trimmed answer to the client or logo question, or undefined when it was left out.
 const optional = (value) => {
   const answer = value?.trim()
@@ -226,10 +267,9 @@ async function askAll(questions) {
   return answers
 }
 
-// Asks for the --content folder. `taken` says why a path a report already goes to cannot be used. Returns the trimmed
+// Asks for the --content folder, suggesting `defaultPath`. `taken` says why a path a report already goes to cannot be used. Returns the trimmed
 // path or clack's cancel symbol.
-async function askContentFolder(taken, streams) {
-  const defaultPath = 'content'
+async function askContentFolder(defaultPath, taken, streams) {
   const check = (value) => checkContentFolder(value) ?? taken(value)
   const answer = await text({
     message: 'Which folder should the page content go in?',
@@ -301,12 +341,16 @@ const checkQuestions = (streams) => ({
     })
 })
 
-// The questions about the HTML report, asked only when it was picked.
-const htmlQuestions = (streams) => ({
-  html: ({ reports }) =>
-    reports.includes('html')
+// The questions about the HTML report, asked only when it was picked. `stem` gives the suggested report name.
+const htmlQuestions = (streams, stem) => ({
+  html: (answers) =>
+    answers.reports.includes('html')
       ? askReportPath(
-          { message: 'Where should the HTML report go?', defaultPath: 'report.html', validate: checkReportPath },
+          {
+            message: 'Where should the HTML report go?',
+            defaultPath: `${stem(answers)}.html`,
+            validate: checkReportPath
+          },
           streams
         )
       : undefined,
@@ -345,7 +389,8 @@ const answeredPaths = ({ html, json, digest }) => [
   [digest, 'The digest goes there']
 ]
 
-const reportQuestions = (streams) => ({
+// `stem` gives the suggested name of the report files, without the extension.
+const reportQuestions = (streams, stem) => ({
   reports: () =>
     multiselect({
       message: 'Which report files should be written?',
@@ -353,13 +398,13 @@ const reportQuestions = (streams) => ({
       required: false,
       ...streams
     }),
-  ...htmlQuestions(streams),
+  ...htmlQuestions(streams, stem),
   json: (answers) =>
     answers.reports.includes('json')
       ? askReportPath(
           {
             message: 'Where should the JSON report go?',
-            defaultPath: 'report.json',
+            defaultPath: `${stem(answers)}.json`,
             validate: checkOwnPath(answeredPaths(answers))
           },
           streams
@@ -370,25 +415,29 @@ const reportQuestions = (streams) => ({
       ? askReportPath(
           {
             message: 'Where should the digest go?',
-            defaultPath: 'report.digest.json',
+            defaultPath: `${stem(answers)}.digest.json`,
             validate: checkOwnPath(answeredPaths(answers))
           },
           streams
         )
       : undefined,
   content: (answers) =>
-    answers.reports.includes('content') ? askContentFolder(takenPath(answeredPaths(answers)), streams) : undefined
+    answers.reports.includes('content')
+      ? askContentFolder(`${stem(answers)}-content`, takenPath(answeredPaths(answers)), streams)
+      : undefined
 })
 
 // Asks for the audit setup, shows the command it makes and asks whether to run it now. Returns the arguments for
 // run() and whether to run them, or null when the user cancelled. The streams are clack's input and output, given
-// in tests.
-export async function askArgs(streams = {}) {
+// in tests, and so is `now`, the time the suggested report names carry.
+export async function askArgs(streams = {}, { now = new Date() } = {}) {
   intro('pageaudit', streams)
+  // Worked out once, as a URL file is read for it and may change while the questions are answered.
+  let stem
   const answers = await askAll({
     ...sourceQuestions(streams),
     ...checkQuestions(streams),
-    ...reportQuestions(streams)
+    ...reportQuestions(streams, (answers) => (stem ??= reportStem(answers, now)))
   })
   if (!answers) {
     cancel('Cancelled.', streams)
