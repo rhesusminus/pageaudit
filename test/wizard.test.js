@@ -18,6 +18,7 @@ import {
   shellQuote,
   checkUrlFile,
   commandLines,
+  reportStem,
   wantsWizard
 } from '../src/wizard.js'
 
@@ -33,8 +34,14 @@ const SPACE = ' '
 // The last question, whether to run the audit now: Enter keeps the preselected Yes, the right arrow moves to No.
 const RUN = ENTER
 const LATER = '\u001B[C' + ENTER
+const TAB = '\t'
 
-// Answers the prompts by typing into clack's input, one chunk per prompt once the previous output has rendered.
+// The time the tests' setup starts, so the suggested report names are known: a.test-2026-10-26-1430.html.
+const NOW = new Date(2026, 9, 26, 14, 30)
+const STEM = 'a.test-2026-10-26-1430'
+
+// Answers the prompts by typing into clack's input, one chunk per prompt once the previous output has rendered. A
+// function in place of a chunk is called at that point instead, to change something between two questions.
 // Returns the arguments, null when cancelled, whether to run them now and what was shown. A prompt still waiting
 // after 5 s, because the test typed too few answers, is cancelled, so the test fails instead of hanging.
 async function askShown(...typed) {
@@ -46,10 +53,11 @@ async function askShown(...typed) {
       done()
     }
   })
-  const answer = askArgs({ input, output, signal: AbortSignal.timeout(5000) })
+  const answer = askArgs({ input, output, signal: AbortSignal.timeout(5000) }, { now: NOW })
   for (const keys of typed) {
     await new Promise((resolve) => setImmediate(resolve))
-    input.write(keys)
+    if (typeof keys === 'function') keys()
+    else input.write(keys)
   }
   const setup = await answer
   return { args: setup?.args ?? null, runNow: setup?.runNow, shown: stripVTControlCharacters(shown.join('')) }
@@ -379,7 +387,7 @@ test('wizard: the report answers become their options, leaving out defaults and 
   ])
 })
 
-test('wizard: asks for every report file, with their default paths', async (t) => {
+test('wizard: asks for every report file, suggesting names of the site and the time', async (t) => {
   const dir = tempDir(t)
   const cwd = process.cwd()
   process.chdir(dir)
@@ -388,11 +396,11 @@ test('wizard: asks for every report file, with their default paths', async (t) =
   assert.deepEqual(await ask(...ONE_PAGE, all, ENTER, ENTER, ENTER, ENTER, ENTER, ENTER, RUN), [
     'https://a.test/',
     '--html',
-    'report.html',
+    `${STEM}.html`,
     '--out',
-    'report.json',
+    `${STEM}.json`,
     '--digest',
-    'report.digest.json'
+    `${STEM}.digest.json`
   ])
 })
 
@@ -411,7 +419,7 @@ test('wizard: asks for the page content folder, which cannot be where a report g
   process.chdir(dir)
   t.after(() => process.chdir(cwd))
   const contentOnly = DOWN + DOWN + DOWN + SPACE + ENTER
-  assert.deepEqual(await ask(...ONE_PAGE, contentOnly, ENTER, RUN), ['https://a.test/', '--content', 'content'])
+  assert.deepEqual(await ask(...ONE_PAGE, contentOnly, ENTER, RUN), ['https://a.test/', '--content', `${STEM}-content`])
   const jsonAndContent = DOWN + SPACE + DOWN + DOWN + SPACE + ENTER
   const typed = [...ONE_PAGE, jsonAndContent, 'r.json\r', 'r.json\r', '\u0015pages\r']
   const { args, shown } = await askShown(...typed, RUN)
@@ -427,10 +435,63 @@ test('wizard: an answer of only spaces takes the default path', async (t) => {
   assert.deepEqual(await ask(...ONE_PAGE, SPACE + DOWN + SPACE + ENTER, '  \r', ENTER, ENTER, ENTER, ' \r', RUN), [
     'https://a.test/',
     '--html',
-    'report.html',
+    `${STEM}.html`,
     '--out',
-    'report.json'
+    `${STEM}.json`
   ])
+})
+
+test('wizard: Tab puts the suggested name in to be edited, and only into an empty answer', async (t) => {
+  const dir = tempDir(t)
+  const cwd = process.cwd()
+  process.chdir(dir)
+  t.after(() => process.chdir(cwd))
+  const jsonOnly = DOWN + SPACE + ENTER
+  const { args, shown } = await askShown(...ONE_PAGE, jsonOnly, TAB, '\u007F\u007F\u007F\u007Fx.json\r', RUN)
+  assert.deepEqual(args, ['https://a.test/', '--out', `${STEM}.x.json`])
+  assert.match(shown, /Enter to use it, Tab to edit it/)
+  assert.deepEqual(await ask(...ONE_PAGE, jsonOnly, TAB, ENTER, RUN), ['https://a.test/', '--out', `${STEM}.json`])
+  assert.deepEqual(await ask(...ONE_PAGE, jsonOnly, 'r', TAB, '.json\r', RUN), ['https://a.test/', '--out', 'r.json'])
+})
+
+test('wizard: all report files of a setup are suggested one name, also when the URL file changes', async (t) => {
+  const dir = tempDir(t)
+  const cwd = process.cwd()
+  process.chdir(dir)
+  t.after(() => process.chdir(cwd))
+  writeFileSync('urls.txt', 'https://first.test/\n')
+  const fromFile = [DOWN + DOWN + ENTER, 'urls.txt\r', ENTER, ENTER]
+  const htmlAndJson = SPACE + DOWN + SPACE + ENTER
+  const changeFile = () => writeFileSync('urls.txt', 'https://second.test/\n')
+  const typed = [...fromFile, htmlAndJson, ENTER, changeFile, ENTER, ENTER, ENTER, ENTER, RUN]
+  assert.deepEqual(await ask(...typed), [
+    '--urls-file',
+    'urls.txt',
+    '--html',
+    'first.test-2026-10-26-1430.html',
+    '--out',
+    'first.test-2026-10-26-1430.json'
+  ])
+})
+
+test('wizard: the suggested report name is the site of the first URL and the local time', () => {
+  const at = new Date(2026, 0, 5, 9, 7)
+  const stem = (source, input) => reportStem({ source, input }, at)
+  assert.equal(stem('pages', 'https://a.test/'), 'a.test-2026-01-05-0907')
+  assert.equal(stem('pages', ' HTTPS://WWW.Example.COM:8080/x https://b.test/'), 'example.com-2026-01-05-0907')
+  assert.equal(stem('sitemap', 'https://shop.test/sitemap.xml'), 'shop.test-2026-01-05-0907')
+  assert.equal(stem('pages', 'http://[2001:db8::1]/'), '2001-db8-1-2026-01-05-0907')
+  assert.equal(stem('file', fixturePath('urls.txt')), 'fixtures.test-2026-01-05-0907')
+  assert.equal(reportStem({ source: 'pages', input: 'https://a.test/' }, NOW), STEM)
+})
+
+test('wizard: a report name without a site to name is suggested as report', (t) => {
+  const dir = tempDir(t)
+  const file = join(dir, 'urls.txt')
+  writeFileSync(file, '# none yet\nnot-a-url\nhttps://a.test/ extra words\n')
+  const at = new Date(2026, 11, 31, 23, 59)
+  assert.equal(reportStem({ source: 'file', input: file }, at), 'report-2026-12-31-2359')
+  assert.equal(reportStem({ source: 'file', input: join(dir, 'gone.txt') }, at), 'report-2026-12-31-2359')
 })
 
 test('wizard: asks for the HTML report title, client and logo', async (t) => {
