@@ -14,7 +14,9 @@
     "prepare": "husky",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "eslint . && npm run format:check"
+    "lint": "eslint . && npm run format:check",
+    "build": "tsc -p tsconfig.json",
+    "start": "node src/api/index.js"
   },
   "lint-staged": {
     "*.js": [
@@ -31,13 +33,17 @@
     "chrome-launcher": "^1.2.2",
     "cli-table3": "^0.6.5",
     "entities": "^7.0.1",
+    "fastify": "^5.12.7",
     "lighthouse": "^13.5.0",
     "ora": "^9.4.1",
     "robots-parser": "^3.0.1",
     "string-width": "^8.3.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.6.3",
     "@eslint/js": "^10.0.1",
+    "@tsconfig/node24": "^24.0.5",
+    "@types/node": "^26.6.5",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "eslint": "^10.12.0",
@@ -46,6 +52,7 @@
     "globals": "^17.13.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
-    "prettier": "3.9.9"
+    "prettier": "3.9.9",
+    "typescript": "^7.0.2"
   }
 }
