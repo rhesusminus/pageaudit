@@ -15,7 +15,6 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint . && npm run format:check",
-    "build": "tsc -p tsconfig.json",
     "start": "node src/api/index.ts",
     "dev": "node --watch src/api/index.ts",
     "typecheck": "tsc"

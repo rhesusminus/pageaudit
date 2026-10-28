@@ -2,8 +2,6 @@
   "extends": "@tsconfig/node24/tsconfig.json",
   "compilerOptions": {
     "allowJs": true,
-    "noEmit": true,
-    "allowImportingTsExtensions": true,
     "outDir": "dist"
   },
   "include": ["src"]
