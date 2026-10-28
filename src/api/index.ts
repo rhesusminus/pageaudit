@@ -1,6 +1,9 @@
 import fastify from 'fastify'
+import { routes } from './routes.ts'
 
 const server = fastify()
+
+server.register(routes)
 
 server.get('/ping', async () => {
   return 'pong\n'
