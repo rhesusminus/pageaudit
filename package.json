@@ -10,12 +10,12 @@
     "node": ">=24"
   },
   "scripts": {
-    "test": "node --test test/*.test.js",
+    "test": "node --test test/*.test.{js,ts}",
     "prepare": "husky",
     "format": "biome format --write .",
     "lint": "biome check .",
-    "start": "node src/api/index.ts",
-    "dev": "node --watch src/api/index.ts",
+    "start": "node src/api/server.ts",
+    "dev": "node --watch src/api/server.ts",
     "typecheck": "tsc",
     "lint:fix": "biome check --write ."
   },
