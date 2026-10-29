@@ -1,5 +1,5 @@
-import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { test } from 'node:test'
 import { checkResponseHeaders, cspWeaknesses, parseCsp } from '../src/checks/site/headers.js'
 
 const SECURE = {

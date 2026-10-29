@@ -1,5 +1,5 @@
-import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { test } from 'node:test'
 import { phaseOf } from '../src/lighthouse.js'
 import { canSpin, createProgress, lighthouseProgress, progressBar } from '../src/progress.js'
 
@@ -11,7 +11,10 @@ function fakeSpinners() {
   const spinner = ({ text, stream }) => {
     calls.push(['create', text, stream])
     const current = {
-      start: () => (calls.push(['start']), current),
+      start: () => {
+        calls.push(['start'])
+        return current
+      },
       stop: () => calls.push(['stop']),
       fail: (message) => calls.push(['fail', message]),
       set text(next) {

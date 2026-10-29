@@ -6,16 +6,41 @@
     "useIgnoreFile": true
   },
   "files": {
-    "ignoreUnknown": false
+    "ignoreUnknown": true,
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/coverage",
+      "!**/package-lock.json",
+      "!**/docs",
+      "!**/test/fixtures",
+      "!**/report.html",
+      "!**/report.json"
+    ]
   },
   "formatter": {
     "enabled": true,
-    "indentStyle": "tab"
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 120
   },
   "linter": {
     "enabled": true,
     "rules": {
-      "preset": "recommended"
+      "preset": "recommended",
+      "complexity": {
+        "noExcessiveLinesPerFunction": {
+          "level": "error",
+          "options": { "maxLines": 40, "skipBlankLines": true }
+        }
+      },
+      "style": {
+        "useFilenamingConvention": {
+          "level": "error",
+          "options": { "filenameCases": ["kebab-case"] }
+        }
+      }
     }
   },
   "javascript": {
@@ -23,18 +48,45 @@
       "quoteStyle": "single",
       "trailingCommas": "none",
       "semicolons": "asNeeded",
-      "bracketSpacing": true,
-      "lineWidth": 120,
-      "indentStyle": "space",
-      "indentWidth": 2
-    }
+      "bracketSpacing": true
+    },
+    "globals": []
   },
-  "assist": {
-    "enabled": true,
-    "actions": {
-      "source": {
-        "organizeImports": "on"
+  "yaml": {
+    "formatter": { "enabled": true, "quoteStyle": "single" }
+  },
+  "markdown": {
+    "formatter": { "enabled": true }
+  },
+  "overrides": [
+    {
+      "includes": ["src/report.js", "src/severity.js", "src/html/**/*.js"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "chalk": "The JSON report and the HTML report stay free of terminal presentation, which lives in src/terminal.js.",
+                  "cli-table3": "The JSON report and the HTML report stay free of terminal presentation, which lives in src/terminal.js.",
+                  "wrap-ansi": "The JSON report and the HTML report stay free of terminal presentation, which lives in src/terminal.js."
+                },
+                "patterns": [
+                  {
+                    "group": ["**/terminal.js"],
+                    "message": "The JSON report and the HTML report stay free of terminal presentation, which lives in src/terminal.js."
+                  }
+                ]
+              }
+            }
+          }
+        }
       }
     }
+  ],
+  "assist": {
+    "enabled": true,
+    "actions": { "source": { "organizeImports": "on" } }
   }
 }

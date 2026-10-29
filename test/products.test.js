@@ -1,8 +1,8 @@
-import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { parse } from '../src/parse.js'
+import { test } from 'node:test'
 import { checkProducts, pageProducts } from '../src/checks/page/products.js'
+import { parse } from '../src/parse.js'
 
 const ldJson = (...values) =>
   values.map((value) => `<script type="application/ld+json">${JSON.stringify(value)}</script>`).join('')
@@ -240,7 +240,7 @@ test('product-brand-is-site: matched against the WebSite, a store type and og:si
   const brandIssues = (head) => types(checkProducts(page(head))).filter((type) => type === 'product-brand-is-site')
   assert.equal(brandIssues(ldJson(product, { '@type': 'WebSite', name: 'hair co' })).length, 1)
   assert.equal(brandIssues(ldJson(product, { '@type': 'HealthAndBeautyBusiness', name: 'Hair Co' })).length, 1)
-  assert.equal(brandIssues(ldJson(product) + '<meta property="og:site_name" content="Hair Co">').length, 1)
+  assert.equal(brandIssues(`${ldJson(product)}<meta property="og:site_name" content="Hair Co">`).length, 1)
   // A Brand node is the brand itself, not the site.
   assert.equal(brandIssues(ldJson(product, { '@type': 'Brand', name: 'Hair Co' })).length, 0)
   assert.equal(brandIssues(ldJson(product, { '@type': 'Organization', name: 'Hair Shop' })).length, 0)

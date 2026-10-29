@@ -1,9 +1,9 @@
-import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { parse } from '../src/parse.js'
+import { test } from 'node:test'
 import { checkEscapedText } from '../src/checks/page/escaped-text.js'
 import { checkHtml } from '../src/checks/page/index.js'
+import { parse } from '../src/parse.js'
 import { htmlEntities } from '../src/text.js'
 
 const page = (head) => parse(`<html><head>${head}</head><body><p>x</p></body></html>`)

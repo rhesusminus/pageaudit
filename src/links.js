@@ -1,6 +1,6 @@
-import { hostThrottle, mapLimited } from './concurrency.js'
 import { pageCanonical } from './checks/page/index.js'
-import { DEFAULT_TIMEOUT_MS, readHtml, request as defaultRequest } from './fetch.js'
+import { hostThrottle, mapLimited } from './concurrency.js'
+import { DEFAULT_TIMEOUT_MS, request as defaultRequest, readHtml } from './fetch.js'
 import { withoutFragment } from './input/resolve.js'
 import { parse } from './parse.js'
 import { DEFAULT_CONCURRENCY, DEFAULT_DELAY_MS, linksUnread } from './runner.js'
@@ -99,7 +99,7 @@ export async function checkLinkTargets(
     onProgress(++done, checked.length)
     return outcome
   })
-  checked.forEach(({ url }, i) => outcomes.set(url, results[i]))
+  for (const [i, { url }] of checked.entries()) outcomes.set(url, results[i])
   return {
     outcomes,
     checked: checked.length,

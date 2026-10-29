@@ -1,35 +1,35 @@
 import { basename, dirname, relative, resolve } from 'node:path'
 import chalk from 'chalk'
 import { originPlatform } from './checks/page/platform.js'
+import { checkSite } from './checks/site/index.js'
 import { checkLinks } from './checks/site/links.js'
 import { aiCrawlerAccess, checkRobotsTxt } from './checks/site/robots.js'
-import { checkSite } from './checks/site/index.js'
 import {
   checkSitemapDeclared,
   checkSitemapEntries,
   checkSitemapFiles,
   checkSitemapHosts
 } from './checks/site/sitemap.js'
+import { hostThrottle } from './concurrency.js'
+import { contentWriter, prepareContentFolder } from './content-files.js'
+import { buildCoverage, orphansSkipped } from './coverage.js'
+import { buildDigest } from './digest.js'
 import { readLogo } from './html/logo.js'
 import { renderHtml } from './html/render.js'
 import { fromArgs } from './input/args.js'
 import { fromFile } from './input/file.js'
 import { pageKey, resolveUrls } from './input/resolve.js'
 import { fromSitemap, lastmodByPage } from './input/sitemap.js'
-import { cachedRobotsLoader, loadRobots } from './robots.js'
 import { lighthouseFailed, runLighthouse, shortSummary } from './lighthouse.js'
-import { hostThrottle } from './concurrency.js'
-import { contentWriter, prepareContentFolder } from './content-files.js'
-import { buildCoverage, orphansSkipped } from './coverage.js'
-import { checkLinkTargets } from './links.js'
 import { lighthouseIssues } from './lighthouse-issues.js'
+import { checkLinkTargets } from './links.js'
 import { HELP, parseOptions, USAGE } from './options.js'
 import { reportPathProblems, sameFile, writeReportFile } from './output.js'
 import { createProgress } from './progress.js'
 import { buildReport } from './report.js'
-import { buildDigest } from './digest.js'
-import { formatReport } from './terminal.js'
+import { cachedRobotsLoader, loadRobots } from './robots.js'
 import { checksFailed, DEFAULT_DELAY_MS, runAudit } from './runner.js'
+import { formatReport } from './terminal.js'
 
 // Collects entries from every input. Only the inputs themselves are fatal (a file
 // that cannot be read, a sitemap that cannot be fetched); bad URLs are skipped.

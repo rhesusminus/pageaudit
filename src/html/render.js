@@ -1,6 +1,6 @@
 import pkg from '../../package.json' with { type: 'json' }
-import { markup, raw } from './escape.js'
 import { averageScores, groupIssues, pageHealth, pagesWithSiteIssues } from '../overview.js'
+import { markup, raw } from './escape.js'
 import { siteWideIssues, verdict } from './model.js'
 import { cover, fixesSection, healthSection, methodSection, pagesSection } from './sections.js'
 import { CSS } from './styles.js'

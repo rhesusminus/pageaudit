@@ -1,5 +1,5 @@
-import test from 'node:test'
 import assert from 'node:assert/strict'
+import test from 'node:test'
 import { isElement, parse } from '../src/parse.js'
 
 const nested = (depth, inner = 'x') => `<main>${'<span>'.repeat(depth)}${inner}</main>`

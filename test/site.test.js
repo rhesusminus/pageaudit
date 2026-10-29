@@ -1,5 +1,5 @@
-import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { test } from 'node:test'
 import { checkHreflangTargets } from '../src/checks/site/hreflang.js'
 import { checkSite } from '../src/checks/site/index.js'
 import { runAudit } from '../src/runner.js'
