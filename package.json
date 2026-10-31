@@ -25,6 +25,7 @@
   "dependencies": {
     "@clack/core": "1.5.1",
     "@clack/prompts": "1.8.1",
+    "@fastify/type-provider-typebox": "^6.3.0",
     "chalk": "^6.0.0",
     "cheerio": "^1.2.0",
     "chrome-launcher": "^1.2.2",

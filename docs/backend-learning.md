@@ -1,9 +1,9 @@
-1. Test the endpoint you have. WORKING ON
+1. Test the endpoint you have. **DONE**
    Cover a successful fetch, missing URL, invalid URL, and network failure. Learn how to replace the outgoing fetch in tests so they don’t depend on another website. Fastify’s inject() lets you exercise routes without starting a listening server. Official testing guide (https://fastify.dev/docs/latest/Guides/Testing/)
 
    Done when you can change the handler and immediately check whether its behavior still works.
 
-2. Return an actual audit result.
+2. Return an actual audit result. **WORKING ON**
    Connect the existing page checks to the endpoint. Start with one check, such as whether the page has a title, then expand.
 
    This teaches how to keep HTTP handling separate from the function that performs the audit.
