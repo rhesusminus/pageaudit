@@ -3,6 +3,7 @@ import { Type } from '@fastify/type-provider-typebox'
 import { deleteAudit, getAudit, saveAudit } from '../db/database.ts'
 import { normalize } from '../input/resolve.js'
 import { runAudit } from '../runner.js'
+import { fetchPublicPage, validateDestination } from './public-destination.js'
 
 const auditSchema = {
   body: Type.Object({ url: Type.String({ format: 'uri', maxLength: 2048 }) }),
@@ -67,11 +68,13 @@ export const routes: FastifyPluginAsyncTypebox = async (fastify) => {
 
     try {
       normalized = normalize(request.body.url)
+      await validateDestination(normalized.url)
     } catch (error) {
       return reply.code(400).send({ error: (error as Error).message })
     }
 
     const [page] = await runAudit([normalized.url], {
+      fetchPage: fetchPublicPage,
       onProgress: (done, total) => {
         request.log.info({ done, total }, 'audit progress')
       }

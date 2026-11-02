@@ -99,7 +99,7 @@ function redirectTarget(url, location, current) {
 // for it does not count toward the timeout, a long --delay must not make a quick server look slow.
 export async function request(
   url,
-  { timeout = DEFAULT_TIMEOUT_MS, accept = '*/*', maxRedirects = MAX_REDIRECTS, beforeHop } = {}
+  { timeout = DEFAULT_TIMEOUT_MS, accept = '*/*', maxRedirects = MAX_REDIRECTS, beforeHop, dispatcher } = {}
 ) {
   const redirects = []
   let current = httpUrl(url, url, 'URL')
@@ -111,6 +111,7 @@ export async function request(
       // The rest of the budget, which also covers reading the body of the last hop.
       const signal = AbortSignal.timeout(Math.max(timeout - spent, 0))
       const res = await fetch(current, {
+        ...(dispatcher ? { dispatcher } : {}),
         redirect: 'manual',
         signal,
         headers: {
@@ -213,8 +214,8 @@ const checkedHeaders = (headers) =>
 // the response is a 200 with an HTML content type, and holds at most the first HTML_MAX_BYTES of it: truncated is
 // true when there was more. robotsHeader is the X-Robots-Tag value or null.
 // headers holds the CHECKED_HEADERS that were sent, and bodyBytes the decompressed size of the html (null without html).
-export async function fetchPage(url, { timeout, beforeHop } = {}) {
-  const res = await request(url, { timeout, beforeHop, accept: 'text/html,application/xhtml+xml' })
+export async function fetchPage(url, { timeout, beforeHop, dispatcher } = {}) {
+  const res = await request(url, { timeout, beforeHop, dispatcher, accept: 'text/html,application/xhtml+xml' })
   const body = await readHtml(res)
   return {
     url,

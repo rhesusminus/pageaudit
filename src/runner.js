@@ -120,7 +120,7 @@ export async function auditPage(
 export async function runAudit(
   urls,
   {
-    fetchPage,
+    fetchPage = defaultFetchPage,
     timeout,
     concurrency = DEFAULT_CONCURRENCY,
     pace = hostThrottle(DEFAULT_DELAY_MS),
