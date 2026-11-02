@@ -77,6 +77,12 @@ export const routes: FastifyPluginAsyncTypebox = async (fastify) => {
       }
     })
 
+    // auditPage reports a failed fetch as a page with no status instead of throwing.
+    if (page.status === null) {
+      request.log.error({ url: normalized.url }, 'fetch failed')
+      return reply.code(502).send({ error: 'Could not fetch page' })
+    }
+
     const id = await saveAudit(fastify.db, normalized.url, {
       finalUrl: page.finalUrl,
       status: page.status,
