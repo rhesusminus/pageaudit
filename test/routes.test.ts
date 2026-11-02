@@ -1,7 +1,14 @@
+import dns from 'node:dns/promises'
 import type { TestContext } from 'node:test'
-import { test } from 'node:test'
+import { beforeEach, test } from 'node:test'
 import { build } from '../src/api/app.ts'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
+import { mockFetch } from './helpers/mock-fetch.js'
+
+beforeEach((t) => {
+  const context = t as TestContext
+  context.mock.method(dns, 'lookup', async () => [{ address: '93.184.215.14', family: 4 }])
+})
 
 // build() returns a fresh app per test, and close() releases it afterwards.
 const makeApp = (t: TestContext) => {
@@ -73,6 +80,41 @@ test('POST /audits: answers 502 when the page cannot be fetched', async (t: Test
 
   t.assert.strictEqual(response.statusCode, 502)
   t.assert.deepStrictEqual(response.json(), { error: 'Could not fetch page' })
+})
+
+test('POST /audits: rejects private destinations before making a request', async (t: TestContext) => {
+  const fetched = mockFetch(t, async () => new Response('private data'))
+  const app = makeApp(t)
+  for (const url of ['http://localhost', 'http://127.1', 'http://10.0.0.1', 'http://[::1]', 'http://169.254.169.254']) {
+    const response = await app.inject({ method: 'POST', url: '/audits', body: { url } })
+    t.assert.strictEqual(response.statusCode, 400)
+  }
+  t.assert.strictEqual(fetched.mock.callCount(), 0)
+})
+
+test('POST /audits: rejects hostnames resolving to private addresses', async (t: TestContext) => {
+  t.mock.method(dns, 'lookup', async () => [{ address: '192.168.1.1', family: 4 }])
+  const fetched = mockFetch(t, async () => new Response('private data'))
+  const response = await makeApp(t).inject({ method: 'POST', url: '/audits', body: { url: 'https://internal.test' } })
+  t.assert.strictEqual(response.statusCode, 400)
+  t.assert.strictEqual(fetched.mock.callCount(), 0)
+})
+
+test('POST /audits: stops a public redirect chain before its private destination', async (t: TestContext) => {
+  const fetched = mockFetch(
+    t,
+    async (url: URL) =>
+      new Response(null, {
+        status: 302,
+        headers: { location: String(url).endsWith('/start') ? '/next' : 'http://10.0.0.1' }
+      })
+  )
+  const response = await makeApp(t).inject({ method: 'POST', url: '/audits', body: { url: `${FIXTURE_HOST}/start` } })
+  t.assert.strictEqual(response.statusCode, 502)
+  t.assert.deepStrictEqual(
+    fetched.mock.calls.map(({ arguments: [url] }: { arguments: [URL] }) => String(url)),
+    [`${FIXTURE_HOST}/start`, `${FIXTURE_HOST}/next`]
+  )
 })
 
 // Stores an audit through the API and returns its id.
