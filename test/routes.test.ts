@@ -83,6 +83,28 @@ const createAudit = async (t: TestContext, app: ReturnType<typeof makeApp>) => {
   return response.json().id as string
 }
 
+test('audit IDs are independent UUIDv4 values usable for fetching and deleting', async (t: TestContext) => {
+  const app = makeApp(t)
+  const firstId = await createAudit(t, app)
+  const secondId = await createAudit(t, app)
+  const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+
+  t.assert.match(firstId, uuidV4)
+  t.assert.match(secondId, uuidV4)
+  t.assert.notStrictEqual(firstId, secondId)
+
+  const fetched = await app.inject({ method: 'GET', url: `/audits/${firstId}` })
+  t.assert.strictEqual(fetched.statusCode, 200)
+  t.assert.strictEqual(fetched.json().id, firstId)
+
+  const deleted = await app.inject({ method: 'DELETE', url: `/audits/${firstId}` })
+  t.assert.strictEqual(deleted.statusCode, 204)
+  const other = await app.inject({ method: 'GET', url: `/audits/${secondId}` })
+  t.assert.strictEqual(other.statusCode, 200)
+  t.assert.strictEqual(other.json().id, secondId)
+  await app.inject({ method: 'DELETE', url: `/audits/${secondId}` })
+})
+
 test('DELETE /audits/:id: removes the audit so it can no longer be fetched', async (t: TestContext) => {
   const app = makeApp(t)
   const id = await createAudit(t, app)

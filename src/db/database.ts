@@ -1,5 +1,5 @@
+import { randomUUID } from 'node:crypto'
 import type { FastifyInstance } from 'fastify'
-import hyperid from 'hyperid'
 import type { runAudit } from '../runner.js'
 
 type Db = FastifyInstance['db']
@@ -19,13 +19,8 @@ type AuditRow = {
   result: string
 }
 
-// URL-safe ids: the default base64 alphabet contains "/" and "+", which break /audits/:id.
-const instance = hyperid({ urlSafe: true })
-
-const generateId = () => instance()
-
 export async function saveAudit(db: Db, url: string, auditResult: AuditResult) {
-  const id = generateId()
+  const id = randomUUID()
 
   await db.run('INSERT INTO audits (id, url, result) VALUES (?, ?, ?)', id, url, JSON.stringify(auditResult))
 
