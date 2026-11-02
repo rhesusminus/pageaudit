@@ -3,12 +3,12 @@
 
    Done when you can change the handler and immediately check whether its behavior still works.
 
-2. Return an actual audit result. **WORKING ON**
+2. Return an actual audit result. **DONE**
    Connect the existing page checks to the endpoint. Start with one check, such as whether the page has a title, then expand.
 
    This teaches how to keep HTTP handling separate from the function that performs the audit.
 
-3. Give each audit an ID and retrieve it.
+3. Give each audit an ID and retrieve it. **WORKING ON**
    Store results in a temporary in-memory Map. Have POST /audits create an audit and add GET /audits/:id to retrieve it.
 
    This teaches resources, route parameters, creation responses, and 404 handling. Restarting the server will erase the results at this stage.

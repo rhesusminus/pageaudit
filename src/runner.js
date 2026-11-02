@@ -126,7 +126,7 @@ export async function runAudit(
     pace = hostThrottle(DEFAULT_DELAY_MS),
     content = false,
     onPage = async () => {},
-    onProgress = () => {}
+    onProgress = /** @type {(done: number, total: number) => void} */ (() => {})
   } = {}
 ) {
   const pages = new Array(urls.length)
