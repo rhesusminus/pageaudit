@@ -19,7 +19,8 @@ type AuditRow = {
   result: string
 }
 
-const instance = hyperid()
+// URL-safe ids: the default base64 alphabet contains "/" and "+", which break /audits/:id.
+const instance = hyperid({ urlSafe: true })
 
 const generateId = () => instance()
 
@@ -45,10 +46,12 @@ export async function getAudit(db: Db, id: string) {
 }
 
 export async function deleteAudit(db: Db, id: string) {
-  await db.run(
+  const result = await db.run(
     `UPDATE audits
      SET deleted_at = CURRENT_TIMESTAMP
      WHERE id = ? AND deleted_at IS NULL`,
     id
   )
+
+  return result.changes === 1
 }

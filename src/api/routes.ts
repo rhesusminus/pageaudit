@@ -1,6 +1,6 @@
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox'
 import { Type } from '@fastify/type-provider-typebox'
-import { getAudit, saveAudit } from '../db/database.ts'
+import { deleteAudit, getAudit, saveAudit } from '../db/database.ts'
 import { normalize } from '../input/resolve.js'
 import { runAudit } from '../runner.js'
 
@@ -27,6 +27,14 @@ const getAuditSchema = {
   }
 }
 
+const deleteAuditSchema = {
+  params: Type.Object({ id: Type.String() }),
+  response: {
+    204: Type.Null(),
+    404: Type.Object({ error: Type.String() })
+  }
+}
+
 export const routes: FastifyPluginAsyncTypebox = async (fastify) => {
   fastify.get(
     '/audits/:id',
@@ -44,6 +52,16 @@ export const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     }
   )
 
+  fastify.delete('/audits/:id', { schema: deleteAuditSchema }, async (request, reply) => {
+    const deleted = await deleteAudit(fastify.db, request.params.id)
+
+    if (!deleted) {
+      return reply.code(404).send({ error: 'Audit not found' })
+    }
+
+    return reply.code(204).send(null)
+  })
+
   fastify.post('/audits', { schema: auditSchema }, async (request, reply) => {
     let normalized: ReturnType<typeof normalize>
 
@@ -58,6 +76,12 @@ export const routes: FastifyPluginAsyncTypebox = async (fastify) => {
         request.log.info({ done, total }, 'audit progress')
       }
     })
+
+    // auditPage reports a failed fetch as a page with no status instead of throwing.
+    if (page.status === null) {
+      request.log.error({ url: normalized.url }, 'fetch failed')
+      return reply.code(502).send({ error: 'Could not fetch page' })
+    }
 
     const id = await saveAudit(fastify.db, normalized.url, {
       finalUrl: page.finalUrl,
