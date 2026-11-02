@@ -391,6 +391,18 @@ Judgment calls that are not straight from those pages:
 - **Hreflang checks:** codes are judged leniently, so only clear mistakes are flagged. Google's page asks for ISO 639-1 languages and ISO 3166-1 regions, but three-letter languages without a two-letter code (`fil`) and numeric regions (`es-419`) are valid language tags and are accepted. Flagged are a wrong separator (`fi_FI`), a three-letter form of a two-letter language (`fin`, `eng`), codes that are reserved or not a region (`UK`, `EU`, `UN`), and codes Node's `Intl` does not know, such as `xx` or `en-XX`. `duplicate-hreflang`, `hreflang-target-noindex` and `hreflang-target-canonicalised` are my own calls: Google does not mention them, but a duplicate leaves Google to pick one URL, and a noindex or canonicalised alternate cannot be shown as itself. `missing-x-default` is only an info because `x-default` is recommended, not required.
 - **Summaries, not full reads:** the pages were read through an AI summarizer, so exact wording should be checked against the linked page before quoting it.
 
+## HTTP API
+
+`npm start` serves a small Fastify API on port 8080 (`npm run dev` restarts on changes). Audits are stored in a SQLite file, `database.db`, in the working directory.
+
+| Route                | Does                                                                                         |
+| -------------------- | -------------------------------------------------------------------------------------------- |
+| `POST /audits`       | Audits the page in `{ "url": "..." }`, stores the result and answers `{ url, finalUrl, id }` |
+| `GET /audits/:id`    | Returns a stored audit, `404` if it is unknown                                               |
+| `DELETE /audits/:id` | Soft-deletes a stored audit with `204`, `404` if it is unknown or already deleted            |
+
+`POST /audits` answers `400` for a URL it cannot audit and `502` when the page cannot be fetched. A failed fetch is not stored.
+
 ## Architecture
 
 ```
