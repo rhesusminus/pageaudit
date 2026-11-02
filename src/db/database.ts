@@ -19,7 +19,8 @@ type AuditRow = {
   result: string
 }
 
-const instance = hyperid()
+// URL-safe ids: the default base64 alphabet contains "/" and "+", which break /audits/:id.
+const instance = hyperid({ urlSafe: true })
 
 const generateId = () => instance()
 
