@@ -1,6 +1,6 @@
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox'
 import { Type } from '@fastify/type-provider-typebox'
-import { getAudit, saveAudit } from '../db/database.ts'
+import { deleteAudit, getAudit, saveAudit } from '../db/database.ts'
 import { normalize } from '../input/resolve.js'
 import { runAudit } from '../runner.js'
 
@@ -27,6 +27,14 @@ const getAuditSchema = {
   }
 }
 
+const deleteAuditSchema = {
+  params: Type.Object({ id: Type.String() }),
+  response: {
+    204: Type.Null(),
+    404: Type.Object({ error: Type.String() })
+  }
+}
+
 export const routes: FastifyPluginAsyncTypebox = async (fastify) => {
   fastify.get(
     '/audits/:id',
@@ -43,6 +51,16 @@ export const routes: FastifyPluginAsyncTypebox = async (fastify) => {
       return reply.code(200).send(audit)
     }
   )
+
+  fastify.delete('/audits/:id', { schema: deleteAuditSchema }, async (request, reply) => {
+    const deleted = await deleteAudit(fastify.db, request.params.id)
+
+    if (!deleted) {
+      return reply.code(404).send({ error: 'Audit not found' })
+    }
+
+    return reply.code(204).send(null)
+  })
 
   fastify.post('/audits', { schema: auditSchema }, async (request, reply) => {
     let normalized: ReturnType<typeof normalize>

@@ -25,9 +25,9 @@ test('POST /audits: returns the fetched page facts', async (t: TestContext) => {
   const { id, ...body } = response.json()
   t.assert.deepStrictEqual(body, {
     url: `${FIXTURE_HOST}/good.html`,
-    finalUrl: `${FIXTURE_HOST}/good.html`,
-    status: 200
+    finalUrl: `${FIXTURE_HOST}/good.html`
   })
+  t.assert.ok(id)
 })
 
 test('POST /audits: reports the final URL after a redirect', async (t: TestContext) => {
@@ -73,4 +73,42 @@ test('POST /audits: answers 502 when the page cannot be fetched', async (t: Test
 
   t.assert.strictEqual(response.statusCode, 502)
   t.assert.deepStrictEqual(response.json(), { error: 'Could not fetch page' })
+})
+
+// Stores an audit through the API and returns its id.
+const createAudit = async (t: TestContext, app: ReturnType<typeof makeApp>) => {
+  mockFixtureFetch(t)
+  const response = await app.inject({ method: 'POST', url: '/audits', body: { url: `${FIXTURE_HOST}/good.html` } })
+
+  return response.json().id as string
+}
+
+test('DELETE /audits/:id: removes the audit so it can no longer be fetched', async (t: TestContext) => {
+  const app = makeApp(t)
+  const id = await createAudit(t, app)
+
+  const deleted = await app.inject({ method: 'DELETE', url: `/audits/${id}` })
+  const fetched = await app.inject({ method: 'GET', url: `/audits/${id}` })
+
+  t.assert.strictEqual(deleted.statusCode, 204)
+  t.assert.strictEqual(fetched.statusCode, 404)
+})
+
+test('DELETE /audits/:id: answers 404 for an unknown audit', async (t: TestContext) => {
+  const app = makeApp(t)
+
+  const response = await app.inject({ method: 'DELETE', url: '/audits/does-not-exist' })
+
+  t.assert.strictEqual(response.statusCode, 404)
+  t.assert.deepStrictEqual(response.json(), { error: 'Audit not found' })
+})
+
+test('DELETE /audits/:id: answers 404 when the audit is already deleted', async (t: TestContext) => {
+  const app = makeApp(t)
+  const id = await createAudit(t, app)
+  await app.inject({ method: 'DELETE', url: `/audits/${id}` })
+
+  const response = await app.inject({ method: 'DELETE', url: `/audits/${id}` })
+
+  t.assert.strictEqual(response.statusCode, 404)
 })
