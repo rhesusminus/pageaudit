@@ -22,7 +22,8 @@ test('POST /audits: returns the fetched page facts', async (t: TestContext) => {
   })
 
   t.assert.strictEqual(response.statusCode, 200)
-  t.assert.deepStrictEqual(response.json(), {
+  const { id, ...body } = response.json()
+  t.assert.deepStrictEqual(body, {
     url: `${FIXTURE_HOST}/good.html`,
     finalUrl: `${FIXTURE_HOST}/good.html`,
     status: 200
