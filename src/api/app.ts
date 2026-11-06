@@ -1,7 +1,9 @@
 import type { FastifyServerOptions } from 'fastify'
 import fastify from 'fastify'
 import { fpSqlitePlugin } from 'fastify-sqlite-typed'
+import { claimNextAudit, completeAudit, failAudit } from '../db/database.ts'
 import { routes } from './routes.ts'
+import { startAuditWorker } from './worker.ts'
 
 type AppOptions = {
   // ':memory:' gives the app a private database that disappears when it closes.
@@ -9,6 +11,7 @@ type AppOptions = {
 }
 
 export function build(opts: FastifyServerOptions = {}, { dbFilename = './database.db' }: AppOptions = {}) {
+  let worker: ReturnType<typeof startAuditWorker> | undefined
   const app = fastify(opts)
 
   app.register(fpSqlitePlugin, { dbFilename })
@@ -21,9 +24,20 @@ export function build(opts: FastifyServerOptions = {}, { dbFilename = './databas
       url TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       deleted_at TEXT,
-      result TEXT NOT NULL
+      result TEXT,
+      status TEXT NOT NULL,
+      error TEXT
     )
   `)
+  })
+
+  app.addHook('onReady', async () => {
+    worker = startAuditWorker(app, { claimNextAudit, completeAudit, failAudit })
+  })
+
+  // Finish using SQLite before the database plugin's onClose hook closes it.
+  app.addHook('preClose', async () => {
+    await worker?.stop()
   })
 
   return app

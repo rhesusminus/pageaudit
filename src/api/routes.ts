@@ -1,16 +1,16 @@
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox'
 import { Type } from '@fastify/type-provider-typebox'
-import { deleteAudit, getAudit, saveAudit } from '../db/database.ts'
+import { deleteAudit, getAudit, queueAudit } from '../db/database.ts'
 import { normalize } from '../input/resolve.js'
-import { runAudit } from '../runner.js'
-import { fetchPublicPage, validateDestination } from './public-destination.js'
+import { validateDestination } from './public-destination.js'
+
+const errorSchema = Type.Object({ error: Type.String() })
 
 const auditSchema = {
   body: Type.Object({ url: Type.String({ format: 'uri', maxLength: 2048 }) }),
   response: {
-    200: Type.Object({ url: Type.String(), finalUrl: Type.String(), id: Type.String() }),
-    400: Type.Object({ error: Type.String() }),
-    502: Type.Object({ error: Type.String() })
+    202: Type.Object({ id: Type.String(), status: Type.Literal('queued') }),
+    400: errorSchema
   }
 }
 
@@ -21,10 +21,16 @@ const getAuditSchema = {
       id: Type.String(),
       url: Type.String(),
       created_at: Type.String(),
-      deleted_at: Type.Union([Type.String(), Type.Null()]),
-      result: Type.Unknown()
+      result: Type.Union([Type.Unknown(), Type.Null()]),
+      status: Type.Union([
+        Type.Literal('queued'),
+        Type.Literal('running'),
+        Type.Literal('completed'),
+        Type.Literal('failed')
+      ]),
+      error: Type.Union([Type.String(), Type.Null()])
     }),
-    404: Type.Object({ error: Type.String() })
+    404: errorSchema
   }
 }
 
@@ -32,7 +38,7 @@ const deleteAuditSchema = {
   params: Type.Object({ id: Type.String() }),
   response: {
     204: Type.Null(),
-    404: Type.Object({ error: Type.String() })
+    404: errorSchema
   }
 }
 
@@ -73,29 +79,8 @@ export const routes: FastifyPluginAsyncTypebox = async (fastify) => {
       return reply.code(400).send({ error: (error as Error).message })
     }
 
-    const [page] = await runAudit([normalized.url], {
-      fetchPage: fetchPublicPage,
-      onProgress: (done, total) => {
-        request.log.info({ done, total }, 'audit progress')
-      }
-    })
+    const id = await queueAudit(fastify.db, normalized.url)
 
-    // auditPage reports a failed fetch as a page with no status instead of throwing.
-    if (page.status === null) {
-      request.log.error({ url: normalized.url }, 'fetch failed')
-      return reply.code(502).send({ error: 'Could not fetch page' })
-    }
-
-    const id = await saveAudit(fastify.db, normalized.url, {
-      finalUrl: page.finalUrl,
-      status: page.status,
-      result: page
-    })
-
-    return reply.code(200).send({
-      url: request.body.url,
-      finalUrl: page.finalUrl,
-      id
-    })
+    return reply.code(202).header('location', `/audits/${id}`).send({ id, status: 'queued' })
   })
 }
