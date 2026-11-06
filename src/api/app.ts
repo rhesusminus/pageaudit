@@ -1,4 +1,4 @@
-import type { FastifyServerOptions } from 'fastify'
+import type { FastifyError, FastifyServerOptions } from 'fastify'
 import fastify from 'fastify'
 import { fpSqlitePlugin } from 'fastify-sqlite-typed'
 import { claimNextAudit, completeAudit, failAudit, recoverInterruptedAudits } from '../db/database.ts'
@@ -16,6 +16,21 @@ export function build(opts: FastifyServerOptions = {}, { dbFilename = './databas
 
   app.register(fpSqlitePlugin, { dbFilename })
   app.register(routes, { onAuditQueued: () => worker?.wake() })
+
+  // Every error answers { error }, the shape the route schemas declare. Client errors (validation, malformed JSON)
+  // keep Fastify's message so the caller can fix the request. Server errors are logged and their message is hidden.
+  app.setErrorHandler<FastifyError>((error, request, reply) => {
+    const statusCode = error.statusCode !== undefined && error.statusCode >= 400 ? error.statusCode : 500
+
+    if (statusCode < 500) {
+      return reply.code(statusCode).send({ error: error.message })
+    }
+
+    request.log.error({ err: error }, 'request failed')
+    return reply.code(statusCode).send({ error: 'Internal Server Error' })
+  })
+
+  app.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: 'Not found' }))
 
   app.addHook('onReady', async () => {
     await app.db.exec(`

@@ -87,10 +87,23 @@ test('GET /audits/:id: reports a page that cannot be fetched as a failed audit',
   t.assert.strictEqual(audit.result, null)
 })
 
-test('POST /audits: rejects a body without a url (schema)', async (t: TestContext) => {
+test('POST /audits: answers with the validation message for a body without a url', async (t: TestContext) => {
   const response = await makeApp(t).inject({ method: 'POST', url: '/audits', body: {} })
 
   t.assert.strictEqual(response.statusCode, 400)
+  t.assert.deepStrictEqual(response.json(), { error: "body must have required property 'url'" })
+})
+
+test('POST /audits: answers with the parser message for a malformed JSON body', async (t: TestContext) => {
+  const response = await makeApp(t).inject({
+    method: 'POST',
+    url: '/audits',
+    headers: { 'content-type': 'application/json' },
+    payload: '{"url":'
+  })
+
+  t.assert.strictEqual(response.statusCode, 400)
+  t.assert.match(response.json().error, /JSON/)
 })
 
 test('POST /audits: rejects a URL that cannot be audited', async (t: TestContext) => {
@@ -192,4 +205,11 @@ test('DELETE /audits/:id: answers 404 when the audit is already deleted', async 
   const response = await app.inject({ method: 'DELETE', url: `/audits/${id}` })
 
   t.assert.strictEqual(response.statusCode, 404)
+})
+
+test('unknown routes answer 404 in the same error shape', async (t: TestContext) => {
+  const response = await makeApp(t).inject({ method: 'GET', url: '/nope' })
+
+  t.assert.strictEqual(response.statusCode, 404)
+  t.assert.deepStrictEqual(response.json(), { error: 'Not found' })
 })
