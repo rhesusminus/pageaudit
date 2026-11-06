@@ -1,7 +1,7 @@
 import type { FastifyServerOptions } from 'fastify'
 import fastify from 'fastify'
 import { fpSqlitePlugin } from 'fastify-sqlite-typed'
-import { claimNextAudit, completeAudit, failAudit } from '../db/database.ts'
+import { claimNextAudit, completeAudit, failAudit, recoverInterruptedAudits } from '../db/database.ts'
 import { routes } from './routes.ts'
 import { startAuditWorker } from './worker.ts'
 
@@ -26,12 +26,14 @@ export function build(opts: FastifyServerOptions = {}, { dbFilename = './databas
       deleted_at TEXT,
       result TEXT,
       status TEXT NOT NULL,
-      error TEXT
+      error TEXT,
+      attempts INTEGER NOT NULL DEFAULT 0
     )
   `)
   })
 
   app.addHook('onReady', async () => {
+    await recoverInterruptedAudits(app.db)
     worker = startAuditWorker(app, { claimNextAudit, completeAudit, failAudit })
   })
 

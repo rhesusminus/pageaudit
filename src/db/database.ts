@@ -15,6 +15,7 @@ type AuditRow = {
   result: string | null
   status: AuditStatus
   error: string | null
+  attempts: number
 }
 
 export async function queueAudit(db: Db, url: string) {
@@ -23,6 +24,18 @@ export async function queueAudit(db: Db, url: string) {
   await db.run(`INSERT INTO audits (id, url, status) VALUES (?, ?, 'queued')`, id, url)
 
   return id
+}
+
+// One worker per database, so any 'running' row at startup was interrupted.
+export async function recoverInterruptedAudits(db: Db, maxAttempts = 3) {
+  await db.run(
+    `UPDATE audits
+     SET status = CASE WHEN attempts >= ? THEN 'failed' ELSE 'queued' END,
+         error  = CASE WHEN attempts >= ? THEN 'Audit was interrupted' ELSE error END
+     WHERE status = 'running' AND deleted_at IS NULL`,
+    maxAttempts,
+    maxAttempts
+  )
 }
 
 export async function getAudit(db: Db, id: Id) {
@@ -52,7 +65,7 @@ export async function deleteAudit(db: Db, id: Id) {
 export async function claimNextAudit(db: Db) {
   const nextAudit = await db.get<AuditRow>(
     `UPDATE audits
-     SET status = 'running'
+     SET status = 'running', attempts = attempts + 1, error = NULL
      WHERE id = (
        SELECT id
        FROM audits
