@@ -113,6 +113,28 @@ test('POST /audits: rejects a URL that cannot be audited', async (t: TestContext
   t.assert.match(response.json().error, /unsupported protocol/)
 })
 
+test('POST /audits: rejects a hostname that does not resolve', async (t: TestContext) => {
+  t.mock.method(dns, 'lookup', async () => {
+    throw Object.assign(new Error('getaddrinfo ENOTFOUND missing.test'), { code: 'ENOTFOUND' })
+  })
+
+  const response = await postAudit(makeApp(t), 'https://missing.test')
+
+  t.assert.strictEqual(response.statusCode, 400)
+  t.assert.deepStrictEqual(response.json(), { error: 'Could not resolve host missing.test' })
+})
+
+test('POST /audits: answers 503 when DNS fails temporarily', async (t: TestContext) => {
+  t.mock.method(dns, 'lookup', async () => {
+    throw Object.assign(new Error('getaddrinfo EAI_AGAIN flaky.test'), { code: 'EAI_AGAIN' })
+  })
+
+  const response = await postAudit(makeApp(t), 'https://flaky.test')
+
+  t.assert.strictEqual(response.statusCode, 503)
+  t.assert.deepStrictEqual(response.json(), { error: 'Could not resolve host flaky.test, try again later' })
+})
+
 test('POST /audits: rejects private destinations before making a request', async (t: TestContext) => {
   const fetched = mockFetch(t, async () => new Response('private data'))
   const app = makeApp(t)

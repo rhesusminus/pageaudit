@@ -2,7 +2,7 @@ import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox'
 import { Type } from '@fastify/type-provider-typebox'
 import { deleteAudit, getAudit, queueAudit } from '../db/database.ts'
 import { normalize } from '../input/resolve.js'
-import { validateDestination } from './public-destination.js'
+import { DestinationError, validateDestination } from './public-destination.js'
 
 const errorSchema = Type.Object({ error: Type.String() })
 
@@ -10,7 +10,8 @@ const auditSchema = {
   body: Type.Object({ url: Type.String({ format: 'uri', maxLength: 2048 }) }),
   response: {
     202: Type.Object({ id: Type.String(), status: Type.Literal('queued') }),
-    400: errorSchema
+    400: errorSchema,
+    503: errorSchema
   }
 }
 
@@ -79,9 +80,15 @@ export const routes: FastifyPluginAsyncTypebox<RoutesOptions> = async (fastify, 
 
     try {
       normalized = normalize(request.body.url)
-      await validateDestination(normalized.url)
     } catch (error) {
       return reply.code(400).send({ error: (error as Error).message })
+    }
+
+    try {
+      await validateDestination(normalized.url)
+    } catch (error) {
+      if (!(error instanceof DestinationError)) throw error
+      return reply.code(error.statusCode as 400 | 503).send({ error: error.message })
     }
 
     const id = await queueAudit(fastify.db, normalized.url)
