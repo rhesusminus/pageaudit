@@ -10,9 +10,9 @@ beforeEach((t) => {
   context.mock.method(dns, 'lookup', async () => [{ address: '93.184.215.14', family: 4 }])
 })
 
-// build() returns a fresh app per test, and close() releases it afterwards.
+// Each app gets its own in-memory database, so no test sees another test's audits. close() releases it afterwards.
 const makeApp = (t: TestContext) => {
-  const app = build()
+  const app = build({}, { dbFilename: ':memory:' })
   t.after(() => app.close())
 
   return app

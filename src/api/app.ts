@@ -3,10 +3,15 @@ import fastify from 'fastify'
 import { fpSqlitePlugin } from 'fastify-sqlite-typed'
 import { routes } from './routes.ts'
 
-export function build(opts: FastifyServerOptions = {}) {
+type AppOptions = {
+  // ':memory:' gives the app a private database that disappears when it closes.
+  dbFilename?: string
+}
+
+export function build(opts: FastifyServerOptions = {}, { dbFilename = './database.db' }: AppOptions = {}) {
   const app = fastify(opts)
 
-  app.register(fpSqlitePlugin, { dbFilename: './database.db' })
+  app.register(fpSqlitePlugin, { dbFilename })
   app.register(routes)
 
   app.addHook('onReady', async () => {
