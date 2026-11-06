@@ -15,7 +15,7 @@ export function build(opts: FastifyServerOptions = {}, { dbFilename = './databas
   const app = fastify(opts)
 
   app.register(fpSqlitePlugin, { dbFilename })
-  app.register(routes)
+  app.register(routes, { onAuditQueued: () => worker?.wake() })
 
   app.addHook('onReady', async () => {
     await app.db.exec(`

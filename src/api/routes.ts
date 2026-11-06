@@ -42,7 +42,12 @@ const deleteAuditSchema = {
   }
 }
 
-export const routes: FastifyPluginAsyncTypebox = async (fastify) => {
+type RoutesOptions = {
+  // Called after an audit is queued, so the worker can start it without waiting for its next poll.
+  onAuditQueued: () => void
+}
+
+export const routes: FastifyPluginAsyncTypebox<RoutesOptions> = async (fastify, { onAuditQueued }) => {
   fastify.get(
     '/audits/:id',
     {
@@ -80,6 +85,7 @@ export const routes: FastifyPluginAsyncTypebox = async (fastify) => {
     }
 
     const id = await queueAudit(fastify.db, normalized.url)
+    onAuditQueued()
 
     return reply.code(202).header('location', `/audits/${id}`).send({ id, status: 'queued' })
   })

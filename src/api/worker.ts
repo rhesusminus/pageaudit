@@ -59,9 +59,13 @@ export function startAuditWorker(
 ) {
   const controller = new AbortController()
   const { signal } = controller
+  // Set by wake() and checked before sleeping, so a wake that lands while a claim is in flight is not lost.
+  let woken = false
+  let interruptSleep: AbortController | undefined
 
   async function work() {
     while (!signal.aborted) {
+      woken = false
       try {
         if (await processNextAudit(app, helpers, audit)) {
           continue
@@ -70,12 +74,20 @@ export function startAuditWorker(
         app.log.error({ err: error }, 'Audit worker error')
       }
 
+      if (woken) {
+        continue
+      }
+
+      const interrupt = new AbortController()
+      interruptSleep = interrupt
       try {
-        await sleep(pollIntervalMs, undefined, { signal })
+        await sleep(pollIntervalMs, undefined, { signal: AbortSignal.any([signal, interrupt.signal]) })
       } catch (error) {
-        if (!signal.aborted) {
+        if (!signal.aborted && !interrupt.signal.aborted) {
           throw error
         }
+      } finally {
+        interruptSleep = undefined
       }
     }
   }
@@ -83,6 +95,11 @@ export function startAuditWorker(
   const running = work()
 
   return {
+    // Look for a queued audit now instead of at the next poll.
+    wake() {
+      woken = true
+      interruptSleep?.abort()
+    },
     async stop() {
       // Wake an idle worker immediately; an already claimed audit finishes first.
       controller.abort()

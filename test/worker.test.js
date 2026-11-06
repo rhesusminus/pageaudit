@@ -3,12 +3,12 @@ import { test } from 'node:test'
 import { setImmediate as nextTurn } from 'node:timers/promises'
 import { startAuditWorker } from '../src/api/worker.ts'
 
-function setup(t, jobs, options = {}) {
+function setup(t, jobs, { claim, ...options } = {}) {
   const app = { db: {}, log: { error: t.mock.fn() } }
   const saved = []
   const finished = Promise.withResolvers()
   const helpers = {
-    claimNextAudit: t.mock.fn(async () => jobs.shift()),
+    claimNextAudit: t.mock.fn(claim ?? (async () => jobs.shift())),
     completeAudit: async (_db, id, page) => {
       saved.push({ id, page })
       finished.resolve()
@@ -116,4 +116,32 @@ test('worker: persistence failures are logged without marking a successful audit
   await state.worker.stop()
   assert.equal(state.app.log.error.mock.callCount(), 1)
   assert.deepEqual(state.saved, [])
+})
+
+test('worker: wake starts a newly queued audit without waiting for the next poll', { timeout: 1000 }, async (t) => {
+  const jobs = []
+  const state = setup(t, jobs, { pollIntervalMs: 60_000, audit: async () => ({ status: 200 }) })
+  await nextTurn()
+  assert.equal(state.helpers.claimNextAudit.mock.callCount(), 1)
+  jobs.push({ id: 'woken', url: 'https://job.test' })
+  state.worker.wake()
+  await state.finished
+  assert.deepEqual(state.saved, [{ id: 'woken', page: { status: 200 } }])
+})
+
+test('worker: a wake during an empty claim is not lost', { timeout: 1000 }, async (t) => {
+  const jobs = []
+  let state
+  let claims = 0
+  // The first claim finds nothing, but an audit is queued and the worker woken before that answer arrives.
+  const claim = async () => {
+    if (++claims > 1) return jobs.shift()
+    await nextTurn()
+    jobs.push({ id: 'raced', url: 'https://job.test' })
+    state.worker.wake()
+    return undefined
+  }
+  state = setup(t, jobs, { claim, pollIntervalMs: 60_000, audit: async () => ({ status: 200 }) })
+  await state.finished
+  assert.equal(state.saved[0].id, 'raced')
 })
