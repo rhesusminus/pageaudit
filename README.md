@@ -393,15 +393,17 @@ Judgment calls that are not straight from those pages:
 
 ## HTTP API
 
-`npm start` serves a small Fastify API on port 8080 (`npm run dev` restarts on changes). Audits are stored in a SQLite file, `database.db`, in the working directory.
+`npm start` serves a small Fastify API on port 8080, or on `PORT` when it is set (`npm run dev` restarts on changes). Audits are stored in a SQLite file, `database.db`, in the working directory.
 
-| Route                | Does                                                                                         |
-| -------------------- | -------------------------------------------------------------------------------------------- |
-| `POST /audits`       | Audits the page in `{ "url": "..." }`, stores the result and answers `{ url, finalUrl, id }` |
-| `GET /audits/:id`    | Returns a stored audit, `404` if it is unknown                                               |
-| `DELETE /audits/:id` | Soft-deletes a stored audit with `204`, `404` if it is unknown or already deleted            |
+| Route                | Does                                                                                                       |
+| -------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `POST /audits`       | Queues an audit of the page in `{ "url": "..." }` and answers `202` with `{ id, status }` and a `Location` |
+| `GET /audits/:id`    | Returns an audit with its `status`, `error` and `result`, `404` if it is unknown                           |
+| `DELETE /audits/:id` | Soft-deletes an audit with `204`, `404` if it is unknown or already deleted                                |
 
-`POST /audits` answers `400` for a URL it cannot audit and `502` when the page cannot be fetched. A failed fetch is not stored.
+A background worker runs queued audits one at a time. An audit's `status` goes from `queued` to `running`, then to `completed` with the page facts in `result`, or to `failed` with the reason in `error`, for example `Could not fetch page`. Poll `GET /audits/:id` until it is one of the last two. An audit that was running when the server stopped is queued again at startup, and fails after three interrupted attempts.
+
+`POST /audits` answers `400` for a URL it cannot audit, including a private network address or a host that does not resolve, and `503` when DNS fails for a reason that may pass on retry. Every error answers `{ "error": "..." }`.
 
 ## Architecture
 
