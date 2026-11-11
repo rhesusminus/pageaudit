@@ -5,11 +5,10 @@ import type { runAudit } from '../runner.js'
 
 type Db = FastifyInstance['db']
 type AuditPage = Awaited<ReturnType<typeof runAudit>>[number]
-type Id = string
 type AuditStatus = 'running' | 'completed' | 'failed' | 'queued'
 
 type AuditRow = {
-  id: Id
+  id: string
   url: string
   created_at: string
   deleted_at: string | null
@@ -27,20 +26,22 @@ export async function queueAudit(db: Db, url: string) {
   return id
 }
 
+// How many times an audit is started before an interruption fails it rather than queueing it again.
+const MAX_ATTEMPTS = 3
+
 // One worker per database, so any 'running' row at startup was interrupted.
-export async function recoverInterruptedAudits(db: Db, maxAttempts = 3) {
+export async function recoverInterruptedAudits(db: Db) {
   await db.run(
     `UPDATE audits
-     SET status = CASE WHEN attempts >= ? THEN 'failed' ELSE 'queued' END,
-         error  = CASE WHEN attempts >= ? THEN ? ELSE error END
+     SET status = CASE WHEN attempts >= ?1 THEN 'failed' ELSE 'queued' END,
+         error  = CASE WHEN attempts >= ?1 THEN ?2 ELSE error END
      WHERE status = 'running' AND deleted_at IS NULL`,
-    maxAttempts,
-    maxAttempts,
+    MAX_ATTEMPTS,
     AUDIT_ERROR.interrupted
   )
 }
 
-export async function getAudit(db: Db, id: Id) {
+export async function getAudit(db: Db, id: string) {
   const row = await db.get<AuditRow>('SELECT * FROM audits WHERE id = ? AND deleted_at IS NULL', id)
 
   if (!row) {
@@ -53,7 +54,7 @@ export async function getAudit(db: Db, id: Id) {
   }
 }
 
-export async function deleteAudit(db: Db, id: Id) {
+export async function deleteAudit(db: Db, id: string) {
   const result = await db.run(
     `UPDATE audits
      SET deleted_at = CURRENT_TIMESTAMP
@@ -82,7 +83,7 @@ export async function claimNextAudit(db: Db) {
   return nextAudit ? { id: nextAudit.id, url: nextAudit.url } : undefined
 }
 
-export async function failAudit(db: Db, id: Id, error: string | null) {
+export async function failAudit(db: Db, id: string, error: string) {
   await db.run(
     `UPDATE audits
      SET status = 'failed', error = ?
@@ -94,14 +95,13 @@ export async function failAudit(db: Db, id: Id, error: string | null) {
   )
 }
 
-export async function completeAudit(db: Db, id: Id, page: AuditPage) {
-  await db.get(
+export async function completeAudit(db: Db, id: string, page: AuditPage) {
+  await db.run(
     `UPDATE audits
      SET status = 'completed', result = ?
      WHERE id = ?
        AND status = 'running'
-       AND deleted_at IS NULL
-    `,
+       AND deleted_at IS NULL`,
     JSON.stringify(page),
     id
   )
