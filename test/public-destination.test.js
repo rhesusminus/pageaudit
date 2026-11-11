@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import dns from 'node:dns/promises'
 import { createServer } from 'node:http'
 import { test } from 'node:test'
-import { fetchPublicPage, publicLookup, validateDestination } from '../src/api/public-destination.js'
+import { DestinationError, fetchPublicPage, publicLookup, validateDestination } from '../src/api/public-destination.js'
 import { mockFetch } from './helpers/mock-fetch.js'
 
 const answers = (...addresses) => addresses.map((address) => ({ address, family: address.includes(':') ? 6 : 4 }))
@@ -60,7 +60,7 @@ test('public destinations: rejects private, encoded and special-use IP literals 
 test('public destinations: allows public IPv4 and IPv6 and rejects credentials and protocols', async () => {
   await validateDestination('https://8.8.8.8')
   await validateDestination('https://[2606:4700:4700::1111]')
-  await assert.rejects(validateDestination('ftp://8.8.8.8'), /public network/)
+  await assert.rejects(validateDestination('ftp://8.8.8.8'), { reason: 'private', statusCode: 400 })
   await assert.rejects(validateDestination('http://user:pass@8.8.8.8'), /public network/)
 })
 
@@ -72,10 +72,31 @@ test('public destinations: DNS fails closed, including mixed answers and empty r
     await assert.rejects(lookup(), /public network/)
   }
   dnsMock.mock.mockImplementation(async () => {
-    throw new Error('ENOTFOUND')
+    throw Object.assign(new Error('getaddrinfo ENOTFOUND public.test'), { code: 'ENOTFOUND' })
   })
-  await assert.rejects(validateDestination('https://public.test'), /ENOTFOUND/)
-  await assert.rejects(lookup(), /ENOTFOUND/)
+  await assert.rejects(validateDestination('https://public.test'), /Could not resolve host public\.test/)
+  await assert.rejects(lookup(), /Could not resolve host public\.test/)
+})
+
+test('public destinations: a missing host answers 400, any other DNS failure 503', async (t) => {
+  const dnsMock = t.mock.method(dns, 'lookup')
+  for (const [code, statusCode, reason] of [
+    ['ENOTFOUND', 400, 'unknown-host'],
+    ['ENODATA', 400, 'unknown-host'],
+    ['EAI_AGAIN', 503, 'lookup-failed'],
+    [undefined, 503, 'lookup-failed']
+  ]) {
+    dnsMock.mock.mockImplementation(async () => {
+      throw Object.assign(new Error(`getaddrinfo ${code} public.test`), { code })
+    })
+    await assert.rejects(validateDestination('https://public.test'), (error) => {
+      assert.ok(error instanceof DestinationError)
+      assert.equal(error.statusCode, statusCode, String(code))
+      assert.equal(error.reason, reason, String(code))
+      assert.doesNotMatch(error.message, /getaddrinfo/)
+      return true
+    })
+  }
 })
 
 test('public destinations: socket lookup returns only validated addresses and handles family selection', async (t) => {

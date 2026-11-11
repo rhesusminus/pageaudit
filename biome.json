@@ -60,7 +60,7 @@
   },
   "overrides": [
     {
-      "includes": ["src/report.js", "src/severity.js", "src/html/**/*.js"],
+      "includes": ["src/report.js", "src/severity.js", "src/html/**/*.js", "src/web/**/*.js"],
       "linter": {
         "rules": {
           "style": {
