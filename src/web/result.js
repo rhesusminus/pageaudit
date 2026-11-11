@@ -4,6 +4,7 @@ import { adviceFor } from '../advice.js'
 import { DESCRIPTION_MAX, TITLE_MAX } from '../checks/page/meta.js'
 import { markup } from '../html/escape.js'
 import { link } from '../html/format.js'
+import { charCount } from '../text.js'
 import { resultBrief } from './brief.js'
 import { findingsOf, verdict } from './findings.js'
 import { addressHeading, checkedAt, count, SEVERITY_LABEL, shortAddress } from './format.js'
@@ -65,8 +66,8 @@ function crumbs(url) {
 
 function snippetNotes({ title, description }) {
   const notes = []
-  const titleLength = title ? Array.from(title).length : 0
-  const descriptionLength = description ? Array.from(description).length : 0
+  const titleLength = title ? charCount(title) : 0
+  const descriptionLength = description ? charCount(description) : 0
   if (titleLength > TITLE_MAX) {
     notes.push(
       `The title is ${titleLength} characters. Results often cut titles after about ${TITLE_MAX}, so the marked part may not show.`

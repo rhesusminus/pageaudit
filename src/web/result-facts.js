@@ -1,15 +1,16 @@
 // "What’s on the page": the facts the audit read from the page, in words. The rows are plain text, so the results
 // page and the Markdown brief for Claude say the same thing.
 import { markup } from '../html/escape.js'
+import { charCount } from '../text.js'
 import { count } from './format.js'
 
 // A row: `value` is the text, `missing` marks a value that is not there (shown muted), `note` is said after it, and
 // `fromPage` marks text taken from the page itself rather than written here.
 const none = (value = 'None') => ({ value, missing: true })
-const fromPage = (value, note) => ({ value, fromPage: true, ...(note ? { note } : {}) })
+const fromPage = (value, note) => ({ value, fromPage: true, note })
 const said = (value) => ({ value })
 
-const withLength = (text) => (text ? fromPage(text, count(Array.from(text).length, 'character')) : none())
+const withLength = (text) => (text ? fromPage(text, count(charCount(text), 'character')) : none())
 
 function socialPreview({ openGraph, twitterCard }) {
   if (!openGraph?.title && !twitterCard) return none()

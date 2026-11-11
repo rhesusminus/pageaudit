@@ -2,6 +2,8 @@
 // says, with more of the places each finding occurs and the address of the full JSON. Text from the checked page is
 // set in quotes or code spans, so a reader can tell it from what pageaudit wrote.
 import { adviceFor } from '../advice.js'
+import { code as codeSpan } from '../markdown.js'
+import { collapseWhitespace } from '../text.js'
 import { findingsOf, verdict } from './findings.js'
 import { checkedAt, count, SEVERITY_LABEL, shortAddress } from './format.js'
 import { factRows, platformName } from './result-facts.js'
@@ -11,16 +13,10 @@ import { failure } from './status.js'
 // them all, and a person reading the page needs only a few examples.
 const SHOWN_HITS = 10
 
-const oneLine = (text) => String(text).replace(/\s+/g, ' ').trim()
+const oneLine = (text) => collapseWhitespace(String(text))
 
-// A code span that holds any text: the fence is one backtick longer than the longest run inside it.
-function code(text) {
-  const value = oneLine(text)
-  const longest = Math.max(0, ...(value.match(/`+/g) ?? []).map((run) => run.length))
-  const fence = '`'.repeat(longest + 1)
-  const pad = value.startsWith('`') || value.endsWith('`') ? ' ' : ''
-  return `${fence}${pad}${value}${pad}${fence}`
-}
+// A code span on one line that holds any text.
+const code = (text) => codeSpan(oneLine(text))
 
 const quoted = (text) => `"${oneLine(text)}"`
 

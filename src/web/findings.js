@@ -1,6 +1,7 @@
 // A finished check as findings: the issues grouped by type, split into what to fix and notes, and the one-line verdict.
 // The results page and the Markdown brief both read them from here.
 import { groupIssues } from '../overview.js'
+import { countSeverities } from '../severity.js'
 import { count } from './format.js'
 
 export function findingsOf(page) {
@@ -14,8 +15,7 @@ export function findingsOf(page) {
 
 // Counts findings, not the places they occur, so the numbers match the lists.
 export function verdict(groups) {
-  const total = (severity) => groups.filter((group) => group.severity === severity).length
-  const [errors, warnings, infos] = [total('error'), total('warning'), total('info')]
+  const { errors, warnings, infos } = countSeverities(groups)
   if (errors) {
     const rest = warnings ? ` ${count(warnings, 'more is', 'more are')} worth a look.` : ''
     return `Fix ${count(errors, 'problem')} first.${rest}`
