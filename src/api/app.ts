@@ -4,6 +4,7 @@ import { fpSqlitePlugin } from 'fastify-sqlite-typed'
 import { claimNextAudit, completeAudit, failAudit, recoverInterruptedAudits } from '../db/database.ts'
 import { sendPage, webPages } from '../web/plugin.ts'
 import { missingPage } from '../web/status.js'
+import { errorStatus } from './error-status.ts'
 import { routes } from './routes.ts'
 import { startAuditWorker } from './worker.ts'
 
@@ -27,7 +28,7 @@ export function build(opts: FastifyServerOptions = {}, { dbFilename = './databas
   // Every error answers { error }, the shape the route schemas declare. Client errors (validation, malformed JSON)
   // keep Fastify's message so the caller can fix the request. Server errors are logged and their message is hidden.
   app.setErrorHandler<FastifyError>((error, request, reply) => {
-    const statusCode = error.statusCode !== undefined && error.statusCode >= 400 ? error.statusCode : 500
+    const statusCode = errorStatus(error)
 
     if (statusCode < 500) {
       return reply.code(statusCode).send({ error: error.message })

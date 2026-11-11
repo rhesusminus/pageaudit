@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import formbody from '@fastify/formbody'
 import fastifyStatic from '@fastify/static'
 import type { FastifyError, FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
+import { errorStatus } from '../api/error-status.ts'
 import { DestinationError } from '../api/public-destination.js'
 import { queueCheckedAudit } from '../api/queue-audit.ts'
 import { deleteAudit, getAudit } from '../db/database.ts'
@@ -95,7 +96,7 @@ function fromThisSite(request: FastifyRequest, publicOrigin?: string) {
 // Client errors, such as a form too large or a body that does not parse, keep their status. Only server errors are
 // logged, and neither shows its message.
 function pageError(error: FastifyError, request: FastifyRequest, reply: FastifyReply) {
-  const statusCode = error.statusCode !== undefined && error.statusCode >= 400 ? error.statusCode : 500
+  const statusCode = errorStatus(error)
   if (statusCode < 500) return sendPage(reply, statusCode, requestErrorPage())
   request.log.error({ err: error }, 'page failed')
   return sendPage(reply, 500, errorPage())
