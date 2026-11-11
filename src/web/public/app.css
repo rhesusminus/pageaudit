@@ -1,0 +1,952 @@
+/* pageaudit web pages. Tokens follow the customer report (src/html/styles.js) so a result and a report read as one
+   product. The one accent of its own is the marker: the highlighter that marks what search results cut off, and that
+   sweeps over the address while a check runs. */
+
+:root {
+  --ink: #16202e;
+  --ink-2: #46536a;
+  --ink-3: #56627a;
+  --paper: #f2f4f8;
+  --sheet: #ffffff;
+  --rule: #d8dde8;
+  --field: #6b778c;
+  --blue: #2f43c9;
+  --on-blue: #ffffff;
+  --marker: #ffe066;
+  --on-marker: #16202e;
+  --err: #b3232f;
+  --err-tint: #fbe9eb;
+  --warn: #8a4f00;
+  --warn-tint: #fdf1dc;
+  --note-tint: #e7ebf2;
+  --good: #16744a;
+  --good-tint: #e3f4ec;
+  --backdrop: rgb(15 20 28 / 0.55);
+
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --measure: 46rem;
+
+  color-scheme: light dark;
+  accent-color: var(--blue);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #e8ecf3;
+    --ink-2: #b4bdcc;
+    --ink-3: #8d98ab;
+    --paper: #0f141c;
+    --sheet: #171e29;
+    --rule: #2a3342;
+    --field: #7f8a9d;
+    --blue: #9aaaff;
+    --on-blue: #0f141c;
+    --marker: #6b5a00;
+    --on-marker: #fff6cc;
+    --err: #ff8b94;
+    --err-tint: #3a1a20;
+    --warn: #f2b35b;
+    --warn-tint: #382811;
+    --note-tint: #232c3b;
+    --good: #5cd1a0;
+    --good-tint: #133126;
+    --backdrop: rgb(0 0 0 / 0.65);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 1.0625rem / 1.6 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+p,
+dl,
+dd,
+ul,
+ol,
+figure {
+  margin: 0;
+}
+
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+
+a {
+  color: var(--blue);
+  text-underline-offset: 0.18em;
+}
+
+:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+}
+
+mark {
+  background: var(--marker);
+  color: var(--on-marker);
+  padding-inline: 0.08em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.masthead,
+main,
+.colophon {
+  inline-size: min(100% - 2rem, var(--measure));
+  margin-inline: auto;
+}
+
+.masthead {
+  padding-block: 1.25rem 0;
+}
+
+.wordmark {
+  font: 600 1.25rem / 1 var(--serif);
+  color: var(--ink);
+  text-decoration: none;
+  letter-spacing: -0.01em;
+}
+
+main {
+  padding-block: clamp(2.5rem, 8vh, 5rem) 4rem;
+}
+
+.colophon {
+  padding-block: 1.5rem 2.5rem;
+  border-block-start: 1px solid var(--rule);
+  color: var(--ink-3);
+  font-size: 0.875rem;
+}
+
+/* ---- type ---- */
+
+h1 {
+  font: 600 clamp(2.5rem, 1.6rem + 4vw, 4rem) / 1.04 var(--serif);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+h2 {
+  font: 600 1.375rem / 1.25 var(--serif);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.lede {
+  margin-block-start: 1rem;
+  max-inline-size: 36em;
+  color: var(--ink-2);
+  font-size: 1.1875rem;
+  text-wrap: pretty;
+}
+
+.hint {
+  color: var(--ink-3);
+  font-size: 0.9375rem;
+}
+
+.missing {
+  color: var(--ink-3);
+  font-style: italic;
+}
+
+/* ---- buttons ---- */
+
+button {
+  font: 600 1rem / 1.2 var(--sans);
+  min-block-size: 2.75rem;
+  padding: 0.6rem 1.1rem;
+  border: 1px solid var(--field);
+  border-radius: 8px;
+  background: var(--sheet);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--paper);
+}
+
+button.primary,
+.check-row button {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: var(--on-blue);
+}
+
+button.primary:hover,
+.check-row button:hover {
+  background: color-mix(in srgb, var(--blue) 88%, var(--ink));
+}
+
+button.danger {
+  border-color: var(--err);
+  background: var(--err);
+  color: var(--sheet);
+}
+
+@media (prefers-color-scheme: dark) {
+  button.danger {
+    color: var(--paper);
+  }
+}
+
+/* ---- the address form ---- */
+
+.check-form {
+  margin-block-start: 2.25rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.check-form label {
+  font-weight: 600;
+}
+
+.check-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-block-start: 0.4rem;
+}
+
+.check-row input {
+  flex: 1;
+  min-inline-size: 0;
+  min-block-size: 3.25rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--field);
+  border-radius: 8px;
+  background: var(--sheet);
+  color: var(--ink);
+  font: inherit;
+  font-size: max(1.125rem, 1em);
+}
+
+.check-row button {
+  min-block-size: 3.25rem;
+  padding-inline: 1.4rem;
+}
+
+.check-row input:user-invalid,
+.check-row input[aria-invalid="true"] {
+  border-color: var(--err);
+  background: var(--err-tint);
+}
+
+/* In the accessibility tree but not on screen: the live region that announces field errors. */
+.visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.field-error {
+  display: none;
+  align-items: baseline;
+  gap: 0.45rem;
+  margin-block-start: 0.35rem;
+  color: var(--err);
+  font-weight: 600;
+}
+
+.field-error.is-shown,
+.check-form:has(#url:user-invalid) #url-error {
+  display: flex;
+}
+
+/* Only one error at a time: once the field is invalid again on the reader's side, that message wins. */
+.check-form:has(#url:user-invalid) #url-problem {
+  display: none;
+}
+
+.error-mark::before {
+  content: "!";
+  display: inline-grid;
+  place-items: center;
+  inline-size: 1.15rem;
+  block-size: 1.15rem;
+  border-radius: 50%;
+  background: var(--err);
+  color: var(--sheet);
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+@media (max-width: 34rem) {
+  .check-row {
+    flex-direction: column;
+  }
+}
+
+.notice {
+  margin-block-end: 2rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  background: var(--good-tint);
+  color: var(--good);
+  font-weight: 600;
+}
+
+/* ---- home ---- */
+
+.scope {
+  margin-block-start: 4.5rem;
+  padding-block-start: 1.5rem;
+  border-block-start: 1px solid var(--rule);
+}
+
+.scope-list {
+  display: grid;
+  gap: 1.25rem 2.5rem;
+  margin-block-start: 1.25rem;
+}
+
+@media (min-width: 40rem) {
+  .scope-list {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.scope-list dt {
+  font-weight: 600;
+}
+
+.scope-list dd {
+  color: var(--ink-2);
+  font-size: 0.9375rem;
+  text-wrap: pretty;
+}
+
+/* ---- a check in progress ---- */
+
+.address {
+  overflow-wrap: anywhere;
+}
+
+/* A part of an address between slashes moves to the next line whole, and only breaks inside when it is wider than
+   the line. */
+.address .part {
+  display: inline-block;
+  max-inline-size: 100%;
+}
+
+h1.long-address {
+  font-size: clamp(1.875rem, 1.3rem + 2.6vw, 3rem);
+}
+
+/* The marker reads along the address while the check runs. */
+.reading {
+  background-image: linear-gradient(var(--marker), var(--marker));
+  background-repeat: no-repeat;
+  background-position: 0 88%;
+  background-size: 100% 0.4em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .reading {
+    animation: read 2.2s ease-in-out infinite;
+  }
+}
+
+@keyframes read {
+  0% {
+    background-size: 0% 0.4em;
+    background-position: 0 88%;
+  }
+  60% {
+    background-size: 100% 0.4em;
+    background-position: 0 88%;
+  }
+  100% {
+    background-size: 0% 0.4em;
+    background-position: 100% 88%;
+  }
+}
+
+.progress h1 {
+  font-size: clamp(2rem, 1.4rem + 3vw, 3.25rem);
+}
+
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.75rem;
+  margin-block-start: 2rem;
+  color: var(--ink-3);
+  font-weight: 600;
+  counter-reset: step;
+}
+
+.steps li {
+  counter-increment: step;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.steps li::before {
+  content: counter(step);
+  display: inline-grid;
+  place-items: center;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 0.875rem;
+}
+
+.steps li[aria-current="step"] {
+  color: var(--blue);
+}
+
+.steps li[aria-current="step"]::before {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: var(--on-blue);
+}
+
+[data-audit-status="running"] .steps li[data-step="queued"] {
+  color: var(--good);
+}
+
+[data-audit-status="running"] .steps li[data-step="queued"]::before {
+  content: "✓";
+}
+
+.status-line {
+  margin-block: 1.75rem 0.5rem;
+  font-size: 1.1875rem;
+}
+
+/* ---- results ---- */
+
+.result-head h1 {
+  font-size: clamp(1.75rem, 1.2rem + 2.4vw, 2.75rem);
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.75rem;
+  margin-block-start: 1rem;
+  font-size: 0.9375rem;
+}
+
+.meta dt {
+  color: var(--ink-3);
+  font-size: 0.8125rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block-start: 1.5rem;
+}
+
+.inline-form {
+  display: contents;
+}
+
+.verdict {
+  margin-block-start: 3rem;
+  font: 600 clamp(1.5rem, 1.15rem + 1.6vw, 2.125rem) / 1.2 var(--serif);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.preview,
+.findings,
+.facts,
+.claude {
+  margin-block-start: 3rem;
+}
+
+.preview h2,
+.findings h2,
+.facts h2 {
+  margin-block-end: 1rem;
+}
+
+.heading-count {
+  color: var(--ink-3);
+  font-family: var(--sans);
+  font-size: 1rem;
+  font-weight: 600;
+  margin-inline-start: 0.35rem;
+}
+
+/* The search result preview. */
+.snippet {
+  padding: 1.25rem 1.4rem;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--sheet);
+}
+
+.snippet-crumbs {
+  color: var(--ink-2);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.snippet-title {
+  margin-block: 0.2rem 0.35rem;
+  color: var(--blue);
+  font-size: 1.3125rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.snippet-text {
+  color: var(--ink-2);
+  font-size: 0.9375rem;
+  overflow-wrap: anywhere;
+}
+
+.snippet-notes {
+  display: grid;
+  gap: 0.35rem;
+  margin-block-start: 0.85rem;
+  color: var(--ink-2);
+  font-size: 0.9375rem;
+}
+
+.snippet-notes li::before {
+  content: "";
+  display: inline-block;
+  inline-size: 0.85em;
+  block-size: 0.55em;
+  margin-inline-end: 0.5rem;
+  background: var(--marker);
+  vertical-align: 0.05em;
+}
+
+/* Findings: one disclosure per kind of problem. */
+.finding {
+  border-block-start: 1px solid var(--rule);
+}
+
+.finding:last-of-type {
+  border-block-end: 1px solid var(--rule);
+}
+
+/* Chevron, badge, title and count on one line. On narrow screens the title and count drop below the badge and line
+   up with it and with the body text. */
+.finding summary {
+  list-style: none;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+  padding-block: 0.9rem;
+  cursor: pointer;
+}
+
+@media (max-width: 34rem) {
+  .finding summary {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .finding summary .severity {
+    justify-self: start;
+  }
+
+  .finding-title,
+  .finding-count {
+    grid-column: 2;
+  }
+}
+
+.finding summary::-webkit-details-marker,
+.brief summary::-webkit-details-marker {
+  display: none;
+}
+
+/* A chevron drawn with borders, pointing to the text when closed and down when open. */
+.finding summary::before,
+.brief summary::before {
+  content: "";
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  margin-inline: 0.15rem 0.1rem;
+  border-inline-end: 2px solid var(--ink-3);
+  border-block-end: 2px solid var(--ink-3);
+  rotate: -45deg;
+}
+
+.finding[open] > summary::before,
+.brief[open] > summary::before {
+  rotate: 45deg;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .finding summary::before,
+  .brief summary::before {
+    transition: rotate 0.2s;
+  }
+}
+
+.finding-title {
+  font-weight: 600;
+}
+
+.finding summary:hover .finding-title {
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.finding-count {
+  color: var(--ink-3);
+  font-size: 0.9375rem;
+}
+
+.severity {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-inline-size: 5.5rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+/* Each severity has its own shape as well as its colour. */
+.severity::before {
+  content: "";
+  inline-size: 0.55rem;
+  block-size: 0.55rem;
+  background: currentColor;
+}
+
+.severity[data-severity="error"] {
+  background: var(--err-tint);
+  color: var(--err);
+}
+
+.severity[data-severity="error"]::before {
+  rotate: 45deg;
+}
+
+.severity[data-severity="warning"] {
+  background: var(--warn-tint);
+  color: var(--warn);
+}
+
+.severity[data-severity="warning"]::before {
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  inline-size: 0.65rem;
+}
+
+.severity[data-severity="info"] {
+  background: var(--note-tint);
+  color: var(--ink-2);
+}
+
+.severity[data-severity="info"]::before {
+  border-radius: 50%;
+}
+
+.finding-body {
+  display: grid;
+  gap: 1rem;
+  /* Lines up with the badge: chevron (0.5rem plus 0.25rem margin) and the summary gap (0.75rem). */
+  padding: 0 0 1.25rem 1.5rem;
+  max-inline-size: 40rem;
+}
+
+.advice dt {
+  color: var(--ink-3);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.advice dd {
+  margin-block-end: 0.75rem;
+  text-wrap: pretty;
+}
+
+.advice dd:last-child {
+  margin-block-end: 0;
+}
+
+.where-label {
+  color: var(--ink-3);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.where ul {
+  display: grid;
+  gap: 0.4rem;
+  margin-block-start: 0.35rem;
+}
+
+.where code {
+  display: block;
+  padding: 0.45rem 0.65rem;
+  border-radius: 6px;
+  background: var(--note-tint);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.measure,
+.where-more {
+  color: var(--ink-2);
+  font-size: 0.9375rem;
+}
+
+/* The opening slide where the browser can animate to an auto size. */
+.finding::details-content,
+.brief::details-content {
+  overflow: clip;
+  contain: layout;
+  interpolate-size: allow-keywords;
+}
+
+.finding:not([open])::details-content,
+.brief:not([open])::details-content {
+  block-size: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .finding::details-content,
+  .brief::details-content {
+    transition:
+      block-size 0.25s ease-in-out,
+      content-visibility 0.25s allow-discrete;
+  }
+}
+
+/* What's on the page. */
+.fact-list > div {
+  display: grid;
+  gap: 0.15rem 1.5rem;
+  padding-block: 0.7rem;
+  border-block-start: 1px solid var(--rule);
+}
+
+.fact-list > div:last-child {
+  border-block-end: 1px solid var(--rule);
+}
+
+@media (min-width: 36rem) {
+  .fact-list > div {
+    grid-template-columns: 10rem minmax(0, 1fr);
+    align-items: baseline;
+  }
+}
+
+.fact-list dt {
+  color: var(--ink-3);
+  font-size: 0.9375rem;
+}
+
+.fact-list dd {
+  overflow-wrap: anywhere;
+}
+
+.length {
+  color: var(--ink-3);
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+/* Use these results with Claude: what the copy button copies, and where Claude Code can read it. */
+.claude > p {
+  margin-block-start: 0.75rem;
+  max-inline-size: 40rem;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+
+.claude > .brief-address {
+  margin-block-start: 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+.brief {
+  margin-block-start: 1rem;
+}
+
+.brief summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-block: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.brief pre {
+  margin: 0.5rem 0 0;
+  max-block-size: 28rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 1rem 1.1rem;
+  border-radius: 8px;
+  background: var(--note-tint);
+  color: var(--ink-2);
+  font: 0.8125rem / 1.55 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Copy for Claude. The status bubble below the button, in the space above the verdict, is also the live region, so
+   it is faded with opacity rather than hidden: hidden text is not announced. The tick is in the bubble, so the button
+   keeps its width. */
+.copy {
+  position: relative;
+  display: inline-flex;
+}
+
+.copy[hidden] {
+  display: none;
+}
+
+.copy-button[data-copied] + .copy-status::before {
+  content: "✓" / "";
+  margin-inline-end: 0.35rem;
+}
+
+.copy-status {
+  position: absolute;
+  inset-block-start: calc(100% + 0.4rem);
+  inset-inline-start: 50%;
+  translate: -50% 0;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.copy-button[data-failed] + .copy-status {
+  background: var(--err);
+}
+
+.copy-button:is([data-copied], [data-failed]) + .copy-status {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .copy-status {
+    transition: opacity 0.15s;
+  }
+}
+
+.source-link {
+  margin-block-start: 2rem;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* ---- failed and missing ---- */
+
+.failed h1 {
+  font-size: clamp(2rem, 1.4rem + 3vw, 3.25rem);
+}
+
+.failed > p {
+  margin-block-start: 1rem;
+  max-inline-size: 36em;
+  text-wrap: pretty;
+}
+
+.failed > .address {
+  color: var(--ink-2);
+  font-size: 1.1875rem;
+}
+
+.reason {
+  color: var(--ink-2);
+}
+
+.failed > .inline-form button {
+  margin-block-start: 1.75rem;
+}
+
+.again {
+  margin-block-start: 4rem;
+  padding-block-start: 1.5rem;
+  border-block-start: 1px solid var(--rule);
+}
+
+.again .check-form {
+  margin-block-start: 1rem;
+}
+
+/* ---- the delete confirmation ---- */
+
+.confirm {
+  max-inline-size: min(28rem, 100% - 2rem);
+  padding: 1.5rem;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--sheet);
+  color: var(--ink);
+}
+
+.confirm p {
+  margin-block: 0.75rem 1.5rem;
+  color: var(--ink-2);
+}
+
+.confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog::backdrop {
+  background: var(--backdrop);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
