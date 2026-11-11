@@ -1,36 +1,13 @@
 import dns from 'node:dns/promises'
 import type { TestContext } from 'node:test'
-import { beforeEach, test } from 'node:test'
-import { setTimeout as sleep } from 'node:timers/promises'
-import { build } from '../src/api/app.ts'
+import { test } from 'node:test'
+import { type App, makeApp, resolvePublicly, waitForAudit } from './helpers/app.ts'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
 import { mockFetch } from './helpers/mock-fetch.js'
 
-type App = ReturnType<typeof build>
-
-beforeEach((t) => {
-  const context = t as TestContext
-  context.mock.method(dns, 'lookup', async () => [{ address: '93.184.215.14', family: 4 }])
-})
-
-// Each app gets its own in-memory database, so no test sees another test's audits. close() releases it afterwards.
-const makeApp = (t: TestContext) => {
-  const app = build({}, { dbFilename: ':memory:' })
-  t.after(() => app.close())
-
-  return app
-}
+resolvePublicly()
 
 const postAudit = (app: App, url: string) => app.inject({ method: 'POST', url: '/audits', body: { url } })
-
-// Polls the audit until the worker has finished with it.
-const waitForAudit = async (app: App, id: string) => {
-  for (;;) {
-    const audit = (await app.inject({ method: 'GET', url: `/audits/${id}` })).json()
-    if (audit.status === 'completed' || audit.status === 'failed') return audit
-    await sleep(5)
-  }
-}
 
 // Queues an audit through the API, waits for it to finish and returns it.
 const runAudit = async (app: App, url: string) => {
