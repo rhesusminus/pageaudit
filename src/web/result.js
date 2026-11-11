@@ -8,6 +8,7 @@ import { charCount } from '../text.js'
 import { resultBrief } from './brief.js'
 import { findingsOf, verdict } from './findings.js'
 import { addressHeading, checkedAt, count, SEVERITY_LABEL, shortAddress } from './format.js'
+import { againForm } from './home.js'
 import { document } from './layout.js'
 import { facts, platformName } from './result-facts.js'
 
@@ -27,10 +28,7 @@ function resultHead(audit) {
       <div><dt>Checked</dt><dd><time datetime="${when.iso}">${when.text}</time></dd></div>
     </dl>
     <div class="actions">
-      <form class="inline-form" method="post" action="/check">
-        <input type="hidden" name="url" value="${audit.url}" />
-        <button type="submit" class="primary">Check again</button>
-      </form>
+      ${againForm(audit.url, 'Check again')}
       <span class="copy" hidden>
         <button type="button" class="copy-button" command="--copy" commandfor="claude-brief">Copy for Claude</button>
         <span class="copy-status" role="status"></span>

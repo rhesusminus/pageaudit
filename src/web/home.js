@@ -1,13 +1,16 @@
 import { markup } from '../html/escape.js'
 import { document } from './layout.js'
 
+// What the address field says when it is left empty, in the page and from the server alike.
+export const EMPTY_ADDRESS = 'Enter the address of a page.'
+
 // The address form. With `problem` (the server refused the address) the field comes back filled in, marked invalid,
 // described by the problem and focused, so a screen reader reads the problem first.
-/** @param {{ value?: string, problem?: string | null, label?: string, button?: string }} [options] */
-export function checkForm({ value = '', problem = null, label = 'Page address', button = 'Check page' } = {}) {
+/** @param {{ value?: string, problem?: string | null }} [options] */
+export function checkForm({ value = '', problem = null } = {}) {
   const describedBy = problem ? 'url-hint url-problem' : 'url-hint'
   return markup`<form class="check-form" method="post" action="/check">
-    <label for="url">${label}</label>
+    <label for="url">Page address</label>
     <p id="url-hint" class="hint">For example example.com/products/linen-shirt</p>
     <div class="check-row">
       <input
@@ -28,12 +31,18 @@ export function checkForm({ value = '', problem = null, label = 'Page address', 
         data-error="url-error"
         ${problem ? markup`autofocus` : ''}
       />
-      <button type="submit">${button}</button>
+      <button type="submit">Check page</button>
     </div>
-    <p id="url-error" class="field-error"><span class="error-mark" role="img" aria-label="Error"></span>Enter the address of a page.</p>
+    <p id="url-error" class="field-error"><span class="error-mark" role="img" aria-label="Error"></span>${EMPTY_ADDRESS}</p>
     ${problem ? markup`<p id="url-problem" class="field-error is-shown"><span class="error-mark" role="img" aria-label="Error"></span>${problem}</p>` : ''}
   </form>`
 }
+
+// A button that checks `url` again, for the results of an earlier check.
+export const againForm = (url, label) => markup`<form class="inline-form" method="post" action="/check">
+    <input type="hidden" name="url" value="${url}" />
+    <button type="submit" class="primary">${label}</button>
+  </form>`
 
 const CHECKS = [
   ['Search', 'The title and description people see in results, headings, canonical address and indexing rules.'],

@@ -3,11 +3,11 @@ import { adviceFor } from '../advice.js'
 import { AUDIT_ERROR } from '../api/audit-errors.js'
 import { markup } from '../html/escape.js'
 import { addressHeading, shortAddress } from './format.js'
-import { checkForm } from './home.js'
+import { againForm, checkForm } from './home.js'
 import { document } from './layout.js'
 
 // What the status line says in each state. checker.js reads these from the page, so the wording lives in one place.
-export const STATUS_TEXT = {
+const STATUS_TEXT = {
   queued: 'Waiting for the check ahead of this one to finish.',
   running: 'Reading the page and running the checks. This usually takes a few seconds.'
 }
@@ -65,61 +65,62 @@ export function failedPage(audit) {
       <p>${why}</p>
       <p>${fix}</p>
       ${reason ? markup`<p class="reason">Reason given: <code>${reason}</code></p>` : ''}
-      <form class="inline-form" method="post" action="/check">
-        <input type="hidden" name="url" value="${audit.url}" />
-        <button type="submit" class="primary">Try again</button>
-      </form>
+      ${againForm(audit.url, 'Try again')}
     </section>
     <section class="again" aria-labelledby="again-title">
       <h2 id="again-title">Check a different page</h2>
-      ${checkForm({ label: 'Page address', button: 'Check page' })}
+      ${checkForm()}
     </section>`
   return document({ title: `${title} - ${shortAddress(audit.url)}`, main })
 }
 
-export function notFoundPage() {
-  const main = markup`<section class="failed" aria-labelledby="missing-title">
-      <h1 id="missing-title">There are no results at this link</h1>
-      <p>They were deleted, or the link is incomplete. Check the page again to get new results.</p>
-      ${checkForm()}
+// A page that only says why there is nothing to show here. `body` is the markup after the heading.
+function messagePage({ title, heading, body }) {
+  const main = markup`<section class="failed" aria-labelledby="message-title">
+      <h1 id="message-title">${heading}</h1>
+      ${body}
     </section>`
-  return document({ title: 'No results here', main })
+  return document({ title, main })
 }
+
+export const notFoundPage = () =>
+  messagePage({
+    title: 'No results here',
+    heading: 'There are no results at this link',
+    body: markup`<p>They were deleted, or the link is incomplete. Check the page again to get new results.</p>
+      ${checkForm()}`
+  })
 
 // An address on this site that is not a page at all.
-export function missingPage() {
-  const main = markup`<section class="failed" aria-labelledby="missing-title">
-      <h1 id="missing-title">There is no page at this address</h1>
-      <p><a href="/">Check a page</a> instead.</p>
-    </section>`
-  return document({ title: 'Page not found', main })
-}
+export const missingPage = () =>
+  messagePage({
+    title: 'Page not found',
+    heading: 'There is no page at this address',
+    body: markup`<p><a href="/">Check a page</a> instead.</p>`
+  })
 
 // A form posted from another site. The forms here change state, so only this site's own pages may send them.
-export function refusedPage() {
-  const main = markup`<section class="failed" aria-labelledby="refused-title">
-      <h1 id="refused-title">This form was sent from another site</h1>
-      <p>Checks and deletes are only accepted from the pages of this site, so another site cannot make them for you.</p>
-      <p><a href="/">Check a page here</a> instead.</p>
-    </section>`
-  return document({ title: 'Form not accepted', main })
-}
+export const refusedPage = () =>
+  messagePage({
+    title: 'Form not accepted',
+    heading: 'This form was sent from another site',
+    body: markup`<p>Checks and deletes are only accepted from the pages of this site, so another site cannot make them for you.</p>
+      <p><a href="/">Check a page here</a> instead.</p>`
+  })
 
 // A request this site could not read, such as a form that is too large or not sent as a form.
-export function requestErrorPage() {
-  const main = markup`<section class="failed" aria-labelledby="request-title">
-      <h1 id="request-title">This request could not be read</h1>
-      <p>What was sent did not arrive as a form this site understands. Go back to the start and try again.</p>
-      <p><a href="/">Back to the start</a></p>
-    </section>`
-  return document({ title: 'Request not read', main })
-}
+export const requestErrorPage = () =>
+  messagePage({
+    title: 'Request not read',
+    heading: 'This request could not be read',
+    body: markup`<p>What was sent did not arrive as a form this site understands. Go back to the start and try again.</p>
+      <p><a href="/">Back to the start</a></p>`
+  })
 
-export function errorPage() {
-  const main = markup`<section class="failed" aria-labelledby="error-title">
-      <h1 id="error-title">Something went wrong on our side</h1>
-      <p>The request could not be finished. Wait a moment and try again.</p>
-      <p><a href="/">Back to the start</a></p>
-    </section>`
-  return document({ title: 'Something went wrong', main })
-}
+export const errorPage = () =>
+  messagePage({
+    title: 'Something went wrong',
+    heading: 'Something went wrong on our side',
+    body: markup`<p>The request could not be finished. Wait a moment and try again.</p>
+      <p><a href="/">Back to the start</a></p>`
+  })

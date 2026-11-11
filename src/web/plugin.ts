@@ -8,7 +8,7 @@ import { queueCheckedAudit } from '../api/queue-audit.ts'
 import { deleteAudit, getAudit } from '../db/database.ts'
 import { resultBrief } from './brief.js'
 import { shortAddress, withScheme } from './format.js'
-import { homePage } from './home.js'
+import { EMPTY_ADDRESS, homePage } from './home.js'
 import { deletePage, resultPage } from './result.js'
 import { errorPage, failedPage, notFoundPage, progressPage, refusedPage, requestErrorPage } from './status.js'
 
@@ -64,8 +64,6 @@ function sendBrief(reply: FastifyReply, audit: Audit | undefined, origin: string
     .header('cache-control', 'no-store')
     .send(resultBrief(audit, origin))
 }
-
-const EMPTY_ADDRESS = 'Enter the address of a page.'
 
 // Why an address was not checked, in the words of someone who typed it into the form.
 function addressProblem({ reason, host }: DestinationError) {
