@@ -4,16 +4,20 @@ import ipaddr from 'ipaddr.js'
 import { Agent } from 'undici'
 import { fetchPage } from '../fetch.js'
 
-// An audit destination the API refuses, with the HTTP status the refusal should answer with.
+// An audit destination the API refuses, with the HTTP status the refusal should answer with. `reason` says why, so a
+// caller can word it for its own readers: 'private' (not a public address), 'unknown-host' (the name has no addresses)
+// or 'lookup-failed' (the lookup failed in a way that may pass on retry).
 export class DestinationError extends Error {
-  constructor(message, statusCode = 400, options) {
-    super(message, options)
+  constructor(message, { reason, statusCode = 400, cause } = {}) {
+    super(message, { cause })
     this.name = 'DestinationError'
+    this.reason = reason
     this.statusCode = statusCode
   }
 }
 
-const blocked = () => new DestinationError('Audit destinations must use public network addresses')
+const blocked = () =>
+  new DestinationError('Audit destinations must use public network addresses', { reason: 'private' })
 
 // These codes mean the name has no addresses. Any other lookup failure (EAI_AGAIN, a timeout) may pass on retry.
 const NO_ADDRESSES = new Set(['ENOTFOUND', 'ENODATA'])
@@ -23,9 +27,13 @@ async function lookupAll(hostname) {
     return await dns.lookup(hostname, { all: true, verbatim: true })
   } catch (error) {
     if (NO_ADDRESSES.has(error.code)) {
-      throw new DestinationError(`Could not resolve host ${hostname}`, 400, { cause: error })
+      throw new DestinationError(`Could not resolve host ${hostname}`, { reason: 'unknown-host', cause: error })
     }
-    throw new DestinationError(`Could not resolve host ${hostname}, try again later`, 503, { cause: error })
+    throw new DestinationError(`Could not resolve host ${hostname}, try again later`, {
+      reason: 'lookup-failed',
+      statusCode: 503,
+      cause: error
+    })
   }
 }
 
