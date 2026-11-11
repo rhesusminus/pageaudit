@@ -21,9 +21,11 @@ export function build(opts: FastifyServerOptions = {}, { dbFilename = './databas
   // Parsed here, so an address that is not a URL stops the server at startup rather than breaking every link.
   const publicOrigin = publicUrl ? new URL(publicUrl).origin : undefined
 
+  const onAuditQueued = () => worker?.wake()
+
   app.register(fpSqlitePlugin, { dbFilename })
-  app.register(routes, { onAuditQueued: () => worker?.wake() })
-  app.register(webPages, { onAuditQueued: () => worker?.wake(), publicOrigin })
+  app.register(routes, { onAuditQueued })
+  app.register(webPages, { onAuditQueued, publicOrigin })
 
   // Every error answers { error }, the shape the route schemas declare. Client errors (validation, malformed JSON)
   // keep Fastify's message so the caller can fix the request. Server errors are logged and their message is hidden.

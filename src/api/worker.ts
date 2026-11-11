@@ -1,4 +1,3 @@
-import { setTimeout as sleep } from 'node:timers/promises'
 import type { FastifyInstance } from 'fastify'
 import { runAudit } from '../runner.js'
 import { AUDIT_ERROR } from './audit-errors.js'
@@ -58,14 +57,25 @@ export function startAuditWorker(
   helpers: AuditWorkerHelpers,
   { pollIntervalMs = 1000, audit = runPublicAudit }: WorkerOptions = {}
 ) {
-  const controller = new AbortController()
-  const { signal } = controller
+  let stopped = false
   // Set by wake() and checked before sleeping, so a wake that lands while a claim is in flight is not lost.
   let woken = false
-  let interruptSleep: AbortController | undefined
+  // Ends the current idle wait early. Set only while the worker sleeps.
+  let endSleep: (() => void) | undefined
+
+  const idle = () =>
+    new Promise<void>((resolve) => {
+      const timer = setTimeout(done, pollIntervalMs)
+      function done() {
+        clearTimeout(timer)
+        endSleep = undefined
+        resolve()
+      }
+      endSleep = done
+    })
 
   async function work() {
-    while (!signal.aborted) {
+    while (!stopped) {
       woken = false
       try {
         if (await processNextAudit(app, helpers, audit)) {
@@ -75,20 +85,8 @@ export function startAuditWorker(
         app.log.error({ err: error }, 'Audit worker error')
       }
 
-      if (woken) {
-        continue
-      }
-
-      const interrupt = new AbortController()
-      interruptSleep = interrupt
-      try {
-        await sleep(pollIntervalMs, undefined, { signal: AbortSignal.any([signal, interrupt.signal]) })
-      } catch (error) {
-        if (!signal.aborted && !interrupt.signal.aborted) {
-          throw error
-        }
-      } finally {
-        interruptSleep = undefined
+      if (!woken && !stopped) {
+        await idle()
       }
     }
   }
@@ -99,11 +97,12 @@ export function startAuditWorker(
     // Look for a queued audit now instead of at the next poll.
     wake() {
       woken = true
-      interruptSleep?.abort()
+      endSleep?.()
     },
     async stop() {
       // Wake an idle worker immediately; an already claimed audit finishes first.
-      controller.abort()
+      stopped = true
+      endSleep?.()
       await running
     }
   }
