@@ -1,7 +1,8 @@
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox'
 import { Type } from '@fastify/type-provider-typebox'
 import { deleteAudit, getAudit } from '../db/database.ts'
-import { AuditUrlError, queueCheckedAudit } from './queue-audit.ts'
+import { DestinationError } from './public-destination.js'
+import { queueCheckedAudit } from './queue-audit.ts'
 
 const errorSchema = Type.Object({ error: Type.String() })
 
@@ -80,7 +81,7 @@ export const routes: FastifyPluginAsyncTypebox<RoutesOptions> = async (fastify, 
     try {
       id = await queueCheckedAudit(fastify.db, request.body.url)
     } catch (error) {
-      if (!(error instanceof AuditUrlError)) throw error
+      if (!(error instanceof DestinationError)) throw error
       return reply.code(error.statusCode).send({ error: error.message })
     }
 

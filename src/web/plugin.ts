@@ -2,7 +2,8 @@ import { join } from 'node:path'
 import formbody from '@fastify/formbody'
 import fastifyStatic from '@fastify/static'
 import type { FastifyError, FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
-import { AuditUrlError, queueCheckedAudit } from '../api/queue-audit.ts'
+import { DestinationError } from '../api/public-destination.js'
+import { queueCheckedAudit } from '../api/queue-audit.ts'
 import { deleteAudit, getAudit } from '../db/database.ts'
 import { resultBrief } from './brief.js'
 import { shortAddress, withScheme } from './format.js'
@@ -66,7 +67,7 @@ function sendBrief(reply: FastifyReply, audit: Audit | undefined, origin: string
 const EMPTY_ADDRESS = 'Enter the address of a page.'
 
 // Why an address was not checked, in the words of someone who typed it into the form.
-function addressProblem({ reason, host }: AuditUrlError) {
+function addressProblem({ reason, host }: DestinationError) {
   if (reason === 'private') return 'That address is not on the public internet, so it cannot be checked.'
   if (reason === 'unknown-host') return `No site answers at ${host}. Check the spelling of the address.`
   if (reason === 'lookup-failed') return `Could not look up ${host} just now. Try again in a minute.`
@@ -129,7 +130,7 @@ export const webPages: FastifyPluginAsync<WebOptions> = async (fastify, { onAudi
         onAuditQueued()
         return reply.redirect(`/check/${id}`, 303)
       } catch (error) {
-        if (!(error instanceof AuditUrlError)) throw error
+        if (!(error instanceof DestinationError)) throw error
         return sendPage(reply, error.statusCode, homePage({ value, problem: addressProblem(error) }))
       }
     }

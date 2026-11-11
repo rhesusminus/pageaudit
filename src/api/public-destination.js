@@ -5,13 +5,20 @@ import { Agent } from 'undici'
 import { fetchPage } from '../fetch.js'
 
 // An audit destination the API refuses, with the HTTP status the refusal should answer with. `reason` says why, so a
-// caller can word it for its own readers: 'private' (not a public address), 'unknown-host' (the name has no addresses)
-// or 'lookup-failed' (the lookup failed in a way that may pass on retry).
+// caller can word it for its own readers: 'invalid' (not a web address), 'private' (not a public address),
+// 'unknown-host' (the name has no addresses) or 'lookup-failed' (the lookup failed in a way that may pass on retry).
+// `host` is the name that was looked up, for the two lookup reasons.
 export class DestinationError extends Error {
-  constructor(message, { reason, statusCode = 400, cause } = {}) {
+  /**
+   * @param {string} message
+   * @param {{ reason: 'invalid' | 'private' | 'unknown-host' | 'lookup-failed', host?: string | null,
+   *   statusCode?: 400 | 503, cause?: unknown }} options
+   */
+  constructor(message, { reason, host = null, statusCode = 400, cause }) {
     super(message, { cause })
     this.name = 'DestinationError'
     this.reason = reason
+    this.host = host
     this.statusCode = statusCode
   }
 }
@@ -27,10 +34,15 @@ async function lookupAll(hostname) {
     return await dns.lookup(hostname, { all: true, verbatim: true })
   } catch (error) {
     if (NO_ADDRESSES.has(error.code)) {
-      throw new DestinationError(`Could not resolve host ${hostname}`, { reason: 'unknown-host', cause: error })
+      throw new DestinationError(`Could not resolve host ${hostname}`, {
+        reason: 'unknown-host',
+        host: hostname,
+        cause: error
+      })
     }
     throw new DestinationError(`Could not resolve host ${hostname}, try again later`, {
       reason: 'lookup-failed',
+      host: hostname,
       statusCode: 503,
       cause: error
     })
