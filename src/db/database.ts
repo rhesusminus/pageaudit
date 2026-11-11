@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { FastifyInstance } from 'fastify'
+import { AUDIT_ERROR } from '../api/audit-errors.js'
 import type { runAudit } from '../runner.js'
 
 type Db = FastifyInstance['db']
@@ -31,10 +32,11 @@ export async function recoverInterruptedAudits(db: Db, maxAttempts = 3) {
   await db.run(
     `UPDATE audits
      SET status = CASE WHEN attempts >= ? THEN 'failed' ELSE 'queued' END,
-         error  = CASE WHEN attempts >= ? THEN 'Audit was interrupted' ELSE error END
+         error  = CASE WHEN attempts >= ? THEN ? ELSE error END
      WHERE status = 'running' AND deleted_at IS NULL`,
     maxAttempts,
-    maxAttempts
+    maxAttempts,
+    AUDIT_ERROR.interrupted
   )
 }
 
