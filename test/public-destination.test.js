@@ -60,7 +60,7 @@ test('public destinations: rejects private, encoded and special-use IP literals 
 test('public destinations: allows public IPv4 and IPv6 and rejects credentials and protocols', async () => {
   await validateDestination('https://8.8.8.8')
   await validateDestination('https://[2606:4700:4700::1111]')
-  await assert.rejects(validateDestination('ftp://8.8.8.8'), /public network/)
+  await assert.rejects(validateDestination('ftp://8.8.8.8'), { reason: 'private', statusCode: 400 })
   await assert.rejects(validateDestination('http://user:pass@8.8.8.8'), /public network/)
 })
 
@@ -80,11 +80,11 @@ test('public destinations: DNS fails closed, including mixed answers and empty r
 
 test('public destinations: a missing host answers 400, any other DNS failure 503', async (t) => {
   const dnsMock = t.mock.method(dns, 'lookup')
-  for (const [code, statusCode] of [
-    ['ENOTFOUND', 400],
-    ['ENODATA', 400],
-    ['EAI_AGAIN', 503],
-    [undefined, 503]
+  for (const [code, statusCode, reason] of [
+    ['ENOTFOUND', 400, 'unknown-host'],
+    ['ENODATA', 400, 'unknown-host'],
+    ['EAI_AGAIN', 503, 'lookup-failed'],
+    [undefined, 503, 'lookup-failed']
   ]) {
     dnsMock.mock.mockImplementation(async () => {
       throw Object.assign(new Error(`getaddrinfo ${code} public.test`), { code })
@@ -92,6 +92,7 @@ test('public destinations: a missing host answers 400, any other DNS failure 503
     await assert.rejects(validateDestination('https://public.test'), (error) => {
       assert.ok(error instanceof DestinationError)
       assert.equal(error.statusCode, statusCode, String(code))
+      assert.equal(error.reason, reason, String(code))
       assert.doesNotMatch(error.message, /getaddrinfo/)
       return true
     })

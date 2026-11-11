@@ -1,8 +1,7 @@
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox'
 import { Type } from '@fastify/type-provider-typebox'
-import { deleteAudit, getAudit, queueAudit } from '../db/database.ts'
-import { normalize } from '../input/resolve.js'
-import { DestinationError, validateDestination } from './public-destination.js'
+import { deleteAudit, getAudit } from '../db/database.ts'
+import { AuditUrlError, queueCheckedAudit } from './queue-audit.ts'
 
 const errorSchema = Type.Object({ error: Type.String() })
 
@@ -76,22 +75,15 @@ export const routes: FastifyPluginAsyncTypebox<RoutesOptions> = async (fastify, 
   })
 
   fastify.post('/audits', { schema: auditSchema }, async (request, reply) => {
-    let normalized: ReturnType<typeof normalize>
+    let id: string
 
     try {
-      normalized = normalize(request.body.url)
+      id = await queueCheckedAudit(fastify.db, request.body.url)
     } catch (error) {
-      return reply.code(400).send({ error: (error as Error).message })
+      if (!(error instanceof AuditUrlError)) throw error
+      return reply.code(error.statusCode).send({ error: error.message })
     }
 
-    try {
-      await validateDestination(normalized.url)
-    } catch (error) {
-      if (!(error instanceof DestinationError)) throw error
-      return reply.code(error.statusCode as 400 | 503).send({ error: error.message })
-    }
-
-    const id = await queueAudit(fastify.db, normalized.url)
     onAuditQueued()
 
     return reply.code(202).header('location', `/audits/${id}`).send({ id, status: 'queued' })

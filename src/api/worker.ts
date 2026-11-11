@@ -1,6 +1,7 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 import type { FastifyInstance } from 'fastify'
 import { runAudit } from '../runner.js'
+import { AUDIT_ERROR } from './audit-errors.js'
 import { fetchPublicPage } from './public-destination.js'
 
 type Db = FastifyInstance['db']
@@ -38,13 +39,13 @@ async function processNextAudit(
     page = await audit(job.url)
   } catch (error) {
     app.log.error({ err: error, auditId: job.id }, 'Audit failed')
-    await helpers.failAudit(app.db, job.id, 'Audit failed')
+    await helpers.failAudit(app.db, job.id, AUDIT_ERROR.failed)
     return true
   }
 
   // A failed fetch is returned as a page, rather than thrown by the runner.
   if (page.status === null) {
-    await helpers.failAudit(app.db, job.id, 'Could not fetch page')
+    await helpers.failAudit(app.db, job.id, AUDIT_ERROR.fetchFailed)
   } else {
     await helpers.completeAudit(app.db, job.id, page)
   }
