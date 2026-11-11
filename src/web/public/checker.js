@@ -151,10 +151,13 @@ let lastCopyMessage = ''
 
 function reportCopy(button, ok) {
   const status = button.nextElementSibling
+  const clear = () => {
+    button.removeAttribute('data-copied')
+    button.removeAttribute('data-failed')
+    status.textContent = ''
+  }
   clearTimeout(copyTimers.get(button))
-  button.removeAttribute('data-copied')
-  button.removeAttribute('data-failed')
-  status.textContent = ''
+  clear()
   void button.offsetWidth // restarts the animation
   button.setAttribute(ok ? 'data-copied' : 'data-failed', '')
   let message = ok ? 'Copied' : 'Copy failed'
@@ -163,11 +166,6 @@ function reportCopy(button, ok) {
   requestAnimationFrame(() => {
     status.textContent = message
   })
-  const clear = () => {
-    button.removeAttribute('data-copied')
-    button.removeAttribute('data-failed')
-    status.textContent = ''
-  }
   copyTimers.set(button, setTimeout(clear, 2000))
 }
 
