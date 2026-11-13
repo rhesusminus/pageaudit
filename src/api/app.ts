@@ -4,6 +4,7 @@ import { fpSqlitePlugin } from 'fastify-sqlite-typed'
 import { claimNextAudit, completeAudit, failAudit, recoverInterruptedAudits } from '../db/database.ts'
 import { sendPage, webPages } from '../web/plugin.ts'
 import { missingPage } from '../web/status.js'
+import { errorStatus } from './error-status.ts'
 import { routes } from './routes.ts'
 import { startAuditWorker } from './worker.ts'
 
@@ -20,14 +21,16 @@ export function build(opts: FastifyServerOptions = {}, { dbFilename = './databas
   // Parsed here, so an address that is not a URL stops the server at startup rather than breaking every link.
   const publicOrigin = publicUrl ? new URL(publicUrl).origin : undefined
 
+  const onAuditQueued = () => worker?.wake()
+
   app.register(fpSqlitePlugin, { dbFilename })
-  app.register(routes, { onAuditQueued: () => worker?.wake() })
-  app.register(webPages, { onAuditQueued: () => worker?.wake(), publicOrigin })
+  app.register(routes, { onAuditQueued })
+  app.register(webPages, { onAuditQueued, publicOrigin })
 
   // Every error answers { error }, the shape the route schemas declare. Client errors (validation, malformed JSON)
   // keep Fastify's message so the caller can fix the request. Server errors are logged and their message is hidden.
   app.setErrorHandler<FastifyError>((error, request, reply) => {
-    const statusCode = error.statusCode !== undefined && error.statusCode >= 400 ? error.statusCode : 500
+    const statusCode = errorStatus(error)
 
     if (statusCode < 500) {
       return reply.code(statusCode).send({ error: error.message })
@@ -51,11 +54,15 @@ export function build(opts: FastifyServerOptions = {}, { dbFilename = './databas
       url TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       deleted_at TEXT,
-      result TEXT,
       status TEXT NOT NULL,
       error TEXT,
-      attempts INTEGER NOT NULL DEFAULT 0
-    )
+      attempts INTEGER NOT NULL DEFAULT 0,
+      -- Last, so reading the small columns never walks a long report's overflow pages.
+      result TEXT
+    );
+    -- The worker claims the oldest queued audit every poll. Only queued rows are in this index, so a claim does not
+    -- scan every stored audit.
+    CREATE INDEX IF NOT EXISTS audits_queue ON audits (created_at, id) WHERE status = 'queued' AND deleted_at IS NULL;
   `)
   })
 

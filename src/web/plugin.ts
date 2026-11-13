@@ -2,11 +2,13 @@ import { join } from 'node:path'
 import formbody from '@fastify/formbody'
 import fastifyStatic from '@fastify/static'
 import type { FastifyError, FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
-import { AuditUrlError, queueCheckedAudit } from '../api/queue-audit.ts'
+import { errorStatus } from '../api/error-status.ts'
+import { DestinationError } from '../api/public-destination.js'
+import { queueCheckedAudit } from '../api/queue-audit.ts'
 import { deleteAudit, getAudit } from '../db/database.ts'
 import { resultBrief } from './brief.js'
 import { shortAddress, withScheme } from './format.js'
-import { homePage } from './home.js'
+import { EMPTY_ADDRESS, homePage } from './home.js'
 import { deletePage, resultPage } from './result.js'
 import { errorPage, failedPage, notFoundPage, progressPage, refusedPage, requestErrorPage } from './status.js'
 
@@ -63,10 +65,8 @@ function sendBrief(reply: FastifyReply, audit: Audit | undefined, origin: string
     .send(resultBrief(audit, origin))
 }
 
-const EMPTY_ADDRESS = 'Enter the address of a page.'
-
 // Why an address was not checked, in the words of someone who typed it into the form.
-function addressProblem({ reason, host }: AuditUrlError) {
+function addressProblem({ reason, host }: DestinationError) {
   if (reason === 'private') return 'That address is not on the public internet, so it cannot be checked.'
   if (reason === 'unknown-host') return `No site answers at ${host}. Check the spelling of the address.`
   if (reason === 'lookup-failed') return `Could not look up ${host} just now. Try again in a minute.`
@@ -94,7 +94,7 @@ function fromThisSite(request: FastifyRequest, publicOrigin?: string) {
 // Client errors, such as a form too large or a body that does not parse, keep their status. Only server errors are
 // logged, and neither shows its message.
 function pageError(error: FastifyError, request: FastifyRequest, reply: FastifyReply) {
-  const statusCode = error.statusCode !== undefined && error.statusCode >= 400 ? error.statusCode : 500
+  const statusCode = errorStatus(error)
   if (statusCode < 500) return sendPage(reply, statusCode, requestErrorPage())
   request.log.error({ err: error }, 'page failed')
   return sendPage(reply, 500, errorPage())
@@ -129,7 +129,7 @@ export const webPages: FastifyPluginAsync<WebOptions> = async (fastify, { onAudi
         onAuditQueued()
         return reply.redirect(`/check/${id}`, 303)
       } catch (error) {
-        if (!(error instanceof AuditUrlError)) throw error
+        if (!(error instanceof DestinationError)) throw error
         return sendPage(reply, error.statusCode, homePage({ value, problem: addressProblem(error) }))
       }
     }

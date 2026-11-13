@@ -1,6 +1,7 @@
 // Small wording helpers shared by the web pages.
 import { ABSOLUTE_URL } from '../checks/page/meta.js'
 import { markup } from '../html/escape.js'
+import { charCount } from '../text.js'
 
 // An address as people read it: no scheme, no trailing slash.
 export const shortAddress = (url) => url.replace(/^https?:\/\//i, '').replace(/\/$/, '')
@@ -14,7 +15,7 @@ export function addressHeading(url) {
   const address = shortAddress(url)
   const [host, ...path] = address.split('/')
   return {
-    long: Array.from(address).length > LONG_ADDRESS,
+    long: charCount(address) > LONG_ADDRESS,
     text: markup`<span class="part">${host}</span>${path.map((part) => markup`<wbr><span class="part">/${part}</span>`)}`
   }
 }

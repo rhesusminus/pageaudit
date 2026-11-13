@@ -511,6 +511,7 @@ src/
     queue-audit.ts      queueCheckedAudit(): checks an address and queues it, for the API and the web form alike
     audit-errors.js     the error a failed audit stores, which the web pages word for their readers
     public-destination.js  validateDestination() and fetchPublicPage(): only public network addresses are fetched
+    error-status.ts     errorStatus(): the status an error answers with, its own or 500
     worker.ts           runs queued audits one at a time
   db/
     database.ts         the audits table: queue, claim, save, get and soft-delete
@@ -534,6 +535,7 @@ test/
   runner.test.js        runner with a mocked fetchPage: concurrency, delay, failures
   site.test.js          site checks over runner results
   checks.test.js        unit tests for each page check
+  escaped-text.test.js  text in the title, description and preview tags escaped twice
   a11y.test.js          form labels, duplicate ids, the main landmark and link names
   parse.test.js         template removal and the DOM depth cap
   fetch.test.js         fetchPage: redirects, User-Agent, encoding sniffing, errors
@@ -568,10 +570,12 @@ test/
   helpers/fixture-fetch.js   mocked fetch that serves the fixtures
   helpers/mock-fetch.js      replaces globalThis.fetch for one test
   helpers/report-pages.js    audited pages and site issues for the report and terminal tests
+  helpers/app.ts             the app for the API and web tests: its own database, every host resolving to a public address
 docs/seo-harness-plan.md     the original v1 plan
 docs/pageaudit-v2-plan.md    the v2 (multi-page) plan
 docs/pageaudit-v3-lighthouse-plan.md          the v3 (Lighthouse) plan
 docs/pageaudit-v4-page-data-html-report.md    the v4 (page data and HTML report) plan
+docs/backend-learning.md     the steps the HTTP API was built in
 ```
 
 Pipeline: inputs -> `resolveUrls` -> `runAudit` (`fetchPage` -> `checkResponse` -> `parse` -> `checkHtml` per page, and with `--content` `pageMarkdown` written as each page finishes) -> `checkSite`, `checkRobotsTxt`, `checkSitemapEntries` and, with `--check-links`, `checkLinkTargets` -> `checkLinks` -> `buildReport` -> table or JSON, and the `--out`, `--digest` (`buildDigest`) and `--html` (`renderHtml`) files.
@@ -621,7 +625,7 @@ The JSON report is meant to be handed to a human or an LLM for prioritizing fixe
 
 ## Testing
 
-Tests use the built-in `node:test` runner with no extra dependencies. `npm test` runs `node --test test/*.test.js`, so helpers in `test/helpers/` are not run as tests. Nothing touches the network. `npm run lint` runs Biome (lint rules and formatting), and a husky pre-commit hook runs it on the staged files.
+Tests use the built-in `node:test` runner with no extra dependencies. `npm test` runs `node --test test/*.test.{js,ts}`, so helpers in `test/helpers/` are not run as tests. Nothing touches the network. `npm run typecheck` runs `tsc` over the TypeScript files. `npm run lint` runs Biome (lint rules and formatting), and a husky pre-commit hook runs it on the staged files.
 
 - Unit tests cover each rule firing, not firing and the length boundaries.
 - HTML fixtures cover the positive and negative cases: `good.html` has no issues, `duplicate.html` shares its title, description and h1 with `good.html`, the `bad-*.html` files (`overlong`, `missing`, `canonical`, `images`, `empty`, `markup`, `hreflang`) trigger the remaining rules, and `hreflang.html` and `hreflang-fi.html` are a language pair with a missing return link and a `noindex` alternate. `noindex.html`, `noindex-header.html` and `blocked.html` feed the indexing, robots.txt and sitemap checks, `ai-blocked.html` is kept from `OAI-SearchBot` only, `snippets.html` has a `noarchive` meta tag and is served with `X-Robots-Tag: googlebot: nosnippet`, `article.html` has a Yoast-style JSON-LD graph with `@id` references and is served with `Last-Modified`, `sitemap-quality.xml` lists them for the sitemap checks, and `rich.html` carries every kind of metadata for the signals tests. Several bad files are needed because some rules are mutually exclusive, for example a title cannot be both missing and too long.

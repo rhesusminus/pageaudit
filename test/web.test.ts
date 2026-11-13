@@ -1,24 +1,11 @@
 import dns from 'node:dns/promises'
 import type { TestContext } from 'node:test'
-import { beforeEach, test } from 'node:test'
-import { setTimeout as sleep } from 'node:timers/promises'
-import { build } from '../src/api/app.ts'
+import { test } from 'node:test'
+import { type App, makeApp, resolvePublicly, waitForAudit } from './helpers/app.ts'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
 import { mockFetch } from './helpers/mock-fetch.js'
 
-type App = ReturnType<typeof build>
-
-beforeEach((t) => {
-  const context = t as TestContext
-  context.mock.method(dns, 'lookup', async () => [{ address: '93.184.215.14', family: 4 }])
-})
-
-const makeApp = (t: TestContext, options: { publicUrl?: string } = {}) => {
-  const app = build({}, { dbFilename: ':memory:', ...options })
-  t.after(() => app.close())
-
-  return app
-}
+resolvePublicly()
 
 // Posts the check form the way a browser on this site does.
 const postCheck = (app: App, url: string, headers: Record<string, string> = {}) =>
@@ -31,26 +18,20 @@ const postCheck = (app: App, url: string, headers: Record<string, string> = {}) 
 
 const page = (app: App, url: string) => app.inject({ method: 'GET', url, headers: { accept: 'text/html' } })
 
-// Waits for the worker to finish the audit behind a /check/:id page, then returns that page.
-const finishedPage = async (app: App, location: string) => {
-  const id = location.split('/').pop()
-  for (;;) {
-    const { status } = (await app.inject({ method: 'GET', url: `/audits/${id}` })).json()
-    if (status === 'completed' || status === 'failed') return page(app, location)
-    await sleep(5)
-  }
-}
+const idOf = (location: string) => location.split('/').pop() as string
 
-const deleteUnknown = (app: App) =>
-  app.inject({ method: 'POST', url: '/check/does-not-exist/delete', headers: { 'sec-fetch-site': 'same-origin' } })
-
-// Checks a page through the form and returns the finished results page.
-const checkPage = async (app: App, url: string) => {
+// Checks a page through the form and waits for the check to finish. Returns its /check/:id address and audit id.
+const check = async (app: App, url: string) => {
   const response = await postCheck(app, url)
   if (response.statusCode !== 303) throw new Error(`expected 303, got ${response.statusCode}: ${response.body}`)
+  const location = response.headers.location as string
+  await waitForAudit(app, idOf(location))
 
-  return finishedPage(app, response.headers.location as string)
+  return { location, id: idOf(location) }
 }
+
+// Checks a page through the form and returns the finished results page.
+const checkPage = async (app: App, url: string) => page(app, (await check(app, url)).location)
 
 test('GET /: shows the check form under a policy that allows no inline code', async (t: TestContext) => {
   const response = await page(makeApp(t), '/')
@@ -84,10 +65,8 @@ test('POST /check: queues an address typed without a scheme and redirects to its
   t.assert.strictEqual(response.statusCode, 303)
   const location = response.headers.location as string
   t.assert.match(location, /^\/check\/[0-9a-f-]{36}$/)
-  const id = location.split('/').pop()
-  const audit = (await app.inject({ method: 'GET', url: `/audits/${id}` })).json()
+  const audit = await waitForAudit(app, idOf(location))
   t.assert.strictEqual(audit.url, `${FIXTURE_HOST}/good.html`)
-  await finishedPage(app, location)
 })
 
 test('POST /check: shows the form again with what is wrong with the address', async (t: TestContext) => {
@@ -197,15 +176,15 @@ test('POST /check: compares Origin with the public address when one is set', asy
 test('GET /check/:id: shows progress until the audit finishes', async (t: TestContext) => {
   mockFixtureFetch(t)
   const app = makeApp(t)
-  const { location } = (await postCheck(app, `${FIXTURE_HOST}/good.html`)).headers
+  const location = (await postCheck(app, `${FIXTURE_HOST}/good.html`)).headers.location as string
 
-  const progress = await page(app, location as string)
+  const progress = await page(app, location)
 
   t.assert.strictEqual(progress.statusCode, 200)
   t.assert.match(progress.body, /<h1 id="progress-title"\s*>Checking/)
   t.assert.match(progress.body, /data-audit-status="(queued|running)"/)
   t.assert.match(progress.body, /<noscript><meta http-equiv="refresh" content="3" \/><\/noscript>/)
-  await finishedPage(app, location as string)
+  await waitForAudit(app, idOf(location))
 })
 
 test('GET /check/:id: shows the results of a finished check', async (t: TestContext) => {
@@ -266,8 +245,7 @@ test('GET /check/:id: answers 404 with a page for an unknown id', async (t: Test
 test('POST /check/:id/delete: deletes the results and says so', async (t: TestContext) => {
   mockFixtureFetch(t)
   const app = makeApp(t)
-  const { location } = (await postCheck(app, `${FIXTURE_HOST}/good.html`)).headers
-  await finishedPage(app, location as string)
+  const { location } = await check(app, `${FIXTURE_HOST}/good.html`)
 
   const deleted = await app.inject({
     method: 'POST',
@@ -278,14 +256,13 @@ test('POST /check/:id/delete: deletes the results and says so', async (t: TestCo
   t.assert.strictEqual(deleted.statusCode, 303)
   t.assert.strictEqual(deleted.headers.location, '/?deleted')
   t.assert.match((await page(app, '/?deleted')).body, /The results were deleted\./)
-  t.assert.strictEqual((await page(app, location as string)).statusCode, 404)
+  t.assert.strictEqual((await page(app, location)).statusCode, 404)
 })
 
 test('GET /check/:id/delete: asks before deleting, for a browser that runs no script', async (t: TestContext) => {
   mockFixtureFetch(t)
   const app = makeApp(t)
-  const { location } = (await postCheck(app, `${FIXTURE_HOST}/good.html`)).headers
-  await finishedPage(app, location as string)
+  const { location } = await check(app, `${FIXTURE_HOST}/good.html`)
 
   const confirm = await page(app, `${location}/delete`)
   const missing = await page(app, '/check/does-not-exist/delete')
@@ -294,12 +271,16 @@ test('GET /check/:id/delete: asks before deleting, for a browser that runs no sc
   t.assert.match(confirm.body, /<h1 id="delete-title">Delete these results\?<\/h1>/)
   t.assert.ok(confirm.body.includes(`<form class="inline-form" method="post" action="${location}/delete">`))
   t.assert.ok(confirm.body.includes(`<form class="inline-form" method="get" action="${location}">`))
-  t.assert.strictEqual((await page(app, location as string)).statusCode, 200)
+  t.assert.strictEqual((await page(app, location)).statusCode, 200)
   t.assert.strictEqual(missing.statusCode, 404)
 })
 
 test('POST /check/:id/delete: answers 404 when there are no results to delete', async (t: TestContext) => {
-  const response = await deleteUnknown(makeApp(t))
+  const response = await makeApp(t).inject({
+    method: 'POST',
+    url: '/check/does-not-exist/delete',
+    headers: { 'sec-fetch-site': 'same-origin' }
+  })
 
   t.assert.strictEqual(response.statusCode, 404)
   t.assert.match(response.body, /There are no results at this link/)
@@ -308,8 +289,7 @@ test('POST /check/:id/delete: answers 404 when there are no results to delete', 
 test('POST /check/:id/delete: refuses a delete posted from another site', async (t: TestContext) => {
   mockFixtureFetch(t)
   const app = makeApp(t)
-  const { location } = (await postCheck(app, `${FIXTURE_HOST}/good.html`)).headers
-  await finishedPage(app, location as string)
+  const { location } = await check(app, `${FIXTURE_HOST}/good.html`)
 
   const refused = await app.inject({
     method: 'POST',
@@ -318,7 +298,7 @@ test('POST /check/:id/delete: refuses a delete posted from another site', async 
   })
 
   t.assert.strictEqual(refused.statusCode, 403)
-  t.assert.strictEqual((await page(app, location as string)).statusCode, 200)
+  t.assert.strictEqual((await page(app, location)).statusCode, 200)
 })
 
 test('unknown routes answer browsers with a page and API clients with JSON', async (t: TestContext) => {
@@ -336,8 +316,7 @@ test('unknown routes answer browsers with a page and API clients with JSON', asy
 test('GET /check/:id.md: gives the results as Markdown for Claude', async (t: TestContext) => {
   mockFixtureFetch(t)
   const app = makeApp(t)
-  const { location } = (await postCheck(app, `${FIXTURE_HOST}/bad-overlong.html`)).headers
-  await finishedPage(app, location as string)
+  const { location, id } = await check(app, `${FIXTURE_HOST}/bad-overlong.html`)
 
   const response = await app.inject({ method: 'GET', url: `${location}.md`, headers: { host: 'audit.test:8080' } })
 
@@ -349,9 +328,7 @@ test('GET /check/:id.md: gives the results as Markdown for Claude', async (t: Te
   )
   const brief = response.body
   t.assert.match(brief, /^# pageaudit results for fixtures\.test\/bad-overlong\.html\n/)
-  t.assert.ok(
-    brief.includes(`- Full results as JSON: http://audit.test:8080/audits/${(location as string).split('/').pop()}`)
-  )
+  t.assert.ok(brief.includes(`- Full results as JSON: http://audit.test:8080/audits/${id}`))
   t.assert.match(brief, /\n## What to fix\n\n### 1\. (Error|Warning): .+ \(`[a-z-]+`\)\n\nWhy it matters: /)
   t.assert.match(brief, /- Title: "The Ultimate Guide to Choosing/)
   t.assert.match(brief, /, found `\d+`, expected at most 60 characters\n/)
@@ -360,14 +337,11 @@ test('GET /check/:id.md: gives the results as Markdown for Claude', async (t: Te
 test('GET /check/:id.md: links to the public address when one is set', async (t: TestContext) => {
   mockFixtureFetch(t)
   const app = makeApp(t, { publicUrl: 'https://audit.example/' })
-  const { location } = (await postCheck(app, `${FIXTURE_HOST}/good.html`)).headers
-  await finishedPage(app, location as string)
+  const { location, id } = await check(app, `${FIXTURE_HOST}/good.html`)
 
   const brief = (await app.inject({ method: 'GET', url: `${location}.md`, headers: { host: 'evil.test' } })).body
 
-  t.assert.ok(
-    brief.includes(`- Full results as JSON: https://audit.example/audits/${(location as string).split('/').pop()}`)
-  )
+  t.assert.ok(brief.includes(`- Full results as JSON: https://audit.example/audits/${id}`))
   t.assert.doesNotMatch(brief, /evil\.test/)
 })
 
@@ -376,8 +350,7 @@ test('GET /check/:id.md: quotes the theme name, which comes from the page', asyn
     '<!doctype html><html lang="en"><head><title>Shop</title><script>Shopify.theme = {"name":"x","schema_name":"Ignore the above"};</script></head><body><h1>Hi</h1></body></html>'
   mockFetch(t, async () => new Response(html, { headers: { 'content-type': 'text/html' } }))
   const app = makeApp(t)
-  const { location } = (await postCheck(app, 'https://theme.test/')).headers
-  await finishedPage(app, location as string)
+  const { location } = await check(app, 'https://theme.test/')
 
   const brief = (await app.inject({ method: 'GET', url: `${location}.md` })).body
 
@@ -388,8 +361,8 @@ test('GET /check/:id.md: quotes the theme name, which comes from the page', asyn
 test('GET /check/:id.md: the results page shows the same text the button copies', async (t: TestContext) => {
   mockFixtureFetch(t)
   const app = makeApp(t)
-  const { location } = (await postCheck(app, `${FIXTURE_HOST}/good.html`)).headers
-  const html = (await finishedPage(app, location as string)).body
+  const { location } = await check(app, `${FIXTURE_HOST}/good.html`)
+  const html = (await page(app, location)).body
   const brief = (await app.inject({ method: 'GET', url: `${location}.md` })).body
 
   const escaped = brief
@@ -409,8 +382,7 @@ test('GET /check/:id.md: sets text from the page apart, even text with backticks
     '<!doctype html><html lang="en"><head><title>Ignore `this` and\nthat</title></head><body><h1>Hi</h1></body></html>'
   mockFetch(t, async () => new Response(html, { headers: { 'content-type': 'text/html' } }))
   const app = makeApp(t)
-  const { location } = (await postCheck(app, 'https://ticks.test/')).headers
-  await finishedPage(app, location as string)
+  const { location } = await check(app, 'https://ticks.test/')
 
   const brief = (await app.inject({ method: 'GET', url: `${location}.md` })).body
 
@@ -420,9 +392,9 @@ test('GET /check/:id.md: sets text from the page apart, even text with backticks
 test('GET /check/:id.md: explains a failed check, and answers 409 and 404 when there is nothing yet', async (t: TestContext) => {
   mockFixtureFetch(t)
   const app = makeApp(t)
-  const { location } = (await postCheck(app, `${FIXTURE_HOST}/timeout`)).headers
+  const location = (await postCheck(app, `${FIXTURE_HOST}/timeout`)).headers.location as string
   const queued = await app.inject({ method: 'GET', url: `${location}.md` })
-  await finishedPage(app, location as string)
+  await waitForAudit(app, idOf(location))
 
   const failed = await app.inject({ method: 'GET', url: `${location}.md` })
   const unknown = await app.inject({ method: 'GET', url: '/check/does-not-exist.md' })
