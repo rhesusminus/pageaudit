@@ -1,10 +1,10 @@
-import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough, Writable } from 'node:stream'
+import { test } from 'node:test'
 import { stripVTControlCharacters } from 'node:util'
 import {
   answersToArgs,
@@ -15,10 +15,10 @@ import {
   checkPageUrls,
   checkReportPath,
   checkSitemapUrl,
-  shellQuote,
   checkUrlFile,
   commandLines,
   reportStem,
+  shellQuote,
   wantsWizard
 } from '../src/wizard.js'
 
@@ -33,7 +33,7 @@ const DOWN = '\u001B[B'
 const SPACE = ' '
 // The last question, whether to run the audit now: Enter keeps the preselected Yes, the right arrow moves to No.
 const RUN = ENTER
-const LATER = '\u001B[C' + ENTER
+const LATER = `\u001B[C${ENTER}`
 const TAB = '\t'
 
 // The time the tests' setup starts, so the suggested report names are known: a.test-2026-10-26-1430.html.
@@ -524,7 +524,7 @@ test('wizard: asks before replacing a report file, and for another path on no', 
     '--out',
     join(dir, 'new.json')
   ])
-  assert.deepEqual(await ask(...json, '\u001B[D' + ENTER, RUN), ['https://a.test/', '--out', old])
+  assert.deepEqual(await ask(...json, `\u001B[D${ENTER}`, RUN), ['https://a.test/', '--out', old])
 })
 
 test('wizard: asks again for a report path that cannot be used', async (t) => {

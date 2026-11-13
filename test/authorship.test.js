@@ -1,8 +1,8 @@
-import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parse } from '../src/parse.js'
+import { test } from 'node:test'
 import { pageAuthorship } from '../src/checks/page/authorship.js'
 import { lastmodByPage } from '../src/input/sitemap.js'
+import { parse } from '../src/parse.js'
 
 const ldJson = (...values) =>
   values.map((value) => `<script type="application/ld+json">${JSON.stringify(value)}</script>`).join('')
@@ -96,7 +96,7 @@ test('jsonLd: nodes, names, sameAs and text are capped, invalid blocks and untyp
     sameAs: Array.from({ length: 7 }, (_, i) => `https://x.test/${i}`)
   }
   const $ = page(
-    '<script type="application/ld+json">{ broken</script>' + ldJson({ name: 'untyped' }, long, { '@graph': many })
+    `<script type="application/ld+json">{ broken</script>${ldJson({ name: 'untyped' }, long, { '@graph': many })}`
   )
   const summary = jsonLdSummary($)
   assert.equal(summary.length, 10)
@@ -130,7 +130,7 @@ test('jsonLd: the dates and author of an article after the node cap are still fo
 })
 
 test('jsonLd: a list inside a list is not text, however deep it goes', () => {
-  const deep = '['.repeat(20000) + '"x"' + ']'.repeat(20000)
+  const deep = `${'['.repeat(20000)}"x"${']'.repeat(20000)}`
   const $ = page(`<script type="application/ld+json">{"@type":"Article","headline":${deep},"name":"Name"}</script>`)
   assert.equal(jsonLdSummary($)[0].name, 'Name')
   assert.equal(

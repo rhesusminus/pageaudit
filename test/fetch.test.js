@@ -1,6 +1,6 @@
-import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
+import { test } from 'node:test'
 import { fetchPage, request, USER_AGENT } from '../src/fetch.js'
 import { mockFetch } from './helpers/mock-fetch.js'
 
@@ -263,7 +263,7 @@ test('fetchPage: beforeHop is awaited before every request, redirect hops includ
 })
 
 test('request: waiting in beforeHop does not count toward the timeout', async (t) => {
-  mockFetch(t, async (input, init) => {
+  mockFetch(t, async (_input, init) => {
     if (init.signal.aborted) throw init.signal.reason
     return html()()
   })

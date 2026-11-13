@@ -10,42 +10,49 @@
     "node": ">=24"
   },
   "scripts": {
-    "test": "node --test test/*.test.js",
+    "test": "node --test test/*.test.{js,ts}",
     "prepare": "husky",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "lint": "eslint . && npm run format:check"
+    "format": "biome format --write .",
+    "lint": "biome check .",
+    "start": "node src/api/server.ts",
+    "dev": "node --watch src/api/server.ts",
+    "typecheck": "tsc",
+    "lint:fix": "biome check --write ."
   },
   "lint-staged": {
-    "*.js": [
-      "eslint --fix",
-      "prettier --write"
-    ],
-    "*.{json,md,yml}": "prettier --write"
+    "*": "biome check --write --no-errors-on-unmatched"
   },
   "dependencies": {
     "@clack/core": "1.5.1",
     "@clack/prompts": "1.8.1",
+    "@fastify/formbody": "^9.0.1",
+    "@fastify/static": "^10.1.10",
+    "@fastify/type-provider-typebox": "^6.3.0",
     "chalk": "^6.0.0",
     "cheerio": "^1.2.0",
     "chrome-launcher": "^1.2.2",
     "cli-table3": "^0.6.5",
     "entities": "^7.0.1",
+    "fastify": "^5.12.7",
+    "fastify-sqlite-typed": "^5.0.2",
+    "ipaddr.js": "^2.5.0",
     "lighthouse": "^13.5.0",
     "ora": "^9.4.1",
     "robots-parser": "^3.0.1",
-    "string-width": "^8.3.0"
+    "string-width": "^8.3.0",
+    "undici": "^7.30.1"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
+    "@biomejs/biome": "2.6.3",
+    "@tsconfig/node24": "^24.0.5",
+    "@types/node": "^26.6.5",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
-    "eslint": "^10.12.0",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-unicorn": "^77.0.0",
-    "globals": "^17.13.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
-    "prettier": "3.9.9"
+    "typescript": "^7.0.2"
+  },
+  "allowScripts": {
+    "sqlite3@5.1.7": true
   }
 }

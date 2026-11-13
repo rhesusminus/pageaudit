@@ -1,8 +1,8 @@
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { issueId } from './issue-id.js'
-import { SOURCES } from './sources.js'
 import { describe, itemsOf, savings } from './lighthouse-detail.js'
+import { SOURCES } from './sources.js'
 
 export const CATEGORIES = ['performance', 'accessibility', 'best-practices', 'seo']
 

@@ -1,8 +1,8 @@
-import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parse } from '../src/parse.js'
-import { checkSnippetControls } from '../src/checks/page/snippets.js'
+import { test } from 'node:test'
 import { extractFacts } from '../src/checks/page/index.js'
+import { checkSnippetControls } from '../src/checks/page/snippets.js'
+import { parse } from '../src/parse.js'
 
 const meta = (name, content) => `<head><meta name="${name}" content="${content}"></head><body><p>x</p></body>`
 const check = (html, header = null) =>

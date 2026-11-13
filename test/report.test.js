@@ -1,5 +1,5 @@
-import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { test } from 'node:test'
 import { adviceFor } from '../src/advice.js'
 import { buildReport } from '../src/report.js'
 import { auditLine, lhBlock, pages, site } from './helpers/report-pages.js'

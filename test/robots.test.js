@@ -1,6 +1,7 @@
-import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { test } from 'node:test'
 import robotsParser from 'robots-parser'
+import { checkRobotsHeader, googleRules, mergeRobotsIssues } from '../src/checks/page/robots-header.js'
 import { aiCrawlerAccess, checkRobotsTxt, contentSignal } from '../src/checks/site/robots.js'
 import {
   checkSitemapDeclared,
@@ -8,13 +9,12 @@ import {
   checkSitemapFiles,
   checkSitemapHosts
 } from '../src/checks/site/sitemap.js'
-import { checkRobotsHeader, googleRules, mergeRobotsIssues } from '../src/checks/page/robots-header.js'
-import { fetchPage } from '../src/fetch.js'
-import { auditPage } from '../src/runner.js'
-import { loadRobots } from '../src/robots.js'
-import { SOURCES } from '../src/sources.js'
 import { buildDigest } from '../src/digest.js'
+import { fetchPage } from '../src/fetch.js'
 import { buildReport } from '../src/report.js'
+import { loadRobots } from '../src/robots.js'
+import { auditPage } from '../src/runner.js'
+import { SOURCES } from '../src/sources.js'
 import { mockFetch } from './helpers/mock-fetch.js'
 
 const types = (issues) => issues.map((i) => i.type)
@@ -168,7 +168,10 @@ test('robots.txt check: unreachable and failed reads are info, a missing file gi
   const issues = await checkRobotsTxt(
     [page('https://a.test/1'), page('https://a.test/2'), page('https://b.test/'), page('https://c.test/')],
     {
-      load: async (origin) => (asked.push(origin), files[origin])
+      load: async (origin) => {
+        asked.push(origin)
+        return files[origin]
+      }
     }
   )
   assert.deepEqual(asked, ['https://a.test', 'https://b.test', 'https://c.test'])
@@ -438,7 +441,7 @@ test('robots.txt check: origins are read at the same time and the issues keep th
   const pending = checkRobotsTxt([page('https://a.test/x'), page('https://b.test/y')], { load: gate })
   await new Promise((resolve) => setImmediate(resolve))
   assert.deepEqual(started, ['https://a.test', 'https://b.test'])
-  release.reverse().forEach((fn) => fn())
+  for (const fn of release.reverse()) fn()
   assert.deepEqual(
     (await pending).map((i) => i.urls[0]),
     ['https://a.test/x', 'https://b.test/y']
@@ -460,7 +463,7 @@ test('loadRobots: more than five redirects count as no file, a body that cannot 
 test('noindex from a long header and the meta tag keep both sources in the context', () => {
   const header = `X-Robots-Tag: googlebot: noindex, ${'max-snippet: 20, '.repeat(8)}notranslate`
   const merged = mergeRobotsIssues([
-    { type: 'noindex', context: header.slice(0, 117) + '...' },
+    { type: 'noindex', context: `${header.slice(0, 117)}...` },
     { type: 'other', context: 'x' },
     { type: 'noindex', context: '<meta name="robots" content="noindex">' }
   ])

@@ -1,8 +1,8 @@
-import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { test } from 'node:test'
+import { checkHtmlError } from '../src/checks/page/index.js'
 import { hostThrottle } from '../src/concurrency.js'
 import { FetchError } from '../src/fetch.js'
-import { checkHtmlError } from '../src/checks/page/index.js'
 import { auditPage, runAudit } from '../src/runner.js'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
 

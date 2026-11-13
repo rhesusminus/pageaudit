@@ -1,0 +1,92 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.6.3/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/coverage",
+      "!**/package-lock.json",
+      "!**/docs",
+      "!**/test/fixtures",
+      "!**/report.html",
+      "!**/report.json"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 120
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "complexity": {
+        "noExcessiveLinesPerFunction": {
+          "level": "error",
+          "options": { "maxLines": 40, "skipBlankLines": true }
+        }
+      },
+      "style": {
+        "useFilenamingConvention": {
+          "level": "error",
+          "options": { "filenameCases": ["kebab-case"] }
+        }
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "trailingCommas": "none",
+      "semicolons": "asNeeded",
+      "bracketSpacing": true
+    },
+    "globals": []
+  },
+  "yaml": {
+    "formatter": { "enabled": true, "quoteStyle": "single" }
+  },
+  "markdown": {
+    "formatter": { "enabled": true }
+  },
+  "overrides": [
+    {
+      "includes": ["src/report.js", "src/severity.js", "src/html/**/*.js", "src/web/**/*.js"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "chalk": "The JSON report and the HTML report stay free of terminal presentation, which lives in src/terminal.js.",
+                  "cli-table3": "The JSON report and the HTML report stay free of terminal presentation, which lives in src/terminal.js.",
+                  "wrap-ansi": "The JSON report and the HTML report stay free of terminal presentation, which lives in src/terminal.js."
+                },
+                "patterns": [
+                  {
+                    "group": ["**/terminal.js"],
+                    "message": "The JSON report and the HTML report stay free of terminal presentation, which lives in src/terminal.js."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "assist": {
+    "enabled": true,
+    "actions": { "source": { "organizeImports": "on" } }
+  }
+}

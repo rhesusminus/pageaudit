@@ -1,7 +1,7 @@
-import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { lighthouseIssues } from '../src/lighthouse-issues.js'
+import { test } from 'node:test'
 import { ADVICE } from '../src/advice.js'
+import { lighthouseIssues } from '../src/lighthouse-issues.js'
 
 const summary = (metrics = {}, scores = {}, extra = {}) => ({
   scores: { performance: 100, accessibility: 100, 'best-practices': 100, seo: 100, ...scores },

@@ -1,5 +1,5 @@
-import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { test } from 'node:test'
 import { buildCoverage, orphansSkipped } from '../src/coverage.js'
 
 const options = (extra = {}) => ({ sitemaps: [], lighthousePages: [], ...extra })
