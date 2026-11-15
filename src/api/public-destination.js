@@ -61,18 +61,30 @@ function publicAddress(address) {
   return parsed.range() === 'unicast' && (parsed.kind() === 'ipv4' || parsed.match(ipaddr.parse('2000::'), 3))
 }
 
+// localhost and its subdomains are this machine by definition, whatever DNS says.
+export const isLocalhostName = (hostname) => /^(localhost|.*\.localhost)\.?$/i.test(hostname)
+
+const resolve = async (hostname) =>
+  isIP(hostname) ? [{ address: hostname, family: isIP(hostname) }] : await lookupAll(hostname)
+
 async function publicAddresses(hostname) {
-  const addresses = isIP(hostname) ? [{ address: hostname, family: isIP(hostname) }] : await lookupAll(hostname)
+  const addresses = await resolve(hostname)
   // Reject mixed public/private answers rather than relying on which address the OS chooses.
   if (addresses.length === 0 || addresses.some(({ address }) => !publicAddress(address))) throw blocked()
   return addresses
 }
 
-export async function validateDestination(value) {
+// With `allowPrivate`, for a server on someone's own machine, any address passes, such as a development site on
+// localhost. The name is still looked up, so an address no site answers at is refused here rather than queued.
+export async function validateDestination(value, { allowPrivate = false } = {}) {
   const url = new URL(value)
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw unsupported()
   const hostname = url.hostname.replace(/^\[|\]$/g, '')
-  if (/^(localhost|.*\.localhost)\.?$/i.test(hostname)) throw blocked()
+  if (allowPrivate) {
+    await resolve(hostname)
+    return
+  }
+  if (isLocalhostName(hostname)) throw blocked()
   await publicAddresses(hostname)
 }
 

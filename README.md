@@ -405,6 +405,8 @@ A background worker runs queued audits one at a time. An audit's `status` goes f
 
 `POST /audits` answers `400` for a URL it cannot audit, including a private network address or a host that does not resolve, and `503` when DNS fails for a reason that may pass on retry. Every error answers `{ "error": "..." }`.
 
+**Sites on your own machine.** Set `ALLOW_PRIVATE_DESTINATIONS=1` to audit private addresses too, such as a development site on `localhost:3000`, `127.0.0.1` or another machine on your network, the way the CLI can. It is off by default because a server others can reach would let them use it to reach your network. Only set it on a server you run for yourself, which `npm start` is: it listens on `localhost`. The server logs a warning at startup when it is set.
+
 The same server has web pages for people, which check one page at a time through the same queue:
 
 | Page                     | Does                                                                                                       |
@@ -505,7 +507,7 @@ src/
   report.js             buildReport(): the JSON report (with SCHEMA_VERSION)
   terminal.js           formatReport(): the report as tables for the terminal
   api/                  the HTTP server (npm start)
-    server.ts           starts the app on PORT
+    server.ts           starts the app on PORT, with PUBLIC_URL and ALLOW_PRIVATE_DESTINATIONS
     app.ts              build(): Fastify with the database, the worker, the API routes and the web pages
     routes.ts           POST, GET and DELETE /audits
     queue-audit.ts      queueCheckedAudit(): checks an address and queues it, for the API and the web form alike

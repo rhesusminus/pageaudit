@@ -1,7 +1,7 @@
 import dns from 'node:dns/promises'
 import type { TestContext } from 'node:test'
 import { test } from 'node:test'
-import { type App, makeApp, resolvePublicly, waitForAudit } from './helpers/app.ts'
+import { type App, makeApp, resolvePublicly, serveLocally, waitForAudit } from './helpers/app.ts'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
 import { mockFetch } from './helpers/mock-fetch.js'
 
@@ -128,6 +128,16 @@ test('POST /audits: rejects hostnames resolving to private addresses', async (t:
   const response = await postAudit(makeApp(t), 'https://internal.test')
   t.assert.strictEqual(response.statusCode, 400)
   t.assert.strictEqual(fetched.mock.callCount(), 0)
+})
+
+test('POST /audits: audits a site on this machine when private destinations are allowed', async (t: TestContext) => {
+  const url = `http://${await serveLocally(t, '<!doctype html><title>Local development site</title>')}/`
+
+  t.assert.strictEqual((await postAudit(makeApp(t), url)).statusCode, 400)
+
+  const audit = await runAudit(makeApp(t, { allowPrivateDestinations: true }), url)
+  t.assert.strictEqual(audit.status, 'completed')
+  t.assert.strictEqual(audit.result.facts.title, 'Local development site')
 })
 
 test('GET /audits/:id: fails an audit whose redirect chain leads to a private destination', async (t: TestContext) => {

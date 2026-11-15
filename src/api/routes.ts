@@ -46,9 +46,14 @@ const deleteAuditSchema = {
 type RoutesOptions = {
   // Called after an audit is queued, so the worker can start it without waiting for its next poll.
   onAuditQueued: () => void
+  // Lets audits reach private network addresses, for a server on someone's own machine.
+  allowPrivateDestinations?: boolean
 }
 
-export const routes: FastifyPluginAsyncTypebox<RoutesOptions> = async (fastify, { onAuditQueued }) => {
+export const routes: FastifyPluginAsyncTypebox<RoutesOptions> = async (
+  fastify,
+  { onAuditQueued, allowPrivateDestinations = false }
+) => {
   fastify.get(
     '/audits/:id',
     {
@@ -79,7 +84,7 @@ export const routes: FastifyPluginAsyncTypebox<RoutesOptions> = async (fastify, 
     let id: string
 
     try {
-      id = await queueCheckedAudit(fastify.db, request.body.url)
+      id = await queueCheckedAudit(fastify.db, request.body.url, { allowPrivate: allowPrivateDestinations })
     } catch (error) {
       if (!(error instanceof DestinationError)) throw error
       return reply.code(error.statusCode).send({ error: error.message })

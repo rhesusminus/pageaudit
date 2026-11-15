@@ -13,9 +13,15 @@ type AppOptions = {
   dbFilename?: string
   // The address people reach the server at, such as https://audit.example.com, for links in the web pages.
   publicUrl?: string
+  // Lets audits reach private network addresses, such as a development site on localhost. Only for a server on
+  // someone's own machine: on a shared server it would let anyone reach the server's own network.
+  allowPrivateDestinations?: boolean
 }
 
-export function build(opts: FastifyServerOptions = {}, { dbFilename = './database.db', publicUrl }: AppOptions = {}) {
+export function build(
+  opts: FastifyServerOptions = {},
+  { dbFilename = './database.db', publicUrl, allowPrivateDestinations = false }: AppOptions = {}
+) {
   let worker: ReturnType<typeof startAuditWorker> | undefined
   const app = fastify(opts)
   // Parsed here, so an address that is not a URL stops the server at startup rather than breaking every link.
@@ -24,8 +30,8 @@ export function build(opts: FastifyServerOptions = {}, { dbFilename = './databas
   const onAuditQueued = () => worker?.wake()
 
   app.register(fpSqlitePlugin, { dbFilename })
-  app.register(routes, { onAuditQueued })
-  app.register(webPages, { onAuditQueued, publicOrigin })
+  app.register(routes, { onAuditQueued, allowPrivateDestinations })
+  app.register(webPages, { onAuditQueued, allowPrivateDestinations, publicOrigin })
 
   // Every error answers { error }, the shape the route schemas declare. Client errors (validation, malformed JSON)
   // keep Fastify's message so the caller can fix the request. Server errors are logged and their message is hidden.
@@ -68,7 +74,7 @@ export function build(opts: FastifyServerOptions = {}, { dbFilename = './databas
 
   app.addHook('onReady', async () => {
     await recoverInterruptedAudits(app.db)
-    worker = startAuditWorker(app, { claimNextAudit, completeAudit, failAudit })
+    worker = startAuditWorker(app, { claimNextAudit, completeAudit, failAudit }, { allowPrivateDestinations })
   })
 
   // Finish using SQLite before the database plugin's onClose hook closes it.

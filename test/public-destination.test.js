@@ -64,6 +64,36 @@ test('public destinations: allows public IPv4 and IPv6 and rejects credentials a
   await assert.rejects(validateDestination('http://user:pass@8.8.8.8'), { reason: 'invalid', statusCode: 400 })
 })
 
+test('private destinations allowed: passes private addresses and names that resolve to them', async (t) => {
+  t.mock.method(dns, 'lookup', async () => answers('8.8.8.8', '192.168.1.1'))
+  for (const url of [
+    'http://localhost:3000/',
+    'http://a.localhost',
+    'http://127.0.0.1',
+    'http://10.0.0.1',
+    'http://[::1]',
+    'https://mixed.test'
+  ]) {
+    await validateDestination(url, { allowPrivate: true })
+  }
+})
+
+test('private destinations allowed: still refuses other schemes, credentials and names that do not resolve', async (t) => {
+  const allowPrivate = { allowPrivate: true }
+  await assert.rejects(validateDestination('ftp://127.0.0.1', allowPrivate), { reason: 'invalid' })
+  await assert.rejects(validateDestination('http://user:pass@127.0.0.1', allowPrivate), { reason: 'invalid' })
+  const dnsMock = t.mock.method(dns, 'lookup')
+  for (const [code, statusCode, reason] of [
+    ['ENOTFOUND', 400, 'unknown-host'],
+    ['EAI_AGAIN', 503, 'lookup-failed']
+  ]) {
+    dnsMock.mock.mockImplementation(async () => {
+      throw Object.assign(new Error(`getaddrinfo ${code} dev.test`), { code })
+    })
+    await assert.rejects(validateDestination('http://dev.test', allowPrivate), { statusCode, reason })
+  }
+})
+
 test('public destinations: DNS fails closed, including mixed answers and empty results', async (t) => {
   const dnsMock = t.mock.method(dns, 'lookup')
   for (const result of [answers('10.0.0.1'), answers('8.8.8.8', 'fd00::1'), answers('::ffff:192.168.1.1'), []]) {
