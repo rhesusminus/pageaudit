@@ -1,5 +1,5 @@
-import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { test } from 'node:test'
 import { compareSeverity, countSeverities, worseSeverity, worstFirst } from '../src/severity.js'
 
 const issues = (...severities) => severities.map((severity) => ({ severity }))

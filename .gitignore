@@ -2,3 +2,6 @@ node_modules
 # generated reports
 report.html
 report.json
+
+# local SQLite database
+database.db

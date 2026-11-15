@@ -1,8 +1,8 @@
-import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { parse } from '../src/parse.js'
+import { test } from 'node:test'
 import { originPlatform, pagePlatform } from '../src/checks/page/platform.js'
+import { parse } from '../src/parse.js'
 
 const platform = (head, html = '') =>
   pagePlatform(parse(`<html${html}><head>${head}</head><body><p>x</p></body></html>`))
@@ -34,7 +34,7 @@ test('platform: a Shopify.theme that is not JSON, or has no schema_name, gives n
 })
 
 test('platform: the theme is read from a Shopify.theme over several lines or with a brace in a quoted name', () => {
-  const theme = (json) => platform(`<script>${'Shopify.theme = ' + json + ';'}</script>`)?.theme
+  const theme = (json) => platform(`<script>${`Shopify.theme = ${json};`}</script>`)?.theme
   assert.equal(theme('{\n  "name": "Copy of Dawn",\n  "schema_name": "Dawn"\n}'), 'Dawn')
   assert.equal(theme('{"name":"Sale }; 2026","schema_name":"Dawn"}'), 'Dawn')
 })

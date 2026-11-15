@@ -1,12 +1,12 @@
-import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readdir, readFile } from 'node:fs/promises'
+import { test } from 'node:test'
 import { ADVICE } from '../src/advice.js'
 import { escapeHtml, markup, raw } from '../src/html/escape.js'
-import { metricBand, siteWideIssues, verdict } from '../src/html/model.js'
-import { averageScores, groupIssues, pageHealth, pagesWithSiteIssues } from '../src/overview.js'
 import { formatPageDate } from '../src/html/format.js'
+import { metricBand, siteWideIssues, verdict } from '../src/html/model.js'
 import { renderHtml } from '../src/html/render.js'
+import { averageScores, groupIssues, pageHealth, pagesWithSiteIssues } from '../src/overview.js'
 import { buildReport } from '../src/report.js'
 
 const issue = (type, severity, extra = {}) => ({

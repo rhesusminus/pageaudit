@@ -1,5 +1,5 @@
-import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { test } from 'node:test'
 import { stripVTControlCharacters } from 'node:util'
 import chalk from 'chalk'
 import { buildReport } from '../src/report.js'
@@ -24,7 +24,7 @@ function colored(render) {
   chalk.level = 1
   try {
     const output = render()
-    // eslint-disable-next-line no-control-regex
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: matches ANSI escapes
     assert.match(output, /\x1b\[/, 'expected colored output')
     return output
   } finally {
@@ -50,7 +50,7 @@ const renderColored = () => colored(() => formatIssueTable(images))
 
 test('formatIssueTable: colored cells are never split or leak escape fragments', () => {
   const plain = stripVTControlCharacters(renderColored())
-  // eslint-disable-next-line no-control-regex
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: matches ANSI escapes
   assert.doesNotMatch(plain, /\x1b|\[\d+m/, 'stray escape fragment')
   for (const word of ['error', 'warning', 'info', 'accessibility', 'performance']) {
     assert.match(plain, new RegExp(`│ ${word} +│`), `${word} was split`)

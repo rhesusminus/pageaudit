@@ -50,13 +50,9 @@ function checkFormLabels($) {
 function referencedIds($) {
   const ids = new Set()
   for (const attr of ID_REFERENCES) {
-    $(`[${attr}]`).each((_, el) =>
-      $(el)
-        .attr(attr)
-        .split(/\s+/)
-        .filter(Boolean)
-        .forEach((id) => ids.add(id))
-    )
+    $(`[${attr}]`).each((_, el) => {
+      for (const id of $(el).attr(attr).split(/\s+/).filter(Boolean)) ids.add(id)
+    })
   }
   return ids
 }

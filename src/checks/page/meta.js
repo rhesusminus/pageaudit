@@ -4,8 +4,8 @@ import { evidence, selectorFor } from '../evidence.js'
 import { seoIssue } from '../snippet.js'
 
 // Heuristics: Google gives no numeric limits, truncation depends on pixel width.
-const TITLE_MAX = 60
-const DESCRIPTION_MAX = 160
+export const TITLE_MAX = 60
+export const DESCRIPTION_MAX = 160
 const DESCRIPTION_MIN = 70
 
 export const ABSOLUTE_URL = /^[a-z][a-z0-9+.-]*:\/\//i

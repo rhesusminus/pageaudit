@@ -391,6 +391,35 @@ Judgment calls that are not straight from those pages:
 - **Hreflang checks:** codes are judged leniently, so only clear mistakes are flagged. Google's page asks for ISO 639-1 languages and ISO 3166-1 regions, but three-letter languages without a two-letter code (`fil`) and numeric regions (`es-419`) are valid language tags and are accepted. Flagged are a wrong separator (`fi_FI`), a three-letter form of a two-letter language (`fin`, `eng`), codes that are reserved or not a region (`UK`, `EU`, `UN`), and codes Node's `Intl` does not know, such as `xx` or `en-XX`. `duplicate-hreflang`, `hreflang-target-noindex` and `hreflang-target-canonicalised` are my own calls: Google does not mention them, but a duplicate leaves Google to pick one URL, and a noindex or canonicalised alternate cannot be shown as itself. `missing-x-default` is only an info because `x-default` is recommended, not required.
 - **Summaries, not full reads:** the pages were read through an AI summarizer, so exact wording should be checked against the linked page before quoting it.
 
+## HTTP API
+
+`npm start` serves a small Fastify API on port 8080, or on `PORT` when it is set (`npm run dev` restarts on changes). Audits are stored in a SQLite file, `database.db`, in the working directory. Behind a proxy, set `PUBLIC_URL` to the address people reach the server at, such as `https://audit.example.com`, so the links in the web pages use it rather than the address the proxy forwards to.
+
+| Route                | Does                                                                                                       |
+| -------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `POST /audits`       | Queues an audit of the page in `{ "url": "..." }` and answers `202` with `{ id, status }` and a `Location` |
+| `GET /audits/:id`    | Returns an audit with its `status`, `error` and `result`, `404` if it is unknown                           |
+| `DELETE /audits/:id` | Soft-deletes an audit with `204`, `404` if it is unknown or already deleted                                |
+
+A background worker runs queued audits one at a time. An audit's `status` goes from `queued` to `running`, then to `completed` with the page facts in `result`, or to `failed` with the reason in `error`, for example `Could not fetch page`. Poll `GET /audits/:id` until it is one of the last two. An audit that was running when the server stopped is queued again at startup, and fails after three interrupted attempts.
+
+`POST /audits` answers `400` for a URL it cannot audit, including a private network address or a host that does not resolve, and `503` when DNS fails for a reason that may pass on retry. Every error answers `{ "error": "..." }`.
+
+The same server has web pages for people, which check one page at a time through the same queue:
+
+| Page                     | Does                                                                                                       |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `GET /`                  | The check form. An address without a scheme is checked over `https://`                                     |
+| `POST /check`            | Queues the address and redirects to its page, or shows the form again with what is wrong (`400`, `503`)    |
+| `GET /check/:id`         | Progress while the check runs, then the results: what to fix, the search result preview and the page facts |
+| `GET /check/:id.md`      | The results as Markdown for Claude, `409` while the check runs                                             |
+| `GET /check/:id/delete`  | Asks before deleting, for browsers that run no script                                                      |
+| `POST /check/:id/delete` | Deletes the results and redirects to `/?deleted`, `404` when there are none                                |
+
+**Results in Claude.** The results page has a Copy for Claude button that puts the results on the clipboard as Markdown, to paste into Claude Desktop or Claude Code: the verdict, each finding with why it matters, how to fix it and up to 10 places it occurs, the page facts and the address of the full JSON. The same text is under "What gets copied" on the page and at `/check/:id.md`, so in Claude Code you can say "read http://localhost:8080/check/<id>.md and fix these on my site". Text from the checked page is set in quotes or code spans, apart from what pageaudit wrote. Browsers only allow the clipboard on `https:` and `localhost`; elsewhere the button says Copy failed and selects the text instead.
+
+The pages work without JavaScript: a check in progress reloads itself every few seconds and Delete results opens a page that asks first. `src/web/public/checker.js` polls `GET /audits/:id` instead, checks the address field as it is typed, copies the results for Claude (the button is hidden without it) and asks before deleting in a dialog. Pages answer with a Content-Security-Policy that allows only their own stylesheet and script, and the forms that change state take a post only from this site: `Sec-Fetch-Site: same-origin`, or in a browser too old to send it, an `Origin` of this server. An unknown path answers a browser with a page and every other client with `{ "error": "Not found" }`.
+
 ## Architecture
 
 ```
@@ -475,6 +504,28 @@ src/
   sources.js            documentation URLs referenced by each issue's `source` field
   report.js             buildReport(): the JSON report (with SCHEMA_VERSION)
   terminal.js           formatReport(): the report as tables for the terminal
+  api/                  the HTTP server (npm start)
+    server.ts           starts the app on PORT
+    app.ts              build(): Fastify with the database, the worker, the API routes and the web pages
+    routes.ts           POST, GET and DELETE /audits
+    queue-audit.ts      queueCheckedAudit(): checks an address and queues it, for the API and the web form alike
+    audit-errors.js     the error a failed audit stores, which the web pages word for their readers
+    public-destination.js  validateDestination() and fetchPublicPage(): only public network addresses are fetched
+    error-status.ts     errorStatus(): the status an error answers with, its own or 500
+    worker.ts           runs queued audits one at a time
+  db/
+    database.ts         the audits table: queue, claim, save, get and soft-delete
+  web/                  the web pages, rendered on the server
+    plugin.ts           the page routes, the Content-Security-Policy and the same-site check on posts
+    layout.js           the document every page shares
+    home.js             the check form
+    status.js           progress, failed, not found, refused and error pages
+    result.js           the results page: verdict, search result preview, findings, Copy for Claude, and asking before a delete
+    findings.js         the issues of a check grouped into what to fix and notes, and the verdict
+    result-facts.js     what the page holds, in words
+    brief.js            resultBrief(): the results as Markdown for Claude
+    format.js           addresses, counts and dates as the pages show them
+    public/             served under /assets: app.css (light and dark) and checker.js
 schema/
   report.schema.json    JSON Schema of the JSON report
   digest.schema.json    JSON Schema of the digest
@@ -484,6 +535,7 @@ test/
   runner.test.js        runner with a mocked fetchPage: concurrency, delay, failures
   site.test.js          site checks over runner results
   checks.test.js        unit tests for each page check
+  escaped-text.test.js  text in the title, description and preview tags escaped twice
   a11y.test.js          form labels, duplicate ids, the main landmark and link names
   parse.test.js         template removal and the DOM depth cap
   fetch.test.js         fetchPage: redirects, User-Agent, encoding sniffing, errors
@@ -509,14 +561,21 @@ test/
   main.test.js          main(): when the wizard runs and how its answer becomes the exit code
   wizard.test.js        the wizard's answer checks, the arguments and the shown command
   progress.test.js      the spinner guard and the Lighthouse progress bar
+  public-destination.test.js  which addresses the server refuses to fetch, and why
+  routes.test.ts        the /audits API through fastify.inject
+  worker.test.js        the queue worker: order, failures, wake-ups and shutdown
+  app.test.ts           audits interrupted by a restart
+  web.test.ts           the web pages: form errors, progress, results, escaping, deleting, cross-site posts and the brief for Claude
   fixtures/             HTML pages, sitemaps, robots.txt and urls.txt
   helpers/fixture-fetch.js   mocked fetch that serves the fixtures
   helpers/mock-fetch.js      replaces globalThis.fetch for one test
   helpers/report-pages.js    audited pages and site issues for the report and terminal tests
+  helpers/app.ts             the app for the API and web tests: its own database, every host resolving to a public address
 docs/seo-harness-plan.md     the original v1 plan
 docs/pageaudit-v2-plan.md    the v2 (multi-page) plan
 docs/pageaudit-v3-lighthouse-plan.md          the v3 (Lighthouse) plan
 docs/pageaudit-v4-page-data-html-report.md    the v4 (page data and HTML report) plan
+docs/backend-learning.md     the steps the HTTP API was built in
 ```
 
 Pipeline: inputs -> `resolveUrls` -> `runAudit` (`fetchPage` -> `checkResponse` -> `parse` -> `checkHtml` per page, and with `--content` `pageMarkdown` written as each page finishes) -> `checkSite`, `checkRobotsTxt`, `checkSitemapEntries` and, with `--check-links`, `checkLinkTargets` -> `checkLinks` -> `buildReport` -> table or JSON, and the `--out`, `--digest` (`buildDigest`) and `--html` (`renderHtml`) files.
@@ -566,7 +625,7 @@ The JSON report is meant to be handed to a human or an LLM for prioritizing fixe
 
 ## Testing
 
-Tests use the built-in `node:test` runner with no extra dependencies. `npm test` runs `node --test test/*.test.js`, so helpers in `test/helpers/` are not run as tests. Nothing touches the network. `npm run lint` runs ESLint and checks the Prettier formatting, and a husky pre-commit hook runs both on the staged files.
+Tests use the built-in `node:test` runner with no extra dependencies. `npm test` runs `node --test test/*.test.{js,ts}`, so helpers in `test/helpers/` are not run as tests. Nothing touches the network. `npm run typecheck` runs `tsc` over the TypeScript files. `npm run lint` runs Biome (lint rules and formatting), and a husky pre-commit hook runs it on the staged files.
 
 - Unit tests cover each rule firing, not firing and the length boundaries.
 - HTML fixtures cover the positive and negative cases: `good.html` has no issues, `duplicate.html` shares its title, description and h1 with `good.html`, the `bad-*.html` files (`overlong`, `missing`, `canonical`, `images`, `empty`, `markup`, `hreflang`) trigger the remaining rules, and `hreflang.html` and `hreflang-fi.html` are a language pair with a missing return link and a `noindex` alternate. `noindex.html`, `noindex-header.html` and `blocked.html` feed the indexing, robots.txt and sitemap checks, `ai-blocked.html` is kept from `OAI-SearchBot` only, `snippets.html` has a `noarchive` meta tag and is served with `X-Robots-Tag: googlebot: nosnippet`, `article.html` has a Yoast-style JSON-LD graph with `@id` references and is served with `Last-Modified`, `sitemap-quality.xml` lists them for the sitemap checks, and `rich.html` carries every kind of metadata for the signals tests. Several bad files are needed because some rules are mutually exclusive, for example a title cannot be both missing and too long.

@@ -47,7 +47,7 @@ function wrap(text, open, close = open) {
 }
 
 // Inline code in a run of backticks one longer than any inside it.
-function code(text) {
+export function code(text) {
   const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length))
   const fence = '`'.repeat(longest + 1)
   const pad = text.startsWith('`') || text.endsWith('`') ? ' ' : ''

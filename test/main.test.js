@@ -1,6 +1,6 @@
-import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
+import { test } from 'node:test'
 import { main } from '../src/main.js'
 
 const tty = { isTTY: true }

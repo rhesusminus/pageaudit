@@ -1,9 +1,9 @@
-import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { chmod, link, lstat, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import { Readable } from 'node:stream'
+import { test } from 'node:test'
 import pkg from '../package.json' with { type: 'json' }
 import { run } from '../src/cli.js'
 import { buildDigest } from '../src/digest.js'
@@ -406,7 +406,10 @@ test('cli: --lighthouse attaches a summary to pages that returned HTML', async (
   const summary = { scores: { seo: 90 }, metrics: {}, audits: [], warnings: [] }
   const urls = [fixtureUrl('good.html'), fixtureUrl('missing-page')]
   const seen = []
-  const lighthouse = async (list) => (seen.push(...list), [{ summary }])
+  const lighthouse = async (list) => {
+    seen.push(...list)
+    return [{ summary }]
+  }
   const { code, report } = await runJson(t, [...urls, '--lighthouse'], { lighthouse })
   assert.equal(code, 1)
   assert.deepEqual(seen, [fixtureUrl('good.html')])
@@ -441,7 +444,10 @@ const detailedSummary = {
   ],
   warnings: []
 }
-const lighthouseFor = (seen) => async (list) => (seen.push(...list), list.map(() => ({ summary: detailedSummary })))
+const lighthouseFor = (seen) => async (list) => {
+  seen.push(...list)
+  return list.map(() => ({ summary: detailedSummary }))
+}
 
 test('cli: --lighthouse-page runs only those pages, adds them to the audit, and the report keeps the detail', async (t) => {
   const seen = []
@@ -569,7 +575,10 @@ test('cli: --lighthouse-runs without any Lighthouse run says it has no effect', 
 
 test('cli: --lighthouse-runs reaches the runner, 1 without it, and must be a number from 1 to 9', async (t) => {
   let runs
-  const lighthouse = async (list, options) => ((runs = options.runs), list.map(() => ({ summary: detailedSummary })))
+  const lighthouse = async (list, options) => {
+    runs = options.runs
+    return list.map(() => ({ summary: detailedSummary }))
+  }
   await runJson(t, [fixtureUrl('good.html'), '--lighthouse', '--lighthouse-runs', '3'], { lighthouse })
   assert.equal(runs, 3)
   // The progress bar divides by the runs, so they are a number also when not given.
@@ -602,7 +611,10 @@ test('cli: a Lighthouse failure does not fail --fail-on warning', async (t) => {
 
 test('cli: Lighthouse audits the final URL once and the failure keeps the input URL', async (t) => {
   const seen = []
-  const lighthouse = async (list) => (seen.push(...list), list.map(() => ({ error: 'boom' })))
+  const lighthouse = async (list) => {
+    seen.push(...list)
+    return list.map(() => ({ error: 'boom' }))
+  }
   const urls = [fixtureUrl('redirect-once'), fixtureUrl('good.html')]
   const { report } = await runJson(t, [...urls, '--lighthouse'], { lighthouse })
   assert.deepEqual(seen, [fixtureUrl('good.html')])

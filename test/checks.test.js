@@ -1,17 +1,17 @@
+import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
-import assert from 'node:assert/strict'
-import { parse } from '../src/parse.js'
-import { checkImages } from '../src/checks/page/images.js'
-import { checkMeta } from '../src/checks/page/meta.js'
+import { mainArea } from '../src/checks/page/content.js'
 import { checkHeadings } from '../src/checks/page/headings.js'
 import { checkHreflang, validHreflang } from '../src/checks/page/hreflang.js'
 import { checkHygiene } from '../src/checks/page/hygiene.js'
+import { checkImages } from '../src/checks/page/images.js'
 import { checkIndexing } from '../src/checks/page/indexing.js'
+import { checkMeta } from '../src/checks/page/meta.js'
 import { checkSocial } from '../src/checks/page/social.js'
 import { checkStructuredData } from '../src/checks/page/structured-data.js'
-import { mainArea } from '../src/checks/page/content.js'
 import { truncate } from '../src/checks/snippet.js'
+import { parse } from '../src/parse.js'
 
 const types = (issues) => issues.map((i) => i.type)
 
@@ -547,8 +547,8 @@ test('structured data: relative URLs are flagged in strings, arrays and image ob
 test('structured data: values nested far deeper than real markup are cut off, not recursed into', () => {
   // Build JSON text directly: JSON.stringify can overflow the runner's stack before the checker runs.
   const depth = 5000
-  const arrays = '['.repeat(depth) + '"/logo.png"' + ']'.repeat(depth)
-  const objects = '{"url":'.repeat(depth) + '"/logo.png"' + '}'.repeat(depth)
+  const arrays = `${'['.repeat(depth)}"/logo.png"${']'.repeat(depth)}`
+  const objects = `${'{"url":'.repeat(depth)}"/logo.png"${'}'.repeat(depth)}`
   for (const image of [arrays, objects]) {
     const json = `{"@context":"https://schema.org","@type":"Thing","image":${image}}`
     assert.deepEqual(checkStructuredData(ld(json)), [])

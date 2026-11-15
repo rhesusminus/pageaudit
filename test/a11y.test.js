@@ -1,11 +1,11 @@
-import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { parse } from '../src/parse.js'
+import { test } from 'node:test'
 import { checkA11y } from '../src/checks/page/a11y.js'
-import { checkLinks } from '../src/checks/page/links.js'
 import { checkImages } from '../src/checks/page/images.js'
 import { checkHtml } from '../src/checks/page/index.js'
+import { checkLinks } from '../src/checks/page/links.js'
+import { parse } from '../src/parse.js'
 
 const types = (issues) => issues.map((i) => i.type)
 const a11y = (html) => types(checkA11y(parse(`<main>${html}</main>`)))
@@ -154,7 +154,7 @@ test('links: a hidden image does not hide a nameless link from both checkers', (
   const img = (attrs, alt) => `<img ${attrs} src="/a.png" alt="${alt}" width="1" height="1">`
   const hidden = `<a href="/">${img('aria-hidden="true"', 'Home')}</a>`
   assert.deepEqual(links(hidden), ['link-no-name'])
-  const wrapped = '<a href="/"><span hidden>' + img('', 'Home') + '</span></a>'
+  const wrapped = `<a href="/"><span hidden>${img('', 'Home')}</span></a>`
   assert.deepEqual(links(wrapped), ['link-no-name'])
   assert.deepEqual(links(`<a href="/">${img('', '')}</a>`), [])
 })

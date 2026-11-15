@@ -1,5 +1,5 @@
-import { countSeverities, worstFirst } from '../severity.js'
 import { adviceFor } from '../advice.js'
+import { countSeverities, worstFirst } from '../severity.js'
 import {
   auditRow,
   evidence,
