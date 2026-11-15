@@ -26,6 +26,11 @@ export class DestinationError extends Error {
 const blocked = () =>
   new DestinationError('Audit destinations must use public network addresses', { reason: 'private' })
 
+const unsupported = () =>
+  new DestinationError('Audit destinations must be http or https addresses without a user name or password', {
+    reason: 'invalid'
+  })
+
 // These codes mean the name has no addresses. Any other lookup failure (EAI_AGAIN, a timeout) may pass on retry.
 const NO_ADDRESSES = new Set(['ENOTFOUND', 'ENODATA'])
 
@@ -65,7 +70,7 @@ async function publicAddresses(hostname) {
 
 export async function validateDestination(value) {
   const url = new URL(value)
-  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw blocked()
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw unsupported()
   const hostname = url.hostname.replace(/^\[|\]$/g, '')
   if (/^(localhost|.*\.localhost)\.?$/i.test(hostname)) throw blocked()
   await publicAddresses(hostname)

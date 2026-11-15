@@ -60,8 +60,8 @@ test('public destinations: rejects private, encoded and special-use IP literals 
 test('public destinations: allows public IPv4 and IPv6 and rejects credentials and protocols', async () => {
   await validateDestination('https://8.8.8.8')
   await validateDestination('https://[2606:4700:4700::1111]')
-  await assert.rejects(validateDestination('ftp://8.8.8.8'), { reason: 'private', statusCode: 400 })
-  await assert.rejects(validateDestination('http://user:pass@8.8.8.8'), /public network/)
+  await assert.rejects(validateDestination('ftp://8.8.8.8'), { reason: 'invalid', statusCode: 400 })
+  await assert.rejects(validateDestination('http://user:pass@8.8.8.8'), { reason: 'invalid', statusCode: 400 })
 })
 
 test('public destinations: DNS fails closed, including mixed answers and empty results', async (t) => {
