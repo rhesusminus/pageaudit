@@ -15,11 +15,18 @@ export type AuditWorkerHelpers = {
 
 type WorkerOptions = {
   pollIntervalMs?: number
+  // Fetch private network addresses too, as the CLI does, for a server on someone's own machine.
+  allowPrivateDestinations?: boolean
   audit?: (url: string) => Promise<AuditPage>
 }
 
 async function runPublicAudit(url: string) {
   const [page] = await runAudit([url], { fetchPage: fetchPublicPage })
+  return page
+}
+
+async function runAnyAudit(url: string) {
+  const [page] = await runAudit([url])
   return page
 }
 
@@ -55,7 +62,11 @@ async function processNextAudit(
 export function startAuditWorker(
   app: FastifyInstance,
   helpers: AuditWorkerHelpers,
-  { pollIntervalMs = 1000, audit = runPublicAudit }: WorkerOptions = {}
+  {
+    pollIntervalMs = 1000,
+    allowPrivateDestinations = false,
+    audit = allowPrivateDestinations ? runAnyAudit : runPublicAudit
+  }: WorkerOptions = {}
 ) {
   let stopped = false
   // Set by wake() and checked before sleeping, so a wake that lands while a claim is in flight is not lost.

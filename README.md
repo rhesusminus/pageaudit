@@ -405,16 +405,18 @@ A background worker runs queued audits one at a time. An audit's `status` goes f
 
 `POST /audits` answers `400` for a URL it cannot audit, including a private network address or a host that does not resolve, and `503` when DNS fails for a reason that may pass on retry. Every error answers `{ "error": "..." }`.
 
+**Sites on your own machine.** Set `ALLOW_PRIVATE_DESTINATIONS=1` to audit private addresses too, such as a development site on `localhost:3000`, `127.0.0.1` or another machine on your network, the way the CLI can. It is off by default because a server others can reach would let them use it to reach your network. Only set it on a server you run for yourself, which `npm start` is: it listens on `localhost`. The server logs a warning at startup when it is set.
+
 The same server has web pages for people, which check one page at a time through the same queue:
 
-| Page                     | Does                                                                                                       |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `GET /`                  | The check form. An address without a scheme is checked over `https://`                                     |
-| `POST /check`            | Queues the address and redirects to its page, or shows the form again with what is wrong (`400`, `503`)    |
-| `GET /check/:id`         | Progress while the check runs, then the results: what to fix, the search result preview and the page facts |
-| `GET /check/:id.md`      | The results as Markdown for Claude, `409` while the check runs                                             |
-| `GET /check/:id/delete`  | Asks before deleting, for browsers that run no script                                                      |
-| `POST /check/:id/delete` | Deletes the results and redirects to `/?deleted`, `404` when there are none                                |
+| Page                     | Does                                                                                                        |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `GET /`                  | The check form. An address without a scheme is checked over `https://`, or `http://` for localhost or an IP |
+| `POST /check`            | Queues the address and redirects to its page, or shows the form again with what is wrong (`400`, `503`)     |
+| `GET /check/:id`         | Progress while the check runs, then the results: what to fix, the search result preview and the page facts  |
+| `GET /check/:id.md`      | The results as Markdown for Claude, `409` while the check runs                                              |
+| `GET /check/:id/delete`  | Asks before deleting, for browsers that run no script                                                       |
+| `POST /check/:id/delete` | Deletes the results and redirects to `/?deleted`, `404` when there are none                                 |
 
 **Results in Claude.** The results page has a Copy for Claude button that puts the results on the clipboard as Markdown, to paste into Claude Desktop or Claude Code: the verdict, each finding with why it matters, how to fix it and up to 10 places it occurs, the page facts and the address of the full JSON. The same text is under "What gets copied" on the page and at `/check/:id.md`, so in Claude Code you can say "read http://localhost:8080/check/<id>.md and fix these on my site". Text from the checked page is set in quotes or code spans, apart from what pageaudit wrote. Browsers only allow the clipboard on `https:` and `localhost`; elsewhere the button says Copy failed and selects the text instead.
 
@@ -505,7 +507,7 @@ src/
   report.js             buildReport(): the JSON report (with SCHEMA_VERSION)
   terminal.js           formatReport(): the report as tables for the terminal
   api/                  the HTTP server (npm start)
-    server.ts           starts the app on PORT
+    server.ts           starts the app on PORT, with PUBLIC_URL and ALLOW_PRIVATE_DESTINATIONS
     app.ts              build(): Fastify with the database, the worker, the API routes and the web pages
     routes.ts           POST, GET and DELETE /audits
     queue-audit.ts      queueCheckedAudit(): checks an address and queues it, for the API and the web form alike

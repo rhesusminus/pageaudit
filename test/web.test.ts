@@ -1,7 +1,8 @@
 import dns from 'node:dns/promises'
 import type { TestContext } from 'node:test'
 import { test } from 'node:test'
-import { type App, makeApp, resolvePublicly, waitForAudit } from './helpers/app.ts'
+import { withScheme } from '../src/web/format.js'
+import { type App, makeApp, resolvePublicly, serveLocally, waitForAudit } from './helpers/app.ts'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
 import { mockFetch } from './helpers/mock-fetch.js'
 
@@ -67,6 +68,36 @@ test('POST /check: queues an address typed without a scheme and redirects to its
   t.assert.match(location, /^\/check\/[0-9a-f-]{36}$/)
   const audit = await waitForAudit(app, idOf(location))
   t.assert.strictEqual(audit.url, `${FIXTURE_HOST}/good.html`)
+})
+
+test('POST /check: an address on this machine typed without a scheme is checked over http', async (t: TestContext) => {
+  const address = await serveLocally(t, '<!doctype html><title>Local development site</title>')
+
+  const refused = await postCheck(makeApp(t), address)
+  t.assert.strictEqual(refused.statusCode, 400)
+  t.assert.ok(refused.body.includes('That address is not on the public internet'))
+
+  const app = makeApp(t, { allowPrivateDestinations: true })
+  const { location, id } = await check(app, address)
+  const audit = await waitForAudit(app, id)
+  t.assert.strictEqual(audit.url, `http://${address}/`)
+  t.assert.strictEqual(audit.status, 'completed')
+  t.assert.match((await page(app, location)).body, /Local development site/)
+})
+
+test('withScheme: assumes https, and http for localhost and IP addresses', (t: TestContext) => {
+  const cases = {
+    'example.com/about': 'https://example.com/about',
+    'localhost:3000': 'http://localhost:3000',
+    'shop.localhost/cart': 'http://shop.localhost/cart',
+    '127.0.0.1:4000/a': 'http://127.0.0.1:4000/a',
+    '192.168.1.5': 'http://192.168.1.5',
+    '[::1]:8080': 'http://[::1]:8080',
+    'http://localhost': 'http://localhost',
+    'https://localhost': 'https://localhost',
+    'exa mple.com': 'https://exa mple.com'
+  }
+  for (const [value, expected] of Object.entries(cases)) t.assert.strictEqual(withScheme(value), expected, value)
 })
 
 test('POST /check: shows the form again with what is wrong with the address', async (t: TestContext) => {

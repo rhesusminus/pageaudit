@@ -15,6 +15,8 @@ import { errorPage, failedPage, notFoundPage, progressPage, refusedPage, request
 type WebOptions = {
   // Called after an audit is queued, so the worker can start it without waiting for its next poll.
   onAuditQueued: () => void
+  // Lets checks reach private network addresses, for a server on someone's own machine.
+  allowPrivateDestinations?: boolean
   // The origin people reach this server at, such as https://audit.example.com, when it runs behind a proxy. Without
   // it, links that leave the page use the address of each request.
   publicOrigin?: string
@@ -100,7 +102,10 @@ function pageError(error: FastifyError, request: FastifyRequest, reply: FastifyR
   return sendPage(reply, 500, errorPage())
 }
 
-export const webPages: FastifyPluginAsync<WebOptions> = async (fastify, { onAuditQueued, publicOrigin }) => {
+export const webPages: FastifyPluginAsync<WebOptions> = async (
+  fastify,
+  { onAuditQueued, allowPrivateDestinations = false, publicOrigin }
+) => {
   await fastify.register(formbody)
   await fastify.register(fastifyStatic, { root: join(import.meta.dirname, 'public'), prefix: '/assets/', index: false })
 
@@ -125,7 +130,7 @@ export const webPages: FastifyPluginAsync<WebOptions> = async (fastify, { onAudi
       if (!value) return sendPage(reply, 400, homePage({ value, problem: EMPTY_ADDRESS }))
 
       try {
-        const id = await queueCheckedAudit(fastify.db, withScheme(value))
+        const id = await queueCheckedAudit(fastify.db, withScheme(value), { allowPrivate: allowPrivateDestinations })
         onAuditQueued()
         return reply.redirect(`/check/${id}`, 303)
       } catch (error) {

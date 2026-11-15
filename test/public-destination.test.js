@@ -60,8 +60,38 @@ test('public destinations: rejects private, encoded and special-use IP literals 
 test('public destinations: allows public IPv4 and IPv6 and rejects credentials and protocols', async () => {
   await validateDestination('https://8.8.8.8')
   await validateDestination('https://[2606:4700:4700::1111]')
-  await assert.rejects(validateDestination('ftp://8.8.8.8'), { reason: 'private', statusCode: 400 })
-  await assert.rejects(validateDestination('http://user:pass@8.8.8.8'), /public network/)
+  await assert.rejects(validateDestination('ftp://8.8.8.8'), { reason: 'invalid', statusCode: 400 })
+  await assert.rejects(validateDestination('http://user:pass@8.8.8.8'), { reason: 'invalid', statusCode: 400 })
+})
+
+test('private destinations allowed: passes private addresses and names that resolve to them', async (t) => {
+  t.mock.method(dns, 'lookup', async () => answers('8.8.8.8', '192.168.1.1'))
+  for (const url of [
+    'http://localhost:3000/',
+    'http://a.localhost',
+    'http://127.0.0.1',
+    'http://10.0.0.1',
+    'http://[::1]',
+    'https://mixed.test'
+  ]) {
+    await validateDestination(url, { allowPrivate: true })
+  }
+})
+
+test('private destinations allowed: still refuses other schemes, credentials and names that do not resolve', async (t) => {
+  const allowPrivate = { allowPrivate: true }
+  await assert.rejects(validateDestination('ftp://127.0.0.1', allowPrivate), { reason: 'invalid' })
+  await assert.rejects(validateDestination('http://user:pass@127.0.0.1', allowPrivate), { reason: 'invalid' })
+  const dnsMock = t.mock.method(dns, 'lookup')
+  for (const [code, statusCode, reason] of [
+    ['ENOTFOUND', 400, 'unknown-host'],
+    ['EAI_AGAIN', 503, 'lookup-failed']
+  ]) {
+    dnsMock.mock.mockImplementation(async () => {
+      throw Object.assign(new Error(`getaddrinfo ${code} dev.test`), { code })
+    })
+    await assert.rejects(validateDestination('http://dev.test', allowPrivate), { statusCode, reason })
+  }
 })
 
 test('public destinations: DNS fails closed, including mixed answers and empty results', async (t) => {
