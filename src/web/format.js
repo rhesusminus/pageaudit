@@ -1,4 +1,6 @@
 // Small wording helpers shared by the web pages.
+import { isIP } from 'node:net'
+import { isLocalhostName } from '../api/public-destination.js'
 import { ABSOLUTE_URL } from '../checks/page/meta.js'
 import { markup } from '../html/escape.js'
 import { charCount } from '../text.js'
@@ -20,8 +22,22 @@ export function addressHeading(url) {
   }
 }
 
-// People type addresses without a scheme, so the form assumes https:// when none is given.
-export const withScheme = (value) => (ABSOLUTE_URL.test(value) ? value : `https://${value}`)
+// People type addresses without a scheme, so the form assumes https:// when none is given. A development server on
+// localhost or an IP address rarely has TLS, so it gets http://, as browsers do for localhost.
+export function withScheme(value) {
+  if (ABSOLUTE_URL.test(value)) return value
+  return `${localHost(value) ? 'http' : 'https'}://${value}`
+}
+
+function localHost(value) {
+  let hostname
+  try {
+    hostname = new URL(`http://${value}`).hostname
+  } catch {
+    return false
+  }
+  return isLocalhostName(hostname) || isIP(hostname.replace(/^\[|\]$/g, '')) !== 0
+}
 
 export const SEVERITY_LABEL = { error: 'Error', warning: 'Warning', info: 'Note' }
 
