@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { checkA11y } from '../src/checks/page/a11y.js'
 import { checkLinks } from '../src/checks/page/links.js'
 import { parse } from '../src/parse.js'
 
@@ -39,6 +40,11 @@ function assertLinear(check, n, page) {
 }
 
 const repeat = (count, part) => Array.from({ length: count }, (_, i) => part(i)).join('')
+
+test('large pages: labelled fields are matched to their labels in one pass', () => {
+  assertLinear(checkA11y, 1250, (n) => repeat(n, () => '<label><input type="checkbox"> x</label>'))
+  assertLinear(checkA11y, 3000, (n) => repeat(n, (i) => `<label for="f${i}">x</label><input id="f${i}">`))
+})
 
 test('large pages: aria-labelledby references are each looked up once', () => {
   assertLinear(checkLinks, 3000, (n) =>

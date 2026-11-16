@@ -12,29 +12,30 @@ const issue = ($, el, fields) =>
 
 const LABELABLE = 'input:not([type=hidden]), select, textarea, button, meter, output, progress'
 
-// The labels that apply to a control. An explicit `for` always wins over containment: a label with a `for`
-// belongs to that id, and a label without one belongs to its first labelable descendant.
-function labelsFor($, el) {
-  const id = $(el).attr('id')
-  return $('label')
-    .toArray()
-    .filter((label) => {
-      const target = $(label).attr('for')
-      return target === undefined ? $(label).find(LABELABLE).get(0) === el : Boolean(id) && target === id
-    })
+// Whether a label with a name applies to a control, from one pass over the labels instead of one per control. An
+// explicit `for` always wins over containment: a label with a `for` belongs to every element with that id, and a label
+// without one belongs to its first labelable descendant.
+function namedByLabel($) {
+  const ids = new Set()
+  const controls = new Set()
+  for (const label of $('label').toArray()) {
+    if (!accessibleName($, label) && !namedByScript($, label)) continue
+    const target = $(label).attr('for')
+    if (target === undefined) controls.add($(label).find(LABELABLE).get(0))
+    else if (target) ids.add(target)
+  }
+  return (el) => controls.has(el) || ids.has($(el).attr('id'))
 }
 
-// A control is named by its label, aria-labelledby, aria-label or title, in the HTML or set by script.
-function hasName($, el) {
-  const labels = labelsFor($, el)
-  if (labels.some((label) => accessibleName($, label) || namedByScript($, label))) return true
-  return Boolean(accessibleName($, el, { content: false })) || namedByScript($, el, { content: false })
-}
+// A control without a label is named by its aria-labelledby, aria-label or title, in the HTML or set by script.
+const hasOwnName = ($, el) =>
+  Boolean(accessibleName($, el, { content: false })) || namedByScript($, el, { content: false })
 
 function checkFormLabels($) {
+  const labelled = namedByLabel($)
   return $(CONTROLS)
     .toArray()
-    .filter((el) => $(el).attr('aria-hidden') !== 'true' && !hasName($, el))
+    .filter((el) => $(el).attr('aria-hidden') !== 'true' && !labelled(el) && !hasOwnName($, el))
     .map((el) =>
       issue($, el, {
         type: 'form-input-no-label',

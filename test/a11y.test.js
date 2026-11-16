@@ -135,6 +135,11 @@ test('labels: an explicit for wins over a wrapping label', () => {
   assert.deepEqual(a11y('<label for="n">Name<input id="n"></label>'), [])
 })
 
+test('labels: a for names every field with that id, an empty for names none', () => {
+  assert.deepEqual(a11y('<label for="n">Name</label><input id="n"><input id="n">'), ['duplicate-id'])
+  assert.deepEqual(a11y('<label for="">Name</label><input id="">'), ['form-input-no-label'])
+})
+
 test('labels: a wrapping label without for names only its first labelable descendant', () => {
   assert.deepEqual(a11y('<label>Name <input id="a"><input id="b"></label>'), ['form-input-no-label'])
 })
