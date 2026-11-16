@@ -1,12 +1,25 @@
 import assert from 'node:assert/strict'
-import { chmod, link, lstat, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import {
+  chmod,
+  link,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  realpath,
+  rm,
+  symlink,
+  writeFile
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, relative, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { Readable } from 'node:stream'
 import { test } from 'node:test'
 import pkg from '../package.json' with { type: 'json' }
 import { run } from '../src/cli.js'
 import { buildDigest } from '../src/digest.js'
+import { writeReportFile } from '../src/output.js'
 import { SCHEMA_VERSION } from '../src/report.js'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
 import { mockFetch } from './helpers/mock-fetch.js'
@@ -647,9 +660,12 @@ test('cli: --digest writes the digest of the report, naming the report relative 
 })
 
 test('cli: --out to an unwritable path exits 2 but still prints the report', async (t) => {
-  const { code, stdout, stderr } = await runCli(t, [fixtureUrl('good.html'), '--json', '--out', '/no/such/dir/r.json'])
+  const dir = await tempDir(t)
+  await chmod(dir, 0o555)
+  const { code, stdout, stderr } = await runCli(t, [fixtureUrl('good.html'), '--json', '--out', join(dir, 'r.json')])
+  await chmod(dir, 0o755)
   assert.equal(code, 2)
-  assert.match(stderr, /Could not write \/no\/such\/dir\/r.json: ENOENT/)
+  assert.match(stderr, /Could not write .*r\.json: EACCES/)
   assert.equal(JSON.parse(stdout).summary.pages, 1)
 })
 
@@ -673,14 +689,6 @@ test('cli: a report keeps the permissions of the one it replaces', async (t) => 
   await runCli(t, [fixtureUrl('good.html'), '--json', '--out', out])
   assert.equal(JSON.parse(await readFile(out, 'utf8')).summary.pages, 1)
   assert.equal((await lstat(out)).mode & 0o777, 0o600)
-})
-
-test('cli: a report under a path that is a file says why', async (t) => {
-  const file = join(await tempDir(t), 'file')
-  await writeFile(file, 'x')
-  const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), '--json', '--out', join(file, 'r.json')])
-  assert.equal(code, 2)
-  assert.match(stderr, /Could not write .*file\/r\.json: ENOTDIR/)
 })
 
 test('cli: a report path that is a link to a file not there yet makes that file', async (t) => {
@@ -707,12 +715,15 @@ test('cli: a link to a file not there yet is followed from the real folder of th
   assert.deepEqual((await readdir(dir)).sort(), ['linked', 'real'])
 })
 
-test('cli: a report path that is a loop of links says so and stays a link', async (t) => {
+test('cli: a report path that is a loop of links says so before the audit and stays a link', async (t) => {
   const out = join(await tempDir(t), 'r.json')
   await symlink(out, out)
-  const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), '--json', '--out', out])
+  const { code, stdout, stderr } = await runCli(t, [fixtureUrl('good.html'), '--json', '--out', out])
   assert.equal(code, 2)
-  assert.match(stderr, /Could not write .*r\.json: ELOOP/)
+  assert.equal(stderr, `Could not use ${out} for --out: ELOOP`)
+  assert.equal(stdout, '')
+  // A loop made while the audit runs is refused when the report is written.
+  assert.equal(await writeReportFile(out, '{}'), `Could not write ${out}: ELOOP`)
   assert.ok((await lstat(out)).isSymbolicLink())
 })
 
@@ -824,6 +835,73 @@ test('cli: --digest naming a directory or the --out file exits 2 before any page
   assert.equal(fetchMock.mock.callCount(), 0)
 })
 
+test('cli: a report path in a folder that does not exist exits 2 before any page is fetched', async (t) => {
+  const dir = await tempDir(t)
+  const [missing, file] = [join(dir, 'reports'), join(dir, 'file')]
+  await writeFile(file, 'x')
+  const fetchMock = mockFixtureFetch(t)
+  const errors = []
+  t.mock.method(console, 'error', (...a) => errors.push(a.join(' ')))
+  const reports = [
+    '--out',
+    join(missing, 'r.json'),
+    '--digest',
+    join(missing, 'd.json'),
+    '--html',
+    join(file, 'r.html')
+  ]
+  assert.equal(await run([fixtureUrl('good.html'), ...reports, '--json']), 2)
+  assert.deepEqual(errors, [
+    [
+      `--out needs a folder that exists, but "${missing}" does not exist`,
+      `--digest needs a folder that exists, but "${missing}" does not exist`,
+      `Could not use ${join(file, 'r.html')} for --html: ENOTDIR`
+    ].join('\n')
+  ])
+  assert.equal(fetchMock.mock.callCount(), 0)
+  await assert.rejects(lstat(missing), { code: 'ENOENT' })
+})
+
+test('cli: a report path that is a link into a folder that does not exist names that folder', async (t) => {
+  const dir = await tempDir(t)
+  await symlink(join('missing', 'r.json'), join(dir, 'link.json'))
+  const errors = []
+  t.mock.method(console, 'error', (...a) => errors.push(a.join(' ')))
+  assert.equal(await run([fixtureUrl('good.html'), '--out', join(dir, 'link.json'), '--json']), 2)
+  assert.deepEqual(errors, [
+    `--out needs a folder that exists, but "${join(await realpath(dir), 'missing')}" does not exist`
+  ])
+})
+
+test('cli: a report may go in the --content folder or a folder above it, which the audit makes', async (t) => {
+  const content = join(await tempDir(t), 'new', 'content')
+  const [out, html] = [join(content, 'r.json'), join(dirname(content), 'r.html')]
+  const { code } = await runCli(t, [
+    fixtureUrl('good.html'),
+    '--content',
+    content,
+    '--out',
+    out,
+    '--html',
+    html,
+    '--json'
+  ])
+  assert.equal(code, 0)
+  assert.equal(JSON.parse(await readFile(out, 'utf8')).summary.pages, 1)
+  assert.match(await readFile(html, 'utf8'), /<html/)
+})
+
+test('cli: a report may go in a --content folder not made yet, reached through a link', async (t) => {
+  const dir = await tempDir(t)
+  await mkdir(join(dir, 'real'))
+  await symlink(join(dir, 'real'), join(dir, 'linked'))
+  const content = join(dir, 'linked', 'content')
+  const out = join(content, 'r.json')
+  const { code } = await runCli(t, [fixtureUrl('good.html'), '--content', content, '--out', out, '--json'])
+  assert.equal(code, 0)
+  assert.equal(JSON.parse(await readFile(join(dir, 'real', 'content', 'r.json'), 'utf8')).summary.pages, 1)
+})
+
 test('cli: --out and --html naming two hard links to one file exit 2 and leave it as it was', async (t) => {
   const dir = await tempDir(t)
   const [json, html] = [join(dir, 'r.json'), join(dir, 'r.html')]
@@ -839,9 +917,12 @@ test('cli: --out and --html naming two hard links to one file exit 2 and leave i
 })
 
 test('cli: --html to an unwritable path exits 2', async (t) => {
-  const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), '--html', '/no/such/dir/r.html', '--json'])
+  const dir = await tempDir(t)
+  await chmod(dir, 0o555)
+  const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), '--html', join(dir, 'r.html'), '--json'])
+  await chmod(dir, 0o755)
   assert.equal(code, 2)
-  assert.match(stderr, /Could not write \/no\/such\/dir\/r.html: ENOENT/)
+  assert.match(stderr, /Could not write .*r\.html: EACCES/)
   assert.doesNotMatch(stderr, /written/)
 })
 
@@ -854,11 +935,13 @@ test('cli: says where each report file was written, on stderr', async (t) => {
 })
 
 test('cli: says which report files were written when another one failed', async (t) => {
-  const json = join(await tempDir(t), 'r.json')
-  const args = [fixtureUrl('good.html'), '--json', '--out', json, '--html', '/no/such/dir/r.html']
-  const { code, stderr } = await runCli(t, args)
+  const [json, locked] = [join(await tempDir(t), 'r.json'), await tempDir(t)]
+  await chmod(locked, 0o555)
+  const html = join(locked, 'r.html')
+  const { code, stderr } = await runCli(t, [fixtureUrl('good.html'), '--json', '--out', json, '--html', html])
+  await chmod(locked, 0o755)
   assert.equal(code, 2)
-  assert.equal(stderr, `JSON report written to ${json}\nCould not write /no/such/dir/r.html: ENOENT`)
+  assert.equal(stderr, `JSON report written to ${json}\nCould not write ${html}: EACCES`)
 })
 
 test('cli: a bad logo exits 2 before any page is fetched', async (t) => {

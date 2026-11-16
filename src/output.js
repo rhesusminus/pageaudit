@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
-import { readlinkSync, realpathSync, statSync } from 'node:fs'
+import { lstatSync, readlinkSync, realpathSync, statSync } from 'node:fs'
 import { chmod, lstat, rename, rm, stat, writeFile } from 'node:fs/promises'
-import { basename, dirname, join, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 // Writes a report file. Returns an error message instead of throwing, so a bad path
 // never loses the report that was already printed. The report goes to a hidden file beside the one it replaces first,
@@ -46,11 +46,18 @@ function destination(path, links = 0) {
   } catch {
     const target = links < MAX_LINKS ? linkTarget(full) : null
     if (target !== null) return destination(target, links + 1)
-    try {
-      return join(realpathSync(dirname(full)), basename(full))
-    } catch {
-      return full
-    }
+    return join(canonical(dirname(full)), basename(full))
+  }
+}
+
+// The full path with the links in the part of it that exists followed, so a folder not made yet compares equal
+// however the folders above it are spelled.
+function canonical(full) {
+  try {
+    return realpathSync(full)
+  } catch {
+    const parent = dirname(full)
+    return parent === full ? full : join(canonical(parent), basename(full))
   }
 }
 
@@ -71,17 +78,29 @@ export function sameFile(a, b) {
   return destination(a) === destination(b)
 }
 
+// True when making the --content folder `content`, which makes every missing folder above it too, makes `folder`.
+function madeByContent(folder, content) {
+  const path = relative(folder, destination(content))
+  return path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path)
+}
+
 // Why a report cannot be written to `path`, or null when nothing stops it that can be seen before the audit:
-// `{ directory: true }` when the path is a folder, `{ missingFolder }` naming the folder the file would go in when
-// that does not exist, or `{ code }` when the file system refuses to look, such as a folder that cannot be opened
-// (EACCES), a name that is too long or a file in place of a folder (ENOTDIR). These only fail when the report is
-// written at the end of the audit, so the CLI and the wizard check them before it starts.
-export function reportPathProblem(path) {
+// `{ directory: true }` when the path is a folder, `{ missingFolder }` naming the folder the file would go in, after
+// a link, when that does not exist, or `{ code }` when the file system refuses to look, such as a folder that cannot
+// be opened (EACCES), a name that is too long or a file in place of a folder (ENOTDIR). These only fail when the
+// report is written at the end of the audit, so the CLI and the wizard check them before it starts. `content` is the
+// --content folder: the audit makes it and the folders above it before any report is written, so those may be missing.
+export function reportPathProblem(path, { content } = {}) {
   try {
     if (statSync(path, { throwIfNoEntry: false })?.isDirectory()) return { directory: true }
-    const folder = statSync(dirname(path), { throwIfNoEntry: false })
-    if (!folder) return { missingFolder: dirname(path) }
-    return folder.isDirectory() ? null : { code: 'ENOTDIR' }
+    const target = destination(path)
+    const folder = statSync(dirname(target), { throwIfNoEntry: false })
+    // A path under a file, such as file/r.json, gets here: throwIfNoEntry treats its ENOTDIR as no entry too.
+    if (folder) return folder.isDirectory() ? null : { code: 'ENOTDIR' }
+    if (content && madeByContent(dirname(target), content)) return null
+    // Named as typed, unless a link sends the file elsewhere.
+    const link = lstatSync(path, { throwIfNoEntry: false })?.isSymbolicLink()
+    return { missingFolder: link ? dirname(target) : dirname(path) }
   } catch (err) {
     return { code: err.code ?? err.message }
   }
@@ -90,19 +109,25 @@ export function reportPathProblem(path) {
 // A file name to suggest when a report option names a directory.
 const EXAMPLE_NAMES = { '--out': 'report.json', '--digest': 'report.digest.json', '--html': 'report.html' }
 
-// Returns a message for each problem with the report options, or an empty list: a path that is a directory, two
-// reports that would go to the same file, or a `content` folder (--content) that is a file or a report's path. These can
-// only fail at the very end of the audit, so this is checked before it starts.
+// The message for a problem reportPathProblem() found with the path of a report option.
+function optionPathMessage(option, path, { directory, missingFolder, code }) {
+  if (directory) {
+    return `${option} needs a file path, but "${path}" is a directory (for example ${path.replace(/\/+$/, '') || '.'}/${EXAMPLE_NAMES[option]})`
+  }
+  if (missingFolder) return `${option} needs a folder that exists, but "${missingFolder}" does not exist`
+  return `Could not use ${path} for ${option}: ${code}`
+}
+
+// Returns a message for each problem with the report options, or an empty list: a path reportPathProblem() refuses,
+// two reports that would go to the same file, or a `content` folder (--content) that is a file or a report's path.
+// These can only fail at the very end of the audit, so this is checked before it starts.
 export async function reportPathProblems(outputs, { content } = {}) {
   const found = []
   const files = []
   for (const [option, path] of outputs) {
     if (!path) continue
-    const info = await stat(path).catch(() => null)
-    if (info?.isDirectory())
-      found.push(
-        `${option} needs a file path, but "${path}" is a directory (for example ${path.replace(/\/+$/, '') || '.'}/${EXAMPLE_NAMES[option]})`
-      )
+    const problem = reportPathProblem(path, { content })
+    if (problem) found.push(optionPathMessage(option, path, problem))
     else files.push([option, path])
   }
   for (const [i, [option, path]] of files.entries()) {
