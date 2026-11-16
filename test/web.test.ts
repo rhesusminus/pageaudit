@@ -1,6 +1,7 @@
 import dns from 'node:dns/promises'
 import type { TestContext } from 'node:test'
 import { test } from 'node:test'
+import { MAX_ADDRESS_LENGTH } from '../src/api/public-destination.js'
 import { withScheme } from '../src/web/format.js'
 import { type App, makeApp, resolvePublicly, serveLocally, waitForAudit } from './helpers/app.ts'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
@@ -42,6 +43,7 @@ test('GET /: shows the check form under a policy that allows no inline code', as
   t.assert.match(response.headers['content-security-policy'] as string, /default-src 'none'; script-src 'self'/)
   t.assert.strictEqual(response.headers['cache-control'], 'no-store')
   t.assert.match(response.body, /<form class="check-form" method="post" action="\/check"/)
+  t.assert.ok(response.body.includes(`maxlength="${MAX_ADDRESS_LENGTH}"`))
   t.assert.doesNotMatch(response.body, /The results were deleted/)
 })
 
@@ -166,6 +168,28 @@ test('POST /check: a form too large keeps its status and is not called a server 
   t.assert.strictEqual(response.statusCode, 413)
   t.assert.match(response.body, /This request could not be read/)
   t.assert.doesNotMatch(response.body, /on our side/)
+})
+
+test('POST /check: refuses an address longer than the API takes, as typed or as it is fetched', async (t: TestContext) => {
+  const app = makeApp(t)
+  const base = 'https://example.com/'
+  const refused = [
+    `${base}${'a'.repeat(MAX_ADDRESS_LENGTH - base.length + 1)}`,
+    // The fragment is never fetched, but it was sent, and the API counts it too.
+    `${base}#${'a'.repeat(MAX_ADDRESS_LENGTH)}`,
+    // Each of these is six characters once encoded for the request.
+    `${base}${'é'.repeat(400)}`
+  ]
+
+  for (const address of refused) {
+    const response = await postCheck(app, address)
+    t.assert.strictEqual(response.statusCode, 400, address.slice(0, 30))
+    t.assert.ok(response.body.includes('That address is too long to check. It can be at most 2,048 characters'))
+  }
+  const longest = await postCheck(app, `${base}${'a'.repeat(MAX_ADDRESS_LENGTH - base.length)}`)
+  t.assert.strictEqual(longest.statusCode, 303)
+  const stored = await app.db.get<{ n: number }>('SELECT count(*) AS n FROM audits')
+  t.assert.strictEqual(stored?.n, 1)
 })
 
 test('POST /check: takes a form only from this site', async (t: TestContext) => {

@@ -1,6 +1,7 @@
 import dns from 'node:dns/promises'
 import type { TestContext } from 'node:test'
 import { test } from 'node:test'
+import { MAX_ADDRESS_LENGTH } from '../src/api/public-destination.js'
 import { type App, makeApp, resolvePublicly, serveLocally, waitForAudit } from './helpers/app.ts'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
 import { mockFetch } from './helpers/mock-fetch.js'
@@ -88,6 +89,23 @@ test('POST /audits: rejects a URL that cannot be audited', async (t: TestContext
 
   t.assert.strictEqual(response.statusCode, 400)
   t.assert.match(response.json().error, /unsupported protocol/)
+})
+
+test('POST /audits: takes an address up to the length limit, as sent and as it is fetched', async (t: TestContext) => {
+  const app = makeApp(t)
+  const base = 'https://example.com/'
+
+  const longest = await postAudit(app, `${base}${'a'.repeat(MAX_ADDRESS_LENGTH - base.length)}`)
+  const longer = await postAudit(app, `${base}${'a'.repeat(MAX_ADDRESS_LENGTH - base.length + 1)}`)
+  // A valid URI as sent, but each ' in the query is three characters once encoded for the request.
+  const encoded = await postAudit(app, `${base}?${"'".repeat(700)}`)
+
+  t.assert.strictEqual(longest.statusCode, 202)
+  t.assert.strictEqual(longer.statusCode, 400)
+  t.assert.strictEqual(encoded.statusCode, 400)
+  t.assert.deepStrictEqual(encoded.json(), {
+    error: 'Audit destinations must be at most 2048 characters long, as sent and once percent-encoded'
+  })
 })
 
 test('POST /audits: rejects a hostname that does not resolve', async (t: TestContext) => {

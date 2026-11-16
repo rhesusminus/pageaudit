@@ -1,3 +1,4 @@
+import { MAX_ADDRESS_LENGTH } from '../api/public-destination.js'
 import { markup } from '../html/escape.js'
 import { document } from './layout.js'
 
@@ -23,7 +24,7 @@ export function checkForm({ value = '', problem = null } = {}) {
         autocorrect="off"
         spellcheck="false"
         enterkeyhint="go"
-        maxlength="2048"
+        maxlength="${MAX_ADDRESS_LENGTH}"
         required
         value="${value}"
         aria-describedby="${describedBy}"

@@ -4,7 +4,7 @@ import fastifyStatic from '@fastify/static'
 import type { FastifyError, FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import { sentHost } from '../api/allowed-host.ts'
 import { errorStatus } from '../api/error-status.ts'
-import { DestinationError } from '../api/public-destination.js'
+import { DestinationError, MAX_ADDRESS_LENGTH } from '../api/public-destination.js'
 import { queueCheckedAudit } from '../api/queue-audit.ts'
 import { deleteAudit, getAudit } from '../db/database.ts'
 import { resultBrief } from './brief.js'
@@ -73,6 +73,9 @@ function sendBrief(reply: FastifyReply, audit: Audit | undefined, origin: string
 
 // Why an address was not checked, in the words of someone who typed it into the form.
 function addressProblem({ reason, host }: DestinationError) {
+  if (reason === 'too-long') {
+    return `That address is too long to check. It can be at most ${MAX_ADDRESS_LENGTH.toLocaleString('en')} characters, and a space or a letter such as é counts as several.`
+  }
   if (reason === 'private') return 'That address is not on the public internet, so it cannot be checked.'
   if (reason === 'unknown-host') return `No site answers at ${host}. Check the spelling of the address.`
   if (reason === 'lookup-failed') return `Could not look up ${host} just now. Try again in a minute.`

@@ -1,13 +1,13 @@
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox'
 import { Type } from '@fastify/type-provider-typebox'
 import { deleteAudit, getAudit } from '../db/database.ts'
-import { DestinationError } from './public-destination.js'
+import { DestinationError, MAX_ADDRESS_LENGTH } from './public-destination.js'
 import { queueCheckedAudit } from './queue-audit.ts'
 
 const errorSchema = Type.Object({ error: Type.String() })
 
 const auditSchema = {
-  body: Type.Object({ url: Type.String({ format: 'uri', maxLength: 2048 }) }),
+  body: Type.Object({ url: Type.String({ format: 'uri', maxLength: MAX_ADDRESS_LENGTH }) }),
   response: {
     202: Type.Object({ id: Type.String(), status: Type.Literal('queued') }),
     400: errorSchema,

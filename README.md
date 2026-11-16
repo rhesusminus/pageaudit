@@ -403,7 +403,7 @@ Judgment calls that are not straight from those pages:
 
 A background worker runs queued audits one at a time. An audit's `status` goes from `queued` to `running`, then to `completed` with the page facts in `result`, or to `failed` with the reason in `error`, for example `Could not fetch page`. Poll `GET /audits/:id` until it is one of the last two. An audit that was running when the server stopped is queued again at startup, and fails after three interrupted attempts.
 
-`POST /audits` answers `400` for a URL it cannot audit, including a private network address or a host that does not resolve, and `503` when DNS fails for a reason that may pass on retry. Every error answers `{ "error": "..." }`.
+`POST /audits` answers `400` for a URL it cannot audit, including a private network address, a host that does not resolve or an address longer than 2048 characters, counted as sent and once percent-encoded, and `503` when DNS fails for a reason that may pass on retry. The web form refuses the same addresses. Every error answers `{ "error": "..." }`.
 
 **Sites on your own machine.** Set `ALLOW_PRIVATE_DESTINATIONS=1` to audit private addresses too, such as a development site on `localhost:3000`, `127.0.0.1` or another machine on your network, the way the CLI can. It is off by default because a server others can reach would let them use it to reach your network. Only set it on a server you run for yourself, which `npm start` is: it listens on `localhost`. The server logs a warning at startup when it is set.
 
