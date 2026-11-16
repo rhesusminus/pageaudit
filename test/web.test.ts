@@ -332,6 +332,7 @@ test('POST /check/:id/delete: deletes the results and says so', async (t: TestCo
   t.assert.strictEqual(deleted.headers.location, '/?deleted')
   t.assert.match((await page(app, '/?deleted')).body, /The results were deleted\./)
   t.assert.strictEqual((await page(app, location)).statusCode, 404)
+  t.assert.strictEqual(await app.db.get('SELECT id FROM audits WHERE id = ?', idOf(location)), undefined)
 })
 
 test('GET /check/:id/delete: asks before deleting, for a browser that runs no script', async (t: TestContext) => {

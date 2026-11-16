@@ -235,6 +235,34 @@ test('DELETE /audits/:id: removes the audit so it can no longer be fetched', asy
 
   t.assert.strictEqual(deleted.statusCode, 204)
   t.assert.strictEqual(fetched.statusCode, 404)
+  // Gone from the database too, not only hidden.
+  t.assert.strictEqual(await app.db.get('SELECT id FROM audits WHERE id = ?', id), undefined)
+})
+
+test('DELETE /audits/:id: an audit deleted while it runs ends quietly, and the next one runs', async (t: TestContext) => {
+  const release = Promise.withResolvers<void>()
+  const started = Promise.withResolvers<void>()
+  mockFetch(t, async (url: URL) => {
+    if (new URL(url).pathname === '/running') {
+      started.resolve()
+      await release.promise
+    }
+    return new Response('<!doctype html><title>Page</title>', { headers: { 'content-type': 'text/html' } })
+  })
+  const app = makeApp(t)
+  await app.ready()
+  const logged = t.mock.method(app.log, 'error')
+  const running = (await postAudit(app, 'https://delete.test/running')).json().id
+  const next = (await postAudit(app, 'https://delete.test/next')).json().id
+  await started.promise
+
+  const deleted = await app.inject({ method: 'DELETE', url: `/audits/${running}` })
+  release.resolve()
+
+  t.assert.strictEqual(deleted.statusCode, 204)
+  t.assert.strictEqual((await waitForAudit(app, next)).status, 'completed')
+  t.assert.strictEqual(await app.db.get('SELECT id FROM audits WHERE id = ?', running), undefined)
+  t.assert.strictEqual(logged.mock.callCount(), 0)
 })
 
 test('DELETE /audits/:id: answers 404 for an unknown audit', async (t: TestContext) => {

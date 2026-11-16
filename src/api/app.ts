@@ -1,7 +1,13 @@
 import type { FastifyError, FastifyReply, FastifyRequest, FastifyServerOptions } from 'fastify'
 import fastify from 'fastify'
 import { fpSqlitePlugin } from 'fastify-sqlite-typed'
-import { claimNextAudit, completeAudit, failAudit, recoverInterruptedAudits } from '../db/database.ts'
+import {
+  claimNextAudit,
+  completeAudit,
+  failAudit,
+  recoverInterruptedAudits,
+  removeHiddenAudits
+} from '../db/database.ts'
 import { ASSETS_PREFIX, sendPage, webPages } from '../web/plugin.ts'
 import { missingPage, unknownHostPage } from '../web/status.js'
 import { answersTo, sentHost } from './allowed-host.ts'
@@ -75,11 +81,13 @@ export function build(
 
   app.addHook('onReady', async () => {
     await app.db.exec(`
+    -- SQLite otherwise leaves a deleted row's bytes in the file until the space is reused, and deleted results must be
+    -- gone, not only unlisted.
+    PRAGMA secure_delete = ON;
     CREATE TABLE IF NOT EXISTS audits (
       id TEXT PRIMARY KEY,
       url TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      deleted_at TEXT,
       status TEXT NOT NULL,
       error TEXT,
       attempts INTEGER NOT NULL DEFAULT 0,
@@ -92,6 +100,7 @@ export function build(
     DROP INDEX IF EXISTS audits_queue;
     CREATE INDEX IF NOT EXISTS audits_queued ON audits (status) WHERE status = 'queued';
   `)
+    await removeHiddenAudits(app.db)
   })
 
   app.addHook('onReady', async () => {

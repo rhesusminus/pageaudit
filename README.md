@@ -399,9 +399,9 @@ Judgment calls that are not straight from those pages:
 | -------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `POST /audits`       | Queues an audit of the page in `{ "url": "..." }` and answers `202` with `{ id, status }` and a `Location` |
 | `GET /audits/:id`    | Returns an audit with its `status`, `error` and `result`, `404` if it is unknown                           |
-| `DELETE /audits/:id` | Soft-deletes an audit with `204`, `404` if it is unknown or already deleted                                |
+| `DELETE /audits/:id` | Deletes an audit from the database with `204`, `404` if it is unknown or already deleted                   |
 
-A background worker runs queued audits one at a time. An audit's `status` goes from `queued` to `running`, then to `completed` with the page facts in `result`, or to `failed` with the reason in `error`, for example `Could not fetch page`. Poll `GET /audits/:id` until it is one of the last two. An audit that was running when the server stopped is queued again at startup, and fails after three interrupted attempts. An audit whose result cannot be saved, such as when the disk is full, fails with `Audit result could not be saved` rather than staying `running`.
+A background worker runs queued audits one at a time. An audit's `status` goes from `queued` to `running`, then to `completed` with the page facts in `result`, or to `failed` with the reason in `error`, for example `Could not fetch page`. Poll `GET /audits/:id` until it is one of the last two. An audit that was running when the server stopped is queued again at startup, and fails after three interrupted attempts. An audit whose result cannot be saved, such as when the disk is full, fails with `Audit result could not be saved` rather than staying `running`. Deleting an audit removes it from `database.db`, with SQLite's `secure_delete` on so its address and results do not linger in the file. An audit deleted while it runs still finishes, but nothing of it is saved. Audits that an earlier version only hid when they were deleted are removed at startup.
 
 `POST /audits` answers `400` for a URL it cannot audit, including a private network address, a host that does not resolve or an address longer than 2048 characters, counted as sent and once percent-encoded, and `503` when DNS fails for a reason that may pass on retry. The web form refuses the same addresses. Every error answers `{ "error": "..." }`.
 
@@ -519,7 +519,7 @@ src/
     error-status.ts     errorStatus(): the status an error answers with, its own or 500
     worker.ts           runs queued audits one at a time
   db/
-    database.ts         the audits table: queue, claim, save, get and soft-delete
+    database.ts         the audits table: queue, claim, save, get and delete
   web/                  the web pages, rendered on the server
     plugin.ts           the page routes, the Content-Security-Policy and the same-site check on posts
     layout.js           the document every page shares
