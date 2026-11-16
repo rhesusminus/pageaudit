@@ -31,6 +31,28 @@ test('POST /audits: queues the audit and links to it', async (t: TestContext) =>
   await waitForAudit(app, id)
 })
 
+test('POST /audits: runs audits queued in the same second in the order they were queued', async (t: TestContext) => {
+  // The first audit holds the worker until every other one is queued, so they all wait in line together.
+  const release = Promise.withResolvers<void>()
+  const fetched: string[] = []
+  mockFetch(t, async (url: URL) => {
+    const { pathname } = new URL(url)
+    if (pathname === '/first') await release.promise
+    fetched.push(pathname)
+    return new Response('<!doctype html><title>Page</title>', { headers: { 'content-type': 'text/html' } })
+  })
+  const app = makeApp(t)
+  await postAudit(app, 'https://order.test/first')
+  const paths = Array.from({ length: 8 }, (_, i) => `/page-${i}`)
+  const ids: string[] = []
+  for (const path of paths) ids.push((await postAudit(app, `https://order.test${path}`)).json().id)
+
+  release.resolve()
+  for (const id of ids) await waitForAudit(app, id)
+
+  t.assert.deepStrictEqual(fetched, ['/first', ...paths])
+})
+
 test('GET /audits/:id: returns the completed audit with the fetched page facts', async (t: TestContext) => {
   mockFixtureFetch(t)
   const app = makeApp(t)

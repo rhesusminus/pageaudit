@@ -86,9 +86,11 @@ export function build(
       -- Last, so reading the small columns never walks a long report's overflow pages.
       result TEXT
     );
-    -- The worker claims the oldest queued audit every poll. Only queued rows are in this index, so a claim does not
-    -- scan every stored audit.
-    CREATE INDEX IF NOT EXISTS audits_queue ON audits (created_at, id) WHERE status = 'queued' AND deleted_at IS NULL;
+    -- The worker claims the first queued audit, by rowid, every poll. Only queued rows are in this index, so a claim
+    -- does not scan every stored audit. Every index entry ends with its rowid, so an index on (status) of rows that
+    -- all share one status is in rowid order. audits_queue is the index an older version ordered by created_at.
+    DROP INDEX IF EXISTS audits_queue;
+    CREATE INDEX IF NOT EXISTS audits_queued ON audits (status) WHERE status = 'queued';
   `)
   })
 

@@ -65,20 +65,22 @@ export async function deleteAudit(db: Db, id: string) {
   return result.changes === 1
 }
 
-export async function claimNextAudit(db: Db) {
-  const nextAudit = await db.get<AuditRow>(
-    `UPDATE audits
+// Audits run in the order they were queued. created_at only counts whole seconds, so the order is the rowid, which
+// SQLite gives each new row as one more than the largest in the table. Exported so a test can check its query plan.
+export const CLAIM_NEXT_AUDIT = `UPDATE audits
      SET status = 'running', attempts = attempts + 1, error = NULL
      WHERE id = (
        SELECT id
        FROM audits
        WHERE status = 'queued'
          AND deleted_at IS NULL
-       ORDER BY created_at ASC, id ASC
+       ORDER BY rowid
        LIMIT 1
      )
      RETURNING *`
-  )
+
+export async function claimNextAudit(db: Db) {
+  const nextAudit = await db.get<AuditRow>(CLAIM_NEXT_AUDIT)
 
   return nextAudit ? { id: nextAudit.id, url: nextAudit.url } : undefined
 }
