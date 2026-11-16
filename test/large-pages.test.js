@@ -59,3 +59,11 @@ test('large pages: a large element that many aria-labelledby point at is read on
   // An empty target leaves the fields without a name, so the check also looks for a name set by script.
   assertLinear(checkA11y, 1500, (n) => `<div id="l">${repeat(n, () => '<b></b>')}</div>${fields(n)}`)
 })
+
+test('large pages: a long name that many links share is judged once for generic wording', () => {
+  assertLinear(
+    checkLinks,
+    6000,
+    (n) => `<div id="l">${'!'.repeat(25 * n)}</div>${repeat(n, () => '<a href="/" aria-labelledby="l"></a>')}`
+  )
+})

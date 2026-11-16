@@ -35,9 +35,21 @@ function checkName($, el, name) {
   ]
 }
 
+// Whether a name is generic text, judged once per distinct name. Any number of links can share one long name through
+// aria-labelledby, and normalizing it again for each of them would take time in proportion to both. Links that point
+// at one target share one string, so looking it up again is cheap: the string keeps its hash. Equal names in
+// separate strings cost one hash each.
+function genericNames() {
+  const judged = new Map()
+  return (name) => {
+    if (!judged.has(name)) judged.set(name, GENERIC_TEXT.has(normalize(name)))
+    return judged.get(name)
+  }
+}
+
 // Text set by script replaces or adds to the text in the HTML, so the wording cannot be judged.
-function checkText($, el, name) {
-  if (!GENERIC_TEXT.has(normalize(name)) || namedByScript($, el, { images: false })) return []
+function checkText($, el, name, isGeneric) {
+  if (!isGeneric(name) || namedByScript($, el, { images: false })) return []
   return [
     issue($, el, {
       type: 'link-generic-text',
@@ -60,11 +72,16 @@ function checkHref($, el, href) {
 }
 
 export function checkLinks($) {
+  const isGeneric = genericNames()
   return $('a[href]')
     .toArray()
     .filter((el) => $(el).attr('aria-hidden') !== 'true')
     .flatMap((el) => {
       const name = accessibleName($, el, { images: false })
-      return [...checkName($, el, name), ...checkText($, el, name), ...checkHref($, el, $(el).attr('href').trim())]
+      return [
+        ...checkName($, el, name),
+        ...checkText($, el, name, isGeneric),
+        ...checkHref($, el, $(el).attr('href').trim())
+      ]
     })
 }
