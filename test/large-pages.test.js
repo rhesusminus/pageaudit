@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { checkA11y } from '../src/checks/page/a11y.js'
+import { checkImages } from '../src/checks/page/images.js'
 import { checkLinks } from '../src/checks/page/links.js'
 import { parse } from '../src/parse.js'
 
@@ -69,5 +70,13 @@ test('large pages: a long name that many links share is judged once for generic 
     checkLinks,
     6000,
     (n) => `<div id="l">${'!'.repeat(25 * n)}</div>${repeat(n, () => '<a href="/" aria-labelledby="l"></a>')}`
+  )
+})
+
+test('large pages: a link holding many decorative images is judged once', () => {
+  assertLinear(
+    checkImages,
+    1000,
+    (n) => `<a href="/">${repeat(n, () => '<img src="/a.png" alt="" width="1" height="1">')}</a>`
   )
 })

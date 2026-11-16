@@ -25,7 +25,7 @@ const isPlaceholderHref = (href) => href === '#' || /^javascript:/i.test(href)
 
 // A link whose only content is an image is reported by the image checks, so it is skipped here.
 function checkName($, el, name) {
-  if (name || visibleImages($, el).length || namedByScript($, el, { images: false })) return []
+  if (name || visibleImages(el).length || namedByScript($, el, { images: false })) return []
   return [
     issue($, el, {
       type: 'link-no-name',

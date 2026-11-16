@@ -56,12 +56,19 @@ const labelledByText = ($, el) =>
     .filter(Boolean)
     .join(' ')
 
-// The images inside an element that are not explicitly hidden, on their own or through an ancestor within it.
-export const visibleImages = ($, el) =>
-  $(el)
-    .find('img')
-    .toArray()
-    .filter((img) => !$(img).parentsUntil(el).addBack().toArray().some(isHidden))
+// The images inside an element that are not explicitly hidden, on their own or through an ancestor within it, in
+// document order. A plain walk that skips hidden subtrees: cheerio's find sorts what it finds, comparing positions
+// among siblings, which grows faster than the number of images when they are siblings.
+export function visibleImages(el) {
+  const images = []
+  const walk = (node) => {
+    if (node.type !== 'tag' || isHidden(node)) return
+    if (node.name === 'img') images.push(node)
+    node.children.forEach(walk)
+  }
+  el.children.forEach(walk)
+  return images
+}
 
 // `images: false` leaves image alt out, for the check that reports images on their own.
 // `content: false` ignores what is inside the element, for form fields whose content is not a name.
