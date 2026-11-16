@@ -5,11 +5,11 @@ import { AUDIT_ERROR } from '../src/api/audit-errors.js'
 import { MAX_ADDRESS_LENGTH } from '../src/api/public-destination.js'
 import { runAudit } from '../src/runner.js'
 import { withScheme } from '../src/web/format.js'
-import { type App, makeApp, resolvePublicly, serveLocally, waitForAudit } from './helpers/app.ts'
+import { type App, isolateNetwork, makeApp, serveLocally, waitForAudit } from './helpers/app.ts'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
 import { mockFetch } from './helpers/mock-fetch.js'
 
-resolvePublicly()
+isolateNetwork()
 
 // Posts the check form the way a browser on this site does.
 const postCheck = (app: App, url: string, headers: Record<string, string> = {}) =>

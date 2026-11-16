@@ -2,11 +2,11 @@ import dns from 'node:dns/promises'
 import type { TestContext } from 'node:test'
 import { test } from 'node:test'
 import { MAX_ADDRESS_LENGTH } from '../src/api/public-destination.js'
-import { type App, makeApp, resolvePublicly, serveLocally, waitForAudit } from './helpers/app.ts'
+import { type App, isolateNetwork, makeApp, serveLocally, waitForAudit } from './helpers/app.ts'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
 import { mockFetch } from './helpers/mock-fetch.js'
 
-resolvePublicly()
+isolateNetwork()
 
 const postAudit = (app: App, url: string) => app.inject({ method: 'POST', url: '/audits', body: { url } })
 
