@@ -1,6 +1,7 @@
 import { isElement } from '../parse.js'
 import { collapseWhitespace, limit } from '../text.js'
 import { elementsById } from './ids.js'
+import { perElement } from './per-element.js'
 
 const MAX_HTML = 500
 const MAX_PARENT_HTML = 200
@@ -47,24 +48,20 @@ const openingTag = (el) =>
 
 const markupOf = ($, el, max) => (FRAME.has(el.name) ? limit(openingTag(el), max) : cap($.html(el), max))
 
-const found = new WeakMap()
-const parentMarkup = new WeakMap()
+const parentMarkup = perElement(($, parent) => markupOf($, parent, MAX_PARENT_HTML))
+
+const evidenceOf = perElement(($, el) => {
+  const parent = isElement(el.parent) && !FRAME.has(el.parent.name) ? el.parent : null
+  return {
+    selector: selectorFor($, el),
+    html: markupOf($, el, MAX_HTML),
+    ...(parent ? { parentHtml: parentMarkup($, parent) } : {})
+  }
+})
 
 // Where an issue is and what surrounds it: a selector, the element's own markup and its parent's, both bounded.
 // Siblings share the work: the result is kept per element and the parent's markup per parent.
-export function evidence($, el) {
-  if (!el) return {}
-  if (!found.has(el)) {
-    const parent = isElement(el.parent) && !FRAME.has(el.parent.name) ? el.parent : null
-    if (parent && !parentMarkup.has(parent)) parentMarkup.set(parent, markupOf($, parent, MAX_PARENT_HTML))
-    found.set(el, {
-      selector: selectorFor($, el),
-      html: markupOf($, el, MAX_HTML),
-      ...(parent ? { parentHtml: parentMarkup.get(parent) } : {})
-    })
-  }
-  return found.get(el)
-}
+export const evidence = ($, el) => (el ? evidenceOf($, el) : {})
 
 // Adds evidence to every issue in a list that came from one element.
 export const withEvidence = ($, el, issues) => issues.map((issue) => ({ ...issue, ...evidence($, el) }))

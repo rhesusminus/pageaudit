@@ -1,15 +1,7 @@
-// The elements with each id, in document order, found in one pass and kept per document. Checks look ids up through
-// it instead of querying the document once per element. They only read the parsed page, so the index stays valid.
-const indexes = new WeakMap()
+import { perElement } from './per-element.js'
 
-export function elementsById($) {
-  const root = $.root().get(0)
-  if (!indexes.has(root)) {
-    const elements = $('[id]').toArray()
-    indexes.set(
-      root,
-      Map.groupBy(elements, (el) => el.attribs.id)
-    )
-  }
-  return indexes.get(root)
-}
+// The elements with each id, in document order, found in one pass and kept per document. Checks look ids up through
+// it instead of querying the document once per element.
+const indexOf = perElement(($) => Map.groupBy($('[id]').toArray(), (el) => el.attribs.id))
+
+export const elementsById = ($) => indexOf($, $.root().get(0))
