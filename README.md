@@ -88,7 +88,16 @@ Tables follow the terminal width (80 to 114 columns).
 | 2    | Usage error, an unreadable input, an output file that cannot be written, or no URL to audit |
 | 130  | The questions asked when run with no arguments were cancelled (Ctrl+C or Esc)               |
 
-A page that cannot be fetched or returns an error status is an error on that page (exit 1), not a reason to stop. A sitemap that was read but lists no URL to audit is still checked, so that run exits 0 or 1. An unreadable input is a URL file, sitemap or `--logo` that cannot be read. An `--out`, `--digest` or `--html` path that is a directory, two of them naming the same file, or a `--content` folder that is a file, cannot be made or written to or is a report's path, exits 2 before any page is fetched, and a report or content file that cannot be written exits 2 even after a complete audit.
+A page that cannot be fetched or returns an error status is an error on that page (exit 1), not a reason to stop. A sitemap that was read but lists no URL to audit is still checked, so that run exits 0 or 1. An unreadable input is a URL file, sitemap or `--logo` that cannot be read.
+
+These report paths exit 2 before any page is fetched:
+
+- An `--out`, `--digest` or `--html` path that is a directory.
+- An `--out`, `--digest` or `--html` path in a folder that does not exist. The `--content` folder and the folders above it are the exception, since the audit makes them before writing any report.
+- Two of `--out`, `--digest` and `--html` naming the same file.
+- A `--content` folder that is a file, that cannot be made or written to, or that a report also names.
+
+A report or content file that cannot be written still exits 2 after a complete audit.
 
 ### HTML report
 

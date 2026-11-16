@@ -238,8 +238,8 @@ async function loadLogo(path) {
 }
 
 // Report paths that would fail only after the whole audit are refused up front.
-async function reportPathsUsable(options) {
-  const problems = await reportPathProblems(
+function reportPathsUsable(options) {
+  const problems = reportPathProblems(
     [
       ['--out', options.out],
       ['--digest', options.digest],
@@ -327,7 +327,7 @@ export async function run(argv, { stdin = process.stdin, lighthouse = runLightho
     return 2
   }
 
-  if (!(await reportPathsUsable(options))) return 2
+  if (!reportPathsUsable(options)) return 2
 
   const logo = await loadLogo(options.branding.logo)
   if (logo === undefined) return 2
