@@ -1,5 +1,6 @@
 import { isElement } from '../parse.js'
 import { collapseWhitespace, limit } from '../text.js'
+import { elementsById } from './ids.js'
 
 const MAX_HTML = 500
 const MAX_PARENT_HTML = 200
@@ -9,17 +10,8 @@ const VALID_ID = /^[A-Za-z][\w-]*$/
 
 const cap = (text, max = MAX_HTML) => limit(collapseWhitespace(text), max)
 
-// How many elements have each id, counted once per document. An id that is used twice does not find one element.
-const idCounts = new WeakMap()
-function idCount($, id) {
-  const root = $.root().get(0)
-  if (!idCounts.has(root)) {
-    const counts = new Map()
-    for (const el of $('[id]').toArray()) counts.set(el.attribs.id, (counts.get(el.attribs.id) ?? 0) + 1)
-    idCounts.set(root, counts)
-  }
-  return idCounts.get(root).get(id) ?? 0
-}
+// How many elements have an id. An id that is used twice does not find one element.
+const idCount = ($, id) => elementsById($).get(id)?.length ?? 0
 
 // The step for one element: its tag, with :nth-of-type when it has same-tag siblings. One pass over the siblings.
 function step(node) {

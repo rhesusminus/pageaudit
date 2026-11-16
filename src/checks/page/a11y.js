@@ -1,5 +1,6 @@
 import { SOURCES } from '../../sources.js'
 import { evidence } from '../evidence.js'
+import { elementsById } from '../ids.js'
 import { seoIssue, snippet } from '../snippet.js'
 import { accessibleName, hasBrokenLabelledBy, namedByScript } from './accname.js'
 
@@ -58,15 +59,9 @@ function referencedIds($) {
 }
 
 function checkDuplicateIds($) {
-  const byId = Map.groupBy(
-    $('[id]')
-      .toArray()
-      .filter((el) => $(el).attr('id')),
-    (el) => $(el).attr('id')
-  )
   const referenced = referencedIds($)
-  return [...byId]
-    .filter(([, els]) => els.length > 1)
+  return [...elementsById($)]
+    .filter(([id, els]) => id && els.length > 1)
     .map(([id, els]) =>
       issue($, els[0], {
         type: 'duplicate-id',
