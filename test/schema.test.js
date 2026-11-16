@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import dns from 'node:dns/promises'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,6 +10,8 @@ import { run } from '../src/cli.js'
 import { buildDigest, DIGEST_VERSION } from '../src/digest.js'
 import { runLighthouse } from '../src/lighthouse.js'
 import { buildReport, SCHEMA_VERSION } from '../src/report.js'
+import { runAudit } from '../src/runner.js'
+import { makeApp, waitForAudit } from './helpers/app.ts'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
 
 const schema = JSON.parse(await readFile(new URL('../schema/report.schema.json', import.meta.url), 'utf8'))
@@ -303,4 +306,50 @@ test('schema: drift is caught - unknown, missing and mistyped fields all fail', 
     change(copy)
     assert.notDeepEqual(check(copy), [], name)
   }
+})
+
+// The fixture pages a check through the server completes. It gives up on a page it cannot fetch or that is not HTML.
+const SERVER_PAGES = NAMES.filter((name) => name.endsWith('.html'))
+
+// Checks each page through the server and returns the app and the audits as GET /audits/:id answers them.
+async function serverAudits(t, names) {
+  t.mock.method(dns, 'lookup', async () => [{ address: '93.184.215.14', family: 4 }])
+  mockFixtureFetch(t)
+  const app = makeApp(t)
+  const audits = []
+  for (const name of names) {
+    const { id } = (await app.inject({ method: 'POST', url: '/audits', body: { url: url(name) } })).json()
+    audits.push(await waitForAudit(app, id))
+  }
+  return { app, audits }
+}
+
+test('schema: the result the server stores and returns for a page matches it', async (t) => {
+  const { app, audits } = await serverAudits(t, SERVER_PAGES)
+  for (const audit of audits) {
+    assert.equal(audit.status, 'completed', audit.url)
+    assert.deepEqual(check(audit.result), [], audit.url)
+    // Only the fields of the report, never the runner's links and response.
+    assert.deepEqual(Object.keys(audit.result.pages[0]).toSorted(), schema.$defs.page.required.toSorted())
+    const { result } = await app.db.get('SELECT result FROM audits WHERE id = ?', audit.id)
+    assert.deepEqual(JSON.parse(result), audit.result)
+  }
+})
+
+test('schema: a result an older server stored as the runner page is returned in the report shape', async (t) => {
+  const { app } = await serverAudits(t, [])
+  await app.ready()
+  const [page] = await runAudit([url('bad-overlong.html')], { pace: async () => {} })
+  assert.ok(page.links && 'response' in page)
+  await app.db.run(
+    `INSERT INTO audits (id, url, status, result, created_at) VALUES ('old', ?, 'completed', ?, '2026-11-01 10:00:00')`,
+    url('bad-overlong.html'),
+    JSON.stringify(page)
+  )
+
+  const audit = (await app.inject({ method: 'GET', url: '/audits/old' })).json()
+
+  assert.deepEqual(check(audit.result), [])
+  assert.equal(audit.result.generatedAt, '2026-11-01T10:00:00.000Z')
+  assert.deepEqual(audit.result.pages[0].issues, page.issues)
 })

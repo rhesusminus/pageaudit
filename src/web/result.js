@@ -6,17 +6,17 @@ import { markup } from '../html/escape.js'
 import { link } from '../html/format.js'
 import { charCount } from '../text.js'
 import { resultBrief } from './brief.js'
-import { findingsOf, verdict } from './findings.js'
+import { checkedPage, findingsOf, verdict } from './findings.js'
 import { addressHeading, checkedAt, count, SEVERITY_LABEL, shortAddress } from './format.js'
 import { againForm } from './home.js'
 import { document } from './layout.js'
-import { facts, platformName } from './result-facts.js'
+import { facts, lengthNote, platformName } from './result-facts.js'
 
 // How many places a finding lists before it says how many more there are.
 const SHOWN_HITS = 3
 
 function resultHead(audit) {
-  const page = audit.result
+  const page = checkedPage(audit.result)
   const when = checkedAt(audit.created_at)
   const heading = addressHeading(page.finalUrl ?? audit.url)
   return markup`<header class="result-head">
@@ -68,12 +68,12 @@ function snippetNotes({ title, description }) {
   const descriptionLength = description ? charCount(description) : 0
   if (titleLength > TITLE_MAX) {
     notes.push(
-      `The title is ${titleLength} characters. Results often cut titles after about ${TITLE_MAX}, so the marked part may not show.`
+      `The title is ${lengthNote(title)}. Results often cut titles after about ${TITLE_MAX}, so the marked part may not show.`
     )
   }
   if (descriptionLength > DESCRIPTION_MAX) {
     notes.push(
-      `The description is ${descriptionLength} characters. Results often cut it after about ${DESCRIPTION_MAX}, so the marked part may not show.`
+      `The description is ${lengthNote(description)}. Results often cut it after about ${DESCRIPTION_MAX}, so the marked part may not show.`
     )
   }
   return notes.length ? markup`<ul class="snippet-notes">${notes.map((note) => markup`<li>${note}</li>`)}</ul>` : ''
@@ -182,8 +182,8 @@ function claudeSection(audit, origin) {
 
 // `origin` is the address this server is reached at, for the links in the brief.
 export function resultPage(audit, origin) {
-  const page = audit.result
-  const { groups, toFix, notes } = findingsOf(page)
+  const page = checkedPage(audit.result)
+  const { groups, toFix, notes } = findingsOf(audit.result)
   const main = markup`<article class="result" aria-labelledby="result-title">
       ${resultHead(audit)}
       <p class="verdict">${verdict(groups)}</p>

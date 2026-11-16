@@ -2,6 +2,7 @@
 import { isIP } from 'node:net'
 import { isLocalhostName } from '../api/public-destination.js'
 import { ABSOLUTE_URL } from '../checks/page/meta.js'
+import { isoTime } from '../db/database.ts'
 import { markup } from '../html/escape.js'
 import { charCount } from '../text.js'
 
@@ -44,11 +45,10 @@ export const SEVERITY_LABEL = { error: 'Error', warning: 'Warning', info: 'Note'
 // A number and its noun, joined by a no-break space so a line never ends between them ("3 / things").
 export const count = (n, one, many = `${one}s`) => `${n.toLocaleString('en')}\u00a0${n === 1 ? one : many}`
 
-// SQLite stores created_at as "YYYY-MM-DD HH:MM:SS" in UTC. The server does not know the reader's time zone, so the
-// time is shown in UTC and says so.
+// created_at is in UTC. The server does not know the reader's time zone, so the time is shown in UTC and says so.
 const DATE_TIME = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' })
 
 export function checkedAt(createdAt) {
-  const iso = `${createdAt.replace(' ', 'T')}Z`
+  const iso = isoTime(createdAt)
   return { iso, text: `${DATE_TIME.format(new Date(iso))} UTC` }
 }

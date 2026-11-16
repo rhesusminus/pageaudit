@@ -1,7 +1,7 @@
 // "What’s on the page": the facts the audit read from the page, in words. The rows are plain text, so the results
 // page and the Markdown brief for Claude say the same thing.
 import { markup } from '../html/escape.js'
-import { charCount } from '../text.js'
+import { factLength, h1sAtCap } from '../report.js'
 import { count } from './format.js'
 
 // A row: `value` is the text, `missing` marks a value that is not there (shown muted), `note` is said after it, and
@@ -10,7 +10,16 @@ const none = (value = 'None') => ({ value, missing: true })
 const fromPage = (value, note) => ({ value, fromPage: true, note })
 const said = (value) => ({ value })
 
-const withLength = (text) => (text ? fromPage(text, count(charCount(text), 'character')) : none())
+// "N characters", or "over N characters" for text the report cut short.
+export function lengthNote(text) {
+  const { count: n, cut } = factLength(text)
+  return `${cut ? 'over ' : ''}${count(n, 'character')}`
+}
+
+const withLength = (text) => (text ? fromPage(text, lengthNote(text)) : none())
+
+// The report keeps only the first main headings, so a full list may not be all of them.
+const headingNote = (h1s) => (h1sAtCap(h1s) ? `the first ${h1s.length}, there may be more` : undefined)
 
 function socialPreview({ openGraph, twitterCard }) {
   if (!openGraph?.title && !twitterCard) return none()
@@ -31,7 +40,7 @@ export function factRows(f) {
   return [
     ['Title', withLength(f.title)],
     ['Description', withLength(f.description)],
-    ['Main heading', f.h1s.length ? fromPage(f.h1s.join(', ')) : none()],
+    ['Main heading', f.h1s.length ? fromPage(f.h1s.join(', '), headingNote(f.h1s)) : none()],
     ['Canonical address', f.canonical ? fromPage(f.canonical) : none()],
     ['Language', f.lang ? fromPage(f.lang) : none('Not set')],
     ['Words', said(f.wordCount.toLocaleString('en'))],

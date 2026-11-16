@@ -4,7 +4,7 @@
 import { adviceFor } from '../advice.js'
 import { code as codeSpan } from '../markdown.js'
 import { collapseWhitespace } from '../text.js'
-import { findingsOf, verdict } from './findings.js'
+import { checkedPage, findingsOf, verdict } from './findings.js'
 import { checkedAt, count, SEVERITY_LABEL, shortAddress } from './format.js'
 import { factRows, platformName } from './result-facts.js'
 import { failure } from './status.js'
@@ -21,7 +21,7 @@ const code = (text) => codeSpan(oneLine(text))
 const quoted = (text) => `"${oneLine(text)}"`
 
 function about(audit, origin) {
-  const page = audit.result
+  const page = audit.result && checkedPage(audit.result)
   const lines = [`- Address: ${page?.finalUrl ?? audit.url}`]
   if (page) {
     const redirects = page.redirects.length
@@ -94,8 +94,8 @@ const INTRO =
 
 export function resultBrief(audit, origin) {
   if (audit.status === 'failed') return plain(failedBrief(audit, origin))
-  const page = audit.result
-  const { groups, toFix, notes } = findingsOf(page)
+  const page = checkedPage(audit.result)
+  const { groups, toFix, notes } = findingsOf(audit.result)
   const blocks = [
     `# pageaudit results for ${shortAddress(page.finalUrl ?? audit.url)}`,
     INTRO,

@@ -62,8 +62,21 @@ test('GET /audits/:id: returns the completed audit with the fetched page facts',
   t.assert.strictEqual(audit.status, 'completed')
   t.assert.strictEqual(audit.error, null)
   t.assert.strictEqual(audit.url, `${FIXTURE_HOST}/good.html`)
-  t.assert.strictEqual(audit.result.finalUrl, `${FIXTURE_HOST}/good.html`)
-  t.assert.strictEqual(audit.result.status, 200)
+  t.assert.strictEqual(audit.result.pages[0].finalUrl, `${FIXTURE_HOST}/good.html`)
+  t.assert.strictEqual(audit.result.pages[0].status, 200)
+})
+
+test('GET /audits/:id: returns a stored result of another schema version as it is', async (t: TestContext) => {
+  mockFixtureFetch(t)
+  const app = makeApp(t)
+  const { id, result } = await runAudit(app, `${FIXTURE_HOST}/good.html`)
+  const later = { ...result, schemaVersion: 2 }
+  await app.db.run('UPDATE audits SET result = ? WHERE id = ?', JSON.stringify(later), id)
+
+  const response = await app.inject({ method: 'GET', url: `/audits/${id}` })
+
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.deepStrictEqual(response.json().result, later)
 })
 
 test('GET /audits/:id: reports the final URL after a redirect', async (t: TestContext) => {
@@ -73,7 +86,7 @@ test('GET /audits/:id: reports the final URL after a redirect', async (t: TestCo
   const audit = await runAudit(app, `${FIXTURE_HOST}/redirect-once`)
 
   t.assert.strictEqual(audit.status, 'completed')
-  t.assert.strictEqual(audit.result.finalUrl, `${FIXTURE_HOST}/good.html`)
+  t.assert.strictEqual(audit.result.pages[0].finalUrl, `${FIXTURE_HOST}/good.html`)
 })
 
 test('GET /audits/:id: reports a page that cannot be fetched as a failed audit', async (t: TestContext) => {
@@ -177,7 +190,7 @@ test('POST /audits: audits a site on this machine when private destinations are 
 
   const audit = await runAudit(makeApp(t, { allowPrivateDestinations: true }), url)
   t.assert.strictEqual(audit.status, 'completed')
-  t.assert.strictEqual(audit.result.facts.title, 'Local development site')
+  t.assert.strictEqual(audit.result.pages[0].facts.title, 'Local development site')
 })
 
 test('GET /audits/:id: fails an audit whose redirect chain leads to a private destination', async (t: TestContext) => {

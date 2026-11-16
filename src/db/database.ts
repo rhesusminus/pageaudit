@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { FastifyInstance } from 'fastify'
 import { AUDIT_ERROR } from '../api/audit-errors.js'
+import { buildReport } from '../report.js'
 import type { runAudit } from '../runner.js'
 
 type Db = FastifyInstance['db']
@@ -40,6 +41,20 @@ export async function recoverInterruptedAudits(db: Db) {
   )
 }
 
+// SQLite's CURRENT_TIMESTAMP, which created_at holds, is "YYYY-MM-DD HH:MM:SS" in UTC. As an ISO 8601 date-time.
+export const isoTime = (sqliteTime: string) => `${sqliteTime.replace(' ', 'T')}Z`
+
+// What a completed audit stores and GET /audits/:id returns: the JSON report of its one page, as the CLI writes it
+// (schema/report.schema.json), never the runner's page with its internal fields.
+const reportOf = (page: AuditPage, now?: Date) => buildReport({ pages: [page], site: [], now })
+
+// Older versions stored the runner's page itself. It holds everything the report is built from, so it becomes one
+// when it is read. The time it was made was not kept, so the report says the time the audit was queued.
+function storedResult(result: string, createdAt: string) {
+  const stored = JSON.parse(result)
+  return 'schemaVersion' in stored ? stored : reportOf(stored, new Date(isoTime(createdAt)))
+}
+
 export async function getAudit(db: Db, id: string) {
   const row = await db.get<AuditRow>('SELECT * FROM audits WHERE id = ?', id)
 
@@ -49,7 +64,7 @@ export async function getAudit(db: Db, id: string) {
 
   return {
     ...row,
-    result: row.result === null ? null : JSON.parse(row.result)
+    result: row.result === null ? null : storedResult(row.result, row.created_at)
   }
 }
 
@@ -106,7 +121,7 @@ export async function completeAudit(db: Db, id: string, page: AuditPage) {
      SET status = 'completed', result = ?
      WHERE id = ?
        AND status = 'running'`,
-    JSON.stringify(page),
+    JSON.stringify(reportOf(page)),
     id
   )
 }
