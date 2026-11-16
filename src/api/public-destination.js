@@ -5,13 +5,14 @@ import { Agent } from 'undici'
 import { fetchPage } from '../fetch.js'
 
 // An audit destination the API refuses, with the HTTP status the refusal should answer with. `reason` says why, so a
-// caller can word it for its own readers: 'invalid' (not a web address), 'private' (not a public address),
-// 'unknown-host' (the name has no addresses) or 'lookup-failed' (the lookup failed in a way that may pass on retry).
+// caller can word it for its own readers: 'invalid' (not a web address), 'too-long' (longer than MAX_ADDRESS_LENGTH),
+// 'private' (not a public address), 'unknown-host' (the name has no addresses) or 'lookup-failed' (the lookup failed in
+// a way that may pass on retry).
 // `host` is the name that was looked up, for the two lookup reasons.
 export class DestinationError extends Error {
   /**
    * @param {string} message
-   * @param {{ reason: 'invalid' | 'private' | 'unknown-host' | 'lookup-failed', host?: string | null,
+   * @param {{ reason: 'invalid' | 'too-long' | 'private' | 'unknown-host' | 'lookup-failed', host?: string | null,
    *   statusCode?: 400 | 503, cause?: unknown }} options
    */
   constructor(message, { reason, host = null, statusCode = 400, cause }) {
@@ -22,6 +23,10 @@ export class DestinationError extends Error {
     this.statusCode = statusCode
   }
 }
+
+// The longest address an audit is queued for, counted both as it was given and as it is fetched. The API schema and
+// the form field take their limits from here too, so the API and the web form refuse the same addresses.
+export const MAX_ADDRESS_LENGTH = 2048
 
 const blocked = () =>
   new DestinationError('Audit destinations must use public network addresses', { reason: 'private' })

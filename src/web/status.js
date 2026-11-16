@@ -108,6 +108,16 @@ export const refusedPage = () =>
       <p><a href="/">Check a page here</a> instead.</p>`
   })
 
+// A request for a host name this server does not answer to, so another site cannot reach it through a name of its own.
+// The next step is in words, not a link: this server cannot know which of its addresses the reader can open.
+export const unknownHostPage = () =>
+  messagePage({
+    title: 'Address not answered',
+    heading: 'This server does not answer at this address',
+    body: markup`<p>pageaudit only answers at localhost, at an IP address or at the address set in <code>PUBLIC_URL</code>, so that another site cannot reach it through a name of its own.</p>
+      <p>Open it at localhost instead, or start it with <code>PUBLIC_URL</code> set to this address to use it here.</p>`
+  })
+
 // A request this site could not read, such as a form that is too large or not sent as a form.
 export const requestErrorPage = () =>
   messagePage({

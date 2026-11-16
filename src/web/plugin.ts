@@ -2,8 +2,9 @@ import { join } from 'node:path'
 import formbody from '@fastify/formbody'
 import fastifyStatic from '@fastify/static'
 import type { FastifyError, FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
+import { sentHost } from '../api/allowed-host.ts'
 import { errorStatus } from '../api/error-status.ts'
-import { DestinationError } from '../api/public-destination.js'
+import { DestinationError, MAX_ADDRESS_LENGTH } from '../api/public-destination.js'
 import { queueCheckedAudit } from '../api/queue-audit.ts'
 import { deleteAudit, getAudit } from '../db/database.ts'
 import { resultBrief } from './brief.js'
@@ -21,6 +22,9 @@ type WebOptions = {
   // it, links that leave the page use the address of each request.
   publicOrigin?: string
 }
+
+// Where the stylesheet and the script are served. @fastify/static serves them through one route, this prefix and *.
+export const ASSETS_PREFIX = '/assets/'
 
 type Audit = NonNullable<Awaited<ReturnType<typeof getAudit>>>
 
@@ -69,6 +73,9 @@ function sendBrief(reply: FastifyReply, audit: Audit | undefined, origin: string
 
 // Why an address was not checked, in the words of someone who typed it into the form.
 function addressProblem({ reason, host }: DestinationError) {
+  if (reason === 'too-long') {
+    return `That address is too long to check. It can be at most ${MAX_ADDRESS_LENGTH.toLocaleString('en')} characters, and a space or a letter such as é counts as several.`
+  }
   if (reason === 'private') return 'That address is not on the public internet, so it cannot be checked.'
   if (reason === 'unknown-host') return `No site answers at ${host}. Check the spelling of the address.`
   if (reason === 'lookup-failed') return `Could not look up ${host} just now. Try again in a minute.`
@@ -89,8 +96,9 @@ function fromThisSite(request: FastifyRequest, publicOrigin?: string) {
   const { origin } = request.headers
   if (origin === undefined) return true
   // Without a configured origin only the host is compared, since behind a proxy the request itself may arrive over
-  // http. "null" (a sandboxed or privacy-sensitive context) never matches.
-  return publicOrigin ? origin === publicOrigin : URL.parse(origin)?.host === request.host
+  // http. It is the Host the browser sent, one this server answers to (see allowed-host.ts), never X-Forwarded-Host,
+  // which a script can set to match its own Origin. "null" (a sandboxed or privacy-sensitive context) never matches.
+  return publicOrigin ? origin === publicOrigin : URL.parse(origin)?.host === sentHost(request)
 }
 
 // Client errors, such as a form too large or a body that does not parse, keep their status. Only server errors are
@@ -107,7 +115,11 @@ export const webPages: FastifyPluginAsync<WebOptions> = async (
   { onAuditQueued, allowPrivateDestinations = false, publicOrigin }
 ) => {
   await fastify.register(formbody)
-  await fastify.register(fastifyStatic, { root: join(import.meta.dirname, 'public'), prefix: '/assets/', index: false })
+  await fastify.register(fastifyStatic, {
+    root: join(import.meta.dirname, 'public'),
+    prefix: ASSETS_PREFIX,
+    index: false
+  })
 
   const sameOriginOnly = async (request: FastifyRequest, reply: FastifyReply) => {
     if (!fromThisSite(request, publicOrigin)) return sendPage(reply, 403, refusedPage())

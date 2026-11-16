@@ -1,12 +1,13 @@
 import dns from 'node:dns/promises'
 import type { TestContext } from 'node:test'
 import { test } from 'node:test'
+import { MAX_ADDRESS_LENGTH } from '../src/api/public-destination.js'
 import { withScheme } from '../src/web/format.js'
-import { type App, makeApp, resolvePublicly, serveLocally, waitForAudit } from './helpers/app.ts'
+import { type App, isolateNetwork, makeApp, serveLocally, waitForAudit } from './helpers/app.ts'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
 import { mockFetch } from './helpers/mock-fetch.js'
 
-resolvePublicly()
+isolateNetwork()
 
 // Posts the check form the way a browser on this site does.
 const postCheck = (app: App, url: string, headers: Record<string, string> = {}) =>
@@ -42,6 +43,7 @@ test('GET /: shows the check form under a policy that allows no inline code', as
   t.assert.match(response.headers['content-security-policy'] as string, /default-src 'none'; script-src 'self'/)
   t.assert.strictEqual(response.headers['cache-control'], 'no-store')
   t.assert.match(response.body, /<form class="check-form" method="post" action="\/check"/)
+  t.assert.ok(response.body.includes(`maxlength="${MAX_ADDRESS_LENGTH}"`))
   t.assert.doesNotMatch(response.body, /The results were deleted/)
 })
 
@@ -166,6 +168,28 @@ test('POST /check: a form too large keeps its status and is not called a server 
   t.assert.strictEqual(response.statusCode, 413)
   t.assert.match(response.body, /This request could not be read/)
   t.assert.doesNotMatch(response.body, /on our side/)
+})
+
+test('POST /check: refuses an address longer than the API takes, as typed or as it is fetched', async (t: TestContext) => {
+  const app = makeApp(t)
+  const base = 'https://example.com/'
+  const refused = [
+    `${base}${'a'.repeat(MAX_ADDRESS_LENGTH - base.length + 1)}`,
+    // The fragment is never fetched, but it was sent, and the API counts it too.
+    `${base}#${'a'.repeat(MAX_ADDRESS_LENGTH)}`,
+    // Each of these is six characters once encoded for the request.
+    `${base}${'é'.repeat(400)}`
+  ]
+
+  for (const address of refused) {
+    const response = await postCheck(app, address)
+    t.assert.strictEqual(response.statusCode, 400, address.slice(0, 30))
+    t.assert.ok(response.body.includes('That address is too long to check. It can be at most 2,048 characters'))
+  }
+  const longest = await postCheck(app, `${base}${'a'.repeat(MAX_ADDRESS_LENGTH - base.length)}`)
+  t.assert.strictEqual(longest.statusCode, 303)
+  const stored = await app.db.get<{ n: number }>('SELECT count(*) AS n FROM audits')
+  t.assert.strictEqual(stored?.n, 1)
 })
 
 test('POST /check: takes a form only from this site', async (t: TestContext) => {
@@ -363,7 +387,7 @@ test('GET /check/:id.md: gives the results as Markdown for Claude', async (t: Te
   const app = makeApp(t)
   const { location, id } = await check(app, `${FIXTURE_HOST}/bad-overlong.html`)
 
-  const response = await app.inject({ method: 'GET', url: `${location}.md`, headers: { host: 'audit.test:8080' } })
+  const response = await app.inject({ method: 'GET', url: `${location}.md`, headers: { host: 'app.localhost:8080' } })
 
   t.assert.strictEqual(response.statusCode, 200)
   t.assert.match(response.headers['content-type'] as string, /^text\/markdown; charset=utf-8/)
@@ -373,7 +397,7 @@ test('GET /check/:id.md: gives the results as Markdown for Claude', async (t: Te
   )
   const brief = response.body
   t.assert.match(brief, /^# pageaudit results for fixtures\.test\/bad-overlong\.html\n/)
-  t.assert.ok(brief.includes(`- Full results as JSON: http://audit.test:8080/audits/${id}`))
+  t.assert.ok(brief.includes(`- Full results as JSON: http://app.localhost:8080/audits/${id}`))
   t.assert.match(brief, /\n## What to fix\n\n### 1\. (Error|Warning): .+ \(`[a-z-]+`\)\n\nWhy it matters: /)
   t.assert.match(brief, /- Title: "The Ultimate Guide to Choosing/)
   t.assert.match(brief, /`\. Found `\d+`, expected at most 60 characters\.\n/)
@@ -439,10 +463,10 @@ test('GET /check/:id.md: links to the public address when one is set', async (t:
   const app = makeApp(t, { publicUrl: 'https://audit.example/' })
   const { location, id } = await check(app, `${FIXTURE_HOST}/good.html`)
 
-  const brief = (await app.inject({ method: 'GET', url: `${location}.md`, headers: { host: 'evil.test' } })).body
+  const brief = (await app.inject({ method: 'GET', url: `${location}.md`, headers: { host: '127.0.0.1:8080' } })).body
 
   t.assert.ok(brief.includes(`- Full results as JSON: https://audit.example/audits/${id}`))
-  t.assert.doesNotMatch(brief, /evil\.test/)
+  t.assert.doesNotMatch(brief, /127\.0\.0\.1/)
 })
 
 test('GET /check/:id.md: quotes the theme name, which comes from the page', async (t: TestContext) => {

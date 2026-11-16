@@ -1,9 +1,10 @@
-import type { FastifyError, FastifyServerOptions } from 'fastify'
+import type { FastifyError, FastifyReply, FastifyRequest, FastifyServerOptions } from 'fastify'
 import fastify from 'fastify'
 import { fpSqlitePlugin } from 'fastify-sqlite-typed'
 import { claimNextAudit, completeAudit, failAudit, recoverInterruptedAudits } from '../db/database.ts'
-import { sendPage, webPages } from '../web/plugin.ts'
-import { missingPage } from '../web/status.js'
+import { ASSETS_PREFIX, sendPage, webPages } from '../web/plugin.ts'
+import { missingPage, unknownHostPage } from '../web/status.js'
+import { answersTo, sentHost } from './allowed-host.ts'
 import { errorStatus } from './error-status.ts'
 import { routes } from './routes.ts'
 import { startAuditWorker } from './worker.ts'
@@ -18,6 +19,18 @@ type AppOptions = {
   allowPrivateDestinations?: boolean
 }
 
+// A browser asking for a page gets one. Every other client keeps the { error } shape of the API.
+const sendError = (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  statusCode: number,
+  error: string,
+  page: () => string
+) =>
+  request.headers.accept?.includes('text/html')
+    ? sendPage(reply, statusCode, page())
+    : reply.code(statusCode).send({ error })
+
 export function build(
   opts: FastifyServerOptions = {},
   { dbFilename = './database.db', publicUrl, allowPrivateDestinations = false }: AppOptions = {}
@@ -25,13 +38,25 @@ export function build(
   let worker: ReturnType<typeof startAuditWorker> | undefined
   const app = fastify(opts)
   // Parsed here, so an address that is not a URL stops the server at startup rather than breaking every link.
-  const publicOrigin = publicUrl ? new URL(publicUrl).origin : undefined
+  const publicAddress = publicUrl ? new URL(publicUrl) : undefined
 
   const onAuditQueued = () => worker?.wake()
 
+  // Before every route, the API and the pages alike, and before the body is read. 421 Misdirected Request says the
+  // request named a host this server does not answer for, rather than that the request was malformed. Only the static
+  // files pass at any host: they hold nothing about anyone's audits, and the refusal page needs its stylesheet. The
+  // route the router matched is compared, not the path, so a path that leaves /assets/ is either routed elsewhere and
+  // refused here, or taken by the static files, which serve only files from their own folder.
+  app.addHook('onRequest', async (request, reply) => {
+    if (request.routeOptions.url === `${ASSETS_PREFIX}*`) return
+    if (answersTo(sentHost(request), publicAddress?.hostname)) return
+    const error = 'This server only answers at localhost, an IP address or the host of PUBLIC_URL'
+    return sendError(request, reply, 421, error, unknownHostPage)
+  })
+
   app.register(fpSqlitePlugin, { dbFilename })
   app.register(routes, { onAuditQueued, allowPrivateDestinations })
-  app.register(webPages, { onAuditQueued, allowPrivateDestinations, publicOrigin })
+  app.register(webPages, { onAuditQueued, allowPrivateDestinations, publicOrigin: publicAddress?.origin })
 
   // Every error answers { error }, the shape the route schemas declare. Client errors (validation, malformed JSON)
   // keep Fastify's message so the caller can fix the request. Server errors are logged and their message is hidden.
@@ -46,12 +71,7 @@ export function build(
     return reply.code(statusCode).send({ error: 'Internal Server Error' })
   })
 
-  // A browser asking for a page gets one. Every other client keeps the { error } shape of the API.
-  app.setNotFoundHandler((request, reply) =>
-    request.headers.accept?.includes('text/html')
-      ? sendPage(reply, 404, missingPage())
-      : reply.code(404).send({ error: 'Not found' })
-  )
+  app.setNotFoundHandler((request, reply) => sendError(request, reply, 404, 'Not found', missingPage))
 
   app.addHook('onReady', async () => {
     await app.db.exec(`
