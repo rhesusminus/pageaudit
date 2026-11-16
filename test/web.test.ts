@@ -3,11 +3,11 @@ import type { TestContext } from 'node:test'
 import { test } from 'node:test'
 import { MAX_ADDRESS_LENGTH } from '../src/api/public-destination.js'
 import { withScheme } from '../src/web/format.js'
-import { type App, makeApp, resolvePublicly, serveLocally, waitForAudit } from './helpers/app.ts'
+import { type App, isolateNetwork, makeApp, serveLocally, waitForAudit } from './helpers/app.ts'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
 import { mockFetch } from './helpers/mock-fetch.js'
 
-resolvePublicly()
+isolateNetwork()
 
 // Posts the check form the way a browser on this site does.
 const postCheck = (app: App, url: string, headers: Record<string, string> = {}) =>

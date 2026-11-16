@@ -2,9 +2,9 @@ import type { TestContext } from 'node:test'
 import { test } from 'node:test'
 import { answersTo } from '../src/api/allowed-host.ts'
 import { build } from '../src/api/app.ts'
-import { type App, makeApp, resolvePublicly } from './helpers/app.ts'
+import { type App, isolateNetwork, makeApp } from './helpers/app.ts'
 
-resolvePublicly()
+isolateNetwork()
 
 // The Host a browser sends after a site it visits has pointed its own name at this machine (DNS rebinding).
 const REBOUND = { host: 'attacker.example:8080' }
