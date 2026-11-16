@@ -74,9 +74,9 @@ function factList(f) {
 }
 
 function failedBrief(audit, origin) {
-  const { title, why, fix, reason } = failure(audit.error)
+  const { title, why, fix, reason, heading = 'pageaudit could not check' } = failure(audit.error)
   return [
-    `# pageaudit could not check ${shortAddress(audit.url)}`,
+    `# ${heading} ${shortAddress(audit.url)}`,
     about(audit, origin),
     `${title}. ${why}`,
     fix,

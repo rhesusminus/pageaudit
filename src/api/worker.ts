@@ -30,32 +30,74 @@ async function runAnyAudit(url: string) {
   return page
 }
 
-async function processNextAudit(
-  app: FastifyInstance,
-  helpers: AuditWorkerHelpers,
-  audit: (url: string) => Promise<AuditPage>
-) {
-  const job = await helpers.claimNextAudit(app.db)
-  if (!job) {
-    return false
-  }
+// What became of an audit: the page it read, or the error a failed audit stores.
+type Outcome = { page: AuditPage } | { error: string }
 
+type WorkerContext = {
+  app: FastifyInstance
+  helpers: AuditWorkerHelpers
+  audit: (url: string) => Promise<AuditPage>
+  // Waits one poll interval before something is tried again. False once the worker is stopping.
+  pause: () => Promise<boolean>
+}
+
+async function runJob({ app, audit }: WorkerContext, job: AuditJob): Promise<Outcome> {
   let page: AuditPage
   try {
     page = await audit(job.url)
   } catch (error) {
     app.log.error({ err: error, auditId: job.id }, 'Audit failed')
-    await helpers.failAudit(app.db, job.id, AUDIT_ERROR.failed)
-    return true
+    return { error: AUDIT_ERROR.failed }
   }
 
   // A failed fetch is returned as a page, rather than thrown by the runner.
-  if (page.status === null) {
-    await helpers.failAudit(app.db, job.id, AUDIT_ERROR.fetchFailed)
-  } else {
-    await helpers.completeAudit(app.db, job.id, page)
+  return page.status === null ? { error: AUDIT_ERROR.fetchFailed } : { page }
+}
+
+// Errors that mean another connection holds the database for now, so the same write can pass on a later try.
+const TRANSIENT = new Set(['SQLITE_BUSY', 'SQLITE_LOCKED'])
+
+const isTransient = (error: unknown) =>
+  typeof error === 'object' && error !== null && 'code' in error && TRANSIENT.has(String(error.code))
+
+function saveOutcome({ app, helpers }: WorkerContext, id: string, outcome: Outcome) {
+  return 'page' in outcome
+    ? helpers.completeAudit(app.db, id, outcome.page)
+    : helpers.failAudit(app.db, id, outcome.error)
+}
+
+// A claimed audit reaches a final state even when saving its outcome fails, or its progress page would wait forever.
+// While the database is locked, the same save is tried again every poll interval. A result that cannot be saved at
+// all, such as when the disk is full or it is too large, is stored as failed instead. No other audit starts
+// meanwhile, and only a stop gives up, leaving the audit to the restart recovery.
+async function finish(worker: WorkerContext, job: AuditJob, outcome: Outcome) {
+  const { app, helpers, pause } = worker
+  const saveFailure = () => helpers.failAudit(app.db, job.id, AUDIT_ERROR.notSaved)
+  let save = () => saveOutcome(worker, job.id, outcome)
+  let wait = false
+  for (;;) {
+    if (wait && !(await pause())) return
+    try {
+      await save()
+      return
+    } catch (error) {
+      app.log.error({ err: error, auditId: job.id }, 'Could not save the audit result')
+      // A result that can never be saved is stored as failed instead, at once.
+      const giveUp = 'page' in outcome && !isTransient(error) && save !== saveFailure
+      if (giveUp) save = saveFailure
+      wait = !giveUp
+    }
+  }
+}
+
+// False when there was no audit to run.
+async function processNextAudit(worker: WorkerContext) {
+  const job = await worker.helpers.claimNextAudit(worker.app.db)
+  if (!job) {
+    return false
   }
 
+  await finish(worker, job, await runJob(worker, job))
   return true
 }
 
@@ -85,11 +127,21 @@ export function startAuditWorker(
       endSleep = done
     })
 
+  const worker: WorkerContext = {
+    app,
+    helpers,
+    audit,
+    pause: async () => {
+      if (!stopped) await idle()
+      return !stopped
+    }
+  }
+
   async function work() {
     while (!stopped) {
       woken = false
       try {
-        if (await processNextAudit(app, helpers, audit)) {
+        if (await processNextAudit(worker)) {
           continue
         }
       } catch (error) {

@@ -1,6 +1,7 @@
 import dns from 'node:dns/promises'
 import type { TestContext } from 'node:test'
 import { test } from 'node:test'
+import { AUDIT_ERROR } from '../src/api/audit-errors.js'
 import { MAX_ADDRESS_LENGTH } from '../src/api/public-destination.js'
 import { withScheme } from '../src/web/format.js'
 import { type App, makeApp, resolvePublicly, serveLocally, waitForAudit } from './helpers/app.ts'
@@ -288,6 +289,25 @@ test('GET /check/:id: explains a page that could not be fetched', async (t: Test
   t.assert.match(response.body, /<h1 id="failed-title">The page could not be reached<\/h1>/)
   t.assert.doesNotMatch(response.body, /Reason given/)
   t.assert.match(response.body, /<button type="submit" class="primary">Try again<\/button>/)
+})
+
+test('GET /check/:id: says when the results could not be saved', async (t: TestContext) => {
+  const app = makeApp(t)
+  await app.ready()
+  await app.db.run(
+    `INSERT INTO audits (id, url, status, error) VALUES ('unsaved', 'https://a.test/', 'failed', ?)`,
+    AUDIT_ERROR.notSaved
+  )
+
+  const response = await page(app, '/check/unsaved')
+  const brief = (await app.inject({ method: 'GET', url: '/check/unsaved.md' })).body
+
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.match(response.body, /<h1 id="failed-title">The results could not be saved<\/h1>/)
+  t.assert.match(response.body, /no other program, such as a database browser, holds database\.db open/)
+  t.assert.doesNotMatch(response.body, /Reason given/)
+  t.assert.match(brief, /^# pageaudit could not save the results for a\.test\n/)
+  t.assert.doesNotMatch(brief, /could not check/)
 })
 
 test('GET /check/:id: answers 404 with a page for an unknown id', async (t: TestContext) => {

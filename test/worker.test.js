@@ -101,21 +101,82 @@ test('worker: wakes immediately on idle shutdown and workers have independent li
   assert.equal(second.saved[0].id, 'new')
 })
 
-test('worker: persistence failures are logged without marking a successful audit failed', {
+// An error as the SQLite driver throws it, with its code.
+const sqliteError = (code) => Object.assign(new Error(`${code}: database error`), { code })
+
+test('worker: a result that cannot be saved marks the audit failed instead of leaving it running', {
   timeout: 1000
 }, async (t) => {
-  const result = Promise.withResolvers()
-  const attempted = Promise.withResolvers()
-  const state = setup(t, [{ id: 'save', url: 'https://job.test' }], { audit: async () => result.promise })
+  const state = setup(t, [{ id: 'save', url: 'https://job.test' }], { audit: async () => ({ status: 200 }) })
   state.helpers.completeAudit = async () => {
-    attempted.resolve()
-    throw new Error('database unavailable')
+    throw sqliteError('SQLITE_TOOBIG')
   }
-  result.resolve({ status: 200 })
-  await attempted.promise
+  await state.finished
   await state.worker.stop()
+  assert.deepEqual(state.saved, [{ id: 'save', error: 'Audit result could not be saved' }])
   assert.equal(state.app.log.error.mock.callCount(), 1)
+})
+
+// The database stays locked for the first three writes, then frees up. Returns how many audits had been claimed when
+// the write went through.
+function lockFor(state, name, writes = 3) {
+  const write = state.helpers[name]
+  let attempts = 0
+  const claims = { whenSaved: undefined }
+  state.helpers[name] = async (...args) => {
+    if (++attempts <= writes) throw sqliteError(attempts % 2 ? 'SQLITE_BUSY' : 'SQLITE_LOCKED')
+    claims.whenSaved ??= state.helpers.claimNextAudit.mock.callCount()
+    return write(...args)
+  }
+  return claims
+}
+
+const twoJobs = () => [
+  { id: 'locked', url: 'https://job.test/1' },
+  { id: 'next', url: 'https://job.test/2' }
+]
+
+test('worker: a result is saved once the database frees up, before the next audit starts', {
+  timeout: 1000
+}, async (t) => {
+  const state = setup(t, twoJobs(), { audit: async () => ({ status: 200 }) })
+  const claims = lockFor(state, 'completeAudit')
+  await state.finished
+  await state.worker.stop()
+  assert.deepEqual(state.saved[0], { id: 'locked', page: { status: 200 } })
+  assert.equal(state.app.log.error.mock.callCount(), 3)
+  assert.equal(claims.whenSaved, 1)
+})
+
+test('worker: a failure is saved once the database frees up, before the next audit starts', {
+  timeout: 1000
+}, async (t) => {
+  const state = setup(t, twoJobs(), { audit: async () => ({ status: null }) })
+  const claims = lockFor(state, 'failAudit')
+  await state.finished
+  await state.worker.stop()
+  assert.deepEqual(state.saved[0], { id: 'locked', error: 'Could not fetch page' })
+  assert.equal(state.app.log.error.mock.callCount(), 3)
+  assert.equal(claims.whenSaved, 1)
+})
+
+test('worker: stop ends the retries of an outcome that cannot be saved', { timeout: 1000 }, async (t) => {
+  const tried = Promise.withResolvers()
+  const state = setup(t, [{ id: 'full', url: 'https://job.test' }], {
+    pollIntervalMs: 60_000,
+    audit: async () => ({ status: 200 })
+  })
+  state.helpers.completeAudit = async () => {
+    throw sqliteError('SQLITE_FULL')
+  }
+  state.helpers.failAudit = async () => {
+    tried.resolve()
+    throw sqliteError('SQLITE_FULL')
+  }
+  await tried.promise
+  await state.worker.stop()
   assert.deepEqual(state.saved, [])
+  assert.equal(state.helpers.claimNextAudit.mock.callCount(), 1)
 })
 
 test('worker: wake starts a newly queued audit without waiting for the next poll', { timeout: 1000 }, async (t) => {

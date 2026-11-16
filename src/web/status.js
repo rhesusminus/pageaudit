@@ -41,13 +41,24 @@ export function progressPage(audit) {
   return document({ title: `Checking ${address}`, main, head })
 }
 
-// What a failed check means for the reader. A fetch that failed has advice of its own. Any other failure means the
-// check itself broke or was interrupted, and only then is the reason the worker gave shown, since for a fetch that
-// failed it would repeat the heading.
+// What a failed check means for the reader. A fetch that failed and results that could not be saved have words of
+// their own, the second with a `heading` for the brief, since that check did run. Any other failure means the check
+// itself broke or was interrupted, and only then is the reason the worker gave shown, since for the other two it would
+// repeat the heading.
 export function failure(error) {
   if (error === AUDIT_ERROR.fetchFailed) {
     const { title, why } = adviceFor('fetch-failed')
     return { title, why, fix: 'Check that the address is correct and that the site is up, then try again.' }
+  }
+  if (error === AUDIT_ERROR.notSaved) {
+    return {
+      title: 'The results could not be saved',
+      heading: 'pageaudit could not save the results for',
+      why: 'The page was checked, but saving the results failed, so there are none to show.',
+      fix:
+        'Try again. If it keeps failing, check that the server has disk space left and that no other program, ' +
+        'such as a database browser, holds database.db open.'
+    }
   }
   return {
     title: 'The check did not finish',
