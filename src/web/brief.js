@@ -2,7 +2,7 @@
 // says, with more of the places each finding occurs and the address of the full JSON. Text from the checked page is
 // set in quotes or code spans, so a reader can tell it from what pageaudit wrote.
 import { adviceFor } from '../advice.js'
-import { code as codeSpan } from '../markdown.js'
+import { code as codeSpan, escapeMarkdown } from '../markdown.js'
 import { measurementText } from '../measurement.js'
 import { collapseWhitespace } from '../text.js'
 import { findingsOf, verdict } from './findings.js'
@@ -36,13 +36,17 @@ function about(audit, origin) {
   return lines.join('\n')
 }
 
+// What a check expected is pageaudit's own text, so it is not a code span, but some of it is markup such as
+// <link rel="alternate" ...>, which a Markdown renderer would take for HTML and hide.
+const measured = (hit) => measurementText({ ...hit, expected: hit.expected && escapeMarkdown(hit.expected) }, code)
+
 function where(group) {
   const hits = group.hits.filter((hit) => hit.context || hit.selector || measurementText(hit))
   if (!hits.length) return []
   const shown = hits.slice(0, SHOWN_HITS)
   const lines = shown.map((hit) => {
     const place = [hit.context && code(hit.context), hit.selector && `at ${code(hit.selector)}`].filter(Boolean)
-    return `- ${[place.join(', '), measurementText(hit, code)].filter(Boolean).join('. ')}`
+    return `- ${[place.join(', '), measured(hit)].filter(Boolean).join('. ')}`
   })
   const more = group.hits.length - shown.length
   if (more > 0) lines.push(`- And ${count(more, 'more place')}.`)

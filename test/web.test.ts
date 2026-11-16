@@ -386,9 +386,21 @@ test('GET /check/:id.md: a finding with nothing found says only what was expecte
 
   const brief = (await app.inject({ method: 'GET', url: `${location}.md` })).body
 
-  t.assert.ok(brief.includes('- `<head>`. Expected <link rel="alternate" hreflang="x-default" href="...">.\n'))
+  t.assert.ok(brief.includes('- `<head>`. Expected \\<link rel="alternate" hreflang="x-default" href="...">.\n'))
   t.assert.match(brief, /`\. Found `\/de\/`, expected an absolute URL such as https:\/\/example\.com\/en\/page\.\n/)
   t.assert.doesNotMatch(brief, /undefined|found ,/i)
+})
+
+test('GET /check/:id.md: escapes markup in what a check expected, so a renderer does not take it for HTML', async (t: TestContext) => {
+  mockFixtureFetch(t)
+  const app = makeApp(t)
+  const { location } = await check(app, `${FIXTURE_HOST}/bad-hreflang.html`)
+
+  const brief = (await app.inject({ method: 'GET', url: `${location}.md` })).body
+
+  t.assert.ok(brief.includes('Expected \\<link rel="alternate" hreflang="x-default" href="...">.\n'))
+  t.assert.ok(brief.includes('Expected a \\<link rel="alternate" hreflang> pointing to this page.\n'))
+  t.assert.doesNotMatch(brief, /(?<!\\)<link rel="alternate" hreflang(="x-default" href="\.\.\.")?>(\.| pointing)/)
 })
 
 test('results: an empty found value is left out, on the page and in the brief', async (t: TestContext) => {

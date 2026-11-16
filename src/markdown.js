@@ -26,9 +26,9 @@ const clean = (text) =>
 const escapeLineStart = (line) =>
   line.replace(/^(\d+)([.)]\s)/, '$1\\$2').replace(/^(#{1,6}\s|[-+*]\s|>|-{3,}$|={3,}$)/, '\\$1')
 
-// Page text with a backslash before what Markdown would read as markup: emphasis, code, links, HTML and entities. An
+// Text with a backslash before what Markdown would read as markup: emphasis, code, links, HTML and entities. An
 // underscore inside a word, as in snake_case, is left alone, since it is not emphasis there.
-const escapeText = (text) =>
+export const escapeMarkdown = (text) =>
   text.replace(/[\\`*[\]<]|&(?=#?\w+;)/g, '\\$&').replace(/(?<![\p{L}\p{N}])_|_(?![\p{L}\p{N}])/gu, '\\_')
 
 // The paragraphs of a run of text as Markdown. Two line breaks in a row end a paragraph, as on pages that use <br><br>
@@ -61,7 +61,7 @@ const linkTarget = (url) => url.replaceAll('(', '%28').replaceAll(')', '%29')
 
 function image(node, ctx) {
   const alt = attr(node, 'alt')
-  const shownAlt = escapeText((alt ?? '').replace(/\s+/g, ' ').trim())
+  const shownAlt = escapeMarkdown((alt ?? '').replace(/\s+/g, ' ').trim())
   const src = imageSrc((attr(node, 'src') ?? '').trim(), ctx.base)
   if (!src) return shownAlt
   // An image with no alt attribute at all is a different finding from one with alt="".
@@ -78,7 +78,7 @@ function link(node, ctx) {
 }
 
 function inline(node, ctx) {
-  if (node.type === 'text') return escapeText(node.data)
+  if (node.type === 'text') return escapeMarkdown(node.data)
   if (!isElement(node) || ctx.skip.has(node.name)) return ''
   switch (node.name) {
     case 'br':
@@ -284,7 +284,7 @@ function blocks(nodes, ctx) {
   }
   for (const node of nodes ?? []) {
     if (node.type === 'text') {
-      run += escapeText(node.data)
+      run += escapeMarkdown(node.data)
     } else if (isElement(node) && !ctx.skip.has(node.name)) {
       if (INLINE.has(node.name)) {
         run += inline(node, ctx)
