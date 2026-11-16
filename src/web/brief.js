@@ -3,6 +3,7 @@
 // set in quotes or code spans, so a reader can tell it from what pageaudit wrote.
 import { adviceFor } from '../advice.js'
 import { code as codeSpan } from '../markdown.js'
+import { measurementText } from '../measurement.js'
 import { collapseWhitespace } from '../text.js'
 import { findingsOf, verdict } from './findings.js'
 import { checkedAt, count, SEVERITY_LABEL, shortAddress } from './format.js'
@@ -36,15 +37,12 @@ function about(audit, origin) {
 }
 
 function where(group) {
-  const hits = group.hits.filter((hit) => hit.context || hit.expected || hit.selector)
+  const hits = group.hits.filter((hit) => hit.context || hit.selector || measurementText(hit))
   if (!hits.length) return []
   const shown = hits.slice(0, SHOWN_HITS)
   const lines = shown.map((hit) => {
-    const parts = []
-    if (hit.context) parts.push(code(hit.context))
-    if (hit.selector) parts.push(`at ${code(hit.selector)}`)
-    if (hit.expected) parts.push(`found ${code(hit.actual)}, expected ${hit.expected}`)
-    return `- ${parts.join(', ')}`
+    const place = [hit.context && code(hit.context), hit.selector && `at ${code(hit.selector)}`].filter(Boolean)
+    return `- ${[place.join(', '), measurementText(hit, code)].filter(Boolean).join('. ')}`
   })
   const more = group.hits.length - shown.length
   if (more > 0) lines.push(`- And ${count(more, 'more place')}.`)
