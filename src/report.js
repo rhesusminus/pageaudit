@@ -1,7 +1,7 @@
 import { adviceFor } from './advice.js'
 import { issueId, uniqueIds } from './issue-id.js'
 import { countSeverities } from './severity.js'
-import { limit, MAX_URL } from './text.js'
+import { charCount, limit, MAX_URL } from './text.js'
 
 const MAX_FACT_TEXT = 300
 const MAX_H1S = 10
@@ -17,6 +17,16 @@ const reportFacts = (facts) =>
     h1s: facts.h1s.slice(0, MAX_H1S).map((h1) => limit(h1, MAX_FACT_TEXT)),
     hreflang: facts.hreflang.slice(0, MAX_HREFLANG).map(({ lang, href }) => ({ lang, href: limit(href, MAX_URL) }))
   }
+
+// The length of a title or description in the report. `cut` says it was capped above, so the page's own text was
+// longer than `count`.
+export function factLength(text) {
+  const count = charCount(text)
+  return { count, cut: count === MAX_FACT_TEXT && text.endsWith('...') }
+}
+
+// True when the report lists as many main headings as it keeps, so the page may have more than it shows.
+export const h1sAtCap = (h1s) => h1s.length >= MAX_H1S
 
 // What each issue type found in the report means, so the JSON is self-explanatory:
 // { title, why, fix } per type, once instead of on every issue.
@@ -63,7 +73,12 @@ export const SCHEMA_VERSION = 1
 
 // The JSON report, which doubles as the data handed to Claude. `facts` is null for
 // pages that returned no HTML. `contentFiles` holds the --content file of each page by URL, relative to the report.
-// `origins` says how the robots.txt of each audited origin treats AI crawlers.
+// `origins` says how the robots.txt of each audited origin treats AI crawlers. The server's report of one page has no
+// `origins` or `coverage`.
+/**
+ * @param {{ pages: object[], site: object[], origins?: object[], skipped?: object[], coverage?: object,
+ *   contentFiles?: Map<string, string>, now?: Date }} input
+ */
 export function buildReport({
   pages,
   site,

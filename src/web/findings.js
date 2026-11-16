@@ -1,11 +1,14 @@
-// A finished check as findings: the issues grouped by type, split into what to fix and notes, and the one-line verdict.
-// The results page and the Markdown brief both read them from here.
+// A finished check as findings: the issues of its report grouped by type, split into what to fix and notes, and the
+// one-line verdict. The results page and the Markdown brief both read them from here.
 import { groupIssues } from '../overview.js'
 import { countSeverities } from '../severity.js'
 import { count } from './format.js'
 
-export function findingsOf(page) {
-  const groups = groupIssues({ pages: [page], site: [] })
+// The page a check looked at, from its report, which holds that one page.
+export const checkedPage = (report) => report.pages[0]
+
+export function findingsOf(report) {
+  const groups = groupIssues(report)
   return {
     groups,
     toFix: groups.filter((group) => group.severity !== 'info'),

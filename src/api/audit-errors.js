@@ -3,5 +3,6 @@
 export const AUDIT_ERROR = {
   fetchFailed: 'Could not fetch page',
   failed: 'Audit failed',
-  interrupted: 'Audit was interrupted'
+  interrupted: 'Audit was interrupted',
+  notSaved: 'Audit result could not be saved'
 }

@@ -31,6 +31,28 @@ test('POST /audits: queues the audit and links to it', async (t: TestContext) =>
   await waitForAudit(app, id)
 })
 
+test('POST /audits: runs audits queued in the same second in the order they were queued', async (t: TestContext) => {
+  // The first audit holds the worker until every other one is queued, so they all wait in line together.
+  const release = Promise.withResolvers<void>()
+  const fetched: string[] = []
+  mockFetch(t, async (url: URL) => {
+    const { pathname } = new URL(url)
+    if (pathname === '/first') await release.promise
+    fetched.push(pathname)
+    return new Response('<!doctype html><title>Page</title>', { headers: { 'content-type': 'text/html' } })
+  })
+  const app = makeApp(t)
+  await postAudit(app, 'https://order.test/first')
+  const paths = Array.from({ length: 8 }, (_, i) => `/page-${i}`)
+  const ids: string[] = []
+  for (const path of paths) ids.push((await postAudit(app, `https://order.test${path}`)).json().id)
+
+  release.resolve()
+  for (const id of ids) await waitForAudit(app, id)
+
+  t.assert.deepStrictEqual(fetched, ['/first', ...paths])
+})
+
 test('GET /audits/:id: returns the completed audit with the fetched page facts', async (t: TestContext) => {
   mockFixtureFetch(t)
   const app = makeApp(t)
@@ -40,8 +62,21 @@ test('GET /audits/:id: returns the completed audit with the fetched page facts',
   t.assert.strictEqual(audit.status, 'completed')
   t.assert.strictEqual(audit.error, null)
   t.assert.strictEqual(audit.url, `${FIXTURE_HOST}/good.html`)
-  t.assert.strictEqual(audit.result.finalUrl, `${FIXTURE_HOST}/good.html`)
-  t.assert.strictEqual(audit.result.status, 200)
+  t.assert.strictEqual(audit.result.pages[0].finalUrl, `${FIXTURE_HOST}/good.html`)
+  t.assert.strictEqual(audit.result.pages[0].status, 200)
+})
+
+test('GET /audits/:id: returns a stored result of another schema version as it is', async (t: TestContext) => {
+  mockFixtureFetch(t)
+  const app = makeApp(t)
+  const { id, result } = await runAudit(app, `${FIXTURE_HOST}/good.html`)
+  const later = { ...result, schemaVersion: 2 }
+  await app.db.run('UPDATE audits SET result = ? WHERE id = ?', JSON.stringify(later), id)
+
+  const response = await app.inject({ method: 'GET', url: `/audits/${id}` })
+
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.deepStrictEqual(response.json().result, later)
 })
 
 test('GET /audits/:id: reports the final URL after a redirect', async (t: TestContext) => {
@@ -51,7 +86,7 @@ test('GET /audits/:id: reports the final URL after a redirect', async (t: TestCo
   const audit = await runAudit(app, `${FIXTURE_HOST}/redirect-once`)
 
   t.assert.strictEqual(audit.status, 'completed')
-  t.assert.strictEqual(audit.result.finalUrl, `${FIXTURE_HOST}/good.html`)
+  t.assert.strictEqual(audit.result.pages[0].finalUrl, `${FIXTURE_HOST}/good.html`)
 })
 
 test('GET /audits/:id: reports a page that cannot be fetched as a failed audit', async (t: TestContext) => {
@@ -155,7 +190,7 @@ test('POST /audits: audits a site on this machine when private destinations are 
 
   const audit = await runAudit(makeApp(t, { allowPrivateDestinations: true }), url)
   t.assert.strictEqual(audit.status, 'completed')
-  t.assert.strictEqual(audit.result.facts.title, 'Local development site')
+  t.assert.strictEqual(audit.result.pages[0].facts.title, 'Local development site')
 })
 
 test('GET /audits/:id: fails an audit whose redirect chain leads to a private destination', async (t: TestContext) => {
@@ -213,6 +248,34 @@ test('DELETE /audits/:id: removes the audit so it can no longer be fetched', asy
 
   t.assert.strictEqual(deleted.statusCode, 204)
   t.assert.strictEqual(fetched.statusCode, 404)
+  // Gone from the database too, not only hidden.
+  t.assert.strictEqual(await app.db.get('SELECT id FROM audits WHERE id = ?', id), undefined)
+})
+
+test('DELETE /audits/:id: an audit deleted while it runs ends quietly, and the next one runs', async (t: TestContext) => {
+  const release = Promise.withResolvers<void>()
+  const started = Promise.withResolvers<void>()
+  mockFetch(t, async (url: URL) => {
+    if (new URL(url).pathname === '/running') {
+      started.resolve()
+      await release.promise
+    }
+    return new Response('<!doctype html><title>Page</title>', { headers: { 'content-type': 'text/html' } })
+  })
+  const app = makeApp(t)
+  await app.ready()
+  const logged = t.mock.method(app.log, 'error')
+  const running = (await postAudit(app, 'https://delete.test/running')).json().id
+  const next = (await postAudit(app, 'https://delete.test/next')).json().id
+  await started.promise
+
+  const deleted = await app.inject({ method: 'DELETE', url: `/audits/${running}` })
+  release.resolve()
+
+  t.assert.strictEqual(deleted.statusCode, 204)
+  t.assert.strictEqual((await waitForAudit(app, next)).status, 'completed')
+  t.assert.strictEqual(await app.db.get('SELECT id FROM audits WHERE id = ?', running), undefined)
+  t.assert.strictEqual(logged.mock.callCount(), 0)
 })
 
 test('DELETE /audits/:id: answers 404 for an unknown audit', async (t: TestContext) => {

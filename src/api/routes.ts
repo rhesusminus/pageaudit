@@ -15,6 +15,22 @@ const auditSchema = {
   }
 }
 
+// A completed audit's result: the JSON report of its page, which schema/report.schema.json describes in full. Only the
+// top level is listed here, since fast-json-stringify cannot compile the whole schema. test/schema.test.js holds the
+// results the server returns to it.
+const reportSchema = Type.Object(
+  {
+    schemaVersion: Type.Integer(),
+    generatedAt: Type.String({ format: 'date-time' }),
+    pages: Type.Array(Type.Unknown()),
+    site: Type.Array(Type.Unknown()),
+    skipped: Type.Array(Type.Unknown()),
+    rules: Type.Record(Type.String(), Type.Unknown()),
+    summary: Type.Unknown()
+  },
+  { additionalProperties: true }
+)
+
 const getAuditSchema = {
   params: Type.Object({ id: Type.String() }),
   response: {
@@ -22,7 +38,7 @@ const getAuditSchema = {
       id: Type.String(),
       url: Type.String(),
       created_at: Type.String(),
-      result: Type.Union([Type.Unknown(), Type.Null()]),
+      result: Type.Union([reportSchema, Type.Null()]),
       status: Type.Union([
         Type.Literal('queued'),
         Type.Literal('running'),

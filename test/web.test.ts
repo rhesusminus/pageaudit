@@ -1,7 +1,9 @@
 import dns from 'node:dns/promises'
 import type { TestContext } from 'node:test'
 import { test } from 'node:test'
+import { AUDIT_ERROR } from '../src/api/audit-errors.js'
 import { MAX_ADDRESS_LENGTH } from '../src/api/public-destination.js'
+import { runAudit } from '../src/runner.js'
 import { withScheme } from '../src/web/format.js'
 import { type App, isolateNetwork, makeApp, serveLocally, waitForAudit } from './helpers/app.ts'
 import { FIXTURE_HOST, mockFixtureFetch } from './helpers/fixture-fetch.js'
@@ -265,7 +267,50 @@ test('GET /check/:id: marks the part of an over-long title that results may cut 
   const response = await checkPage(makeApp(t), `${FIXTURE_HOST}/bad-overlong.html`)
 
   t.assert.match(response.body, /<p class="snippet-title">.{60}<mark>.+<\/mark><\/p>/)
-  t.assert.match(response.body, /The title is \d+ characters\. Results often cut titles after about 60/)
+  t.assert.match(response.body, /The title is \d+\scharacters\. Results often cut titles after about 60/)
+})
+
+test('GET /check/:id: shows page text as long as the report keeps it, and says it was longer', async (t: TestContext) => {
+  const title = `Start ${'very long title '.repeat(60)}ENDMARK`
+  const h1s = Array.from({ length: 30 }, (_, i) => `<h1>Heading ${i}</h1>`).join('')
+  const html = `<!doctype html><html lang="en"><head><title>${title}</title></head><body>${h1s}</body></html>`
+  mockFetch(t, async () => new Response(html, { headers: { 'content-type': 'text/html' } }))
+  const app = makeApp(t)
+  const { location } = await check(app, 'https://long.test/')
+
+  const body = (await page(app, location)).body
+  const brief = (await app.inject({ method: 'GET', url: `${location}.md` })).body
+
+  for (const text of [body, brief]) {
+    t.assert.ok(text.includes('Start very long title'))
+    t.assert.ok(!text.includes('ENDMARK'))
+    t.assert.ok(text.includes('Heading 9'))
+    t.assert.ok(!text.includes('Heading 10'))
+  }
+  t.assert.match(body, /Heading 9 <span class="length">the first 10, there may be more<\/span>/)
+  t.assert.ok(brief.includes('Heading 9" (the first 10, there may be more)'))
+  t.assert.match(body, /The title is over 300\scharacters\. Results often cut titles/)
+  t.assert.ok(brief.includes('(over 300 characters)'))
+})
+
+test('GET /check/:id: shows results an older version stored as the runner page', async (t: TestContext) => {
+  mockFixtureFetch(t)
+  const app = makeApp(t)
+  await app.ready()
+  const [checked] = await runAudit([`${FIXTURE_HOST}/good.html`], { pace: async () => {} })
+  await app.db.run(
+    `INSERT INTO audits (id, url, status, result) VALUES ('old', ?, 'completed', ?)`,
+    `${FIXTURE_HOST}/good.html`,
+    JSON.stringify(checked)
+  )
+
+  const response = await page(app, '/check/old')
+  const brief = await app.inject({ method: 'GET', url: '/check/old.md' })
+
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.ok(response.body.includes('<p class="snippet-title">Gentle Shampoo - Example Store</p>'))
+  t.assert.strictEqual(brief.statusCode, 200)
+  t.assert.ok(brief.body.includes('- Title: "Gentle Shampoo - Example Store"'))
 })
 
 test('GET /check/:id: escapes text that comes from the checked page', async (t: TestContext) => {
@@ -304,6 +349,25 @@ test('GET /check/:id: explains a page that could not be fetched', async (t: Test
   t.assert.match(response.body, /<button type="submit" class="primary">Try again<\/button>/)
 })
 
+test('GET /check/:id: says when the results could not be saved', async (t: TestContext) => {
+  const app = makeApp(t)
+  await app.ready()
+  await app.db.run(
+    `INSERT INTO audits (id, url, status, error) VALUES ('unsaved', 'https://a.test/', 'failed', ?)`,
+    AUDIT_ERROR.notSaved
+  )
+
+  const response = await page(app, '/check/unsaved')
+  const brief = (await app.inject({ method: 'GET', url: '/check/unsaved.md' })).body
+
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.match(response.body, /<h1 id="failed-title">The results could not be saved<\/h1>/)
+  t.assert.match(response.body, /no other program, such as a database browser, holds database\.db open/)
+  t.assert.doesNotMatch(response.body, /Reason given/)
+  t.assert.match(brief, /^# pageaudit could not save the results for a\.test\n/)
+  t.assert.doesNotMatch(brief, /could not check/)
+})
+
 test('GET /check/:id: answers 404 with a page for an unknown id', async (t: TestContext) => {
   const response = await page(makeApp(t), '/check/does-not-exist')
 
@@ -326,6 +390,7 @@ test('POST /check/:id/delete: deletes the results and says so', async (t: TestCo
   t.assert.strictEqual(deleted.headers.location, '/?deleted')
   t.assert.match((await page(app, '/?deleted')).body, /The results were deleted\./)
   t.assert.strictEqual((await page(app, location)).statusCode, 404)
+  t.assert.strictEqual(await app.db.get('SELECT id FROM audits WHERE id = ?', idOf(location)), undefined)
 })
 
 test('GET /check/:id/delete: asks before deleting, for a browser that runs no script', async (t: TestContext) => {

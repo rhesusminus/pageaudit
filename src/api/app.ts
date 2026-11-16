@@ -1,7 +1,13 @@
 import type { FastifyError, FastifyReply, FastifyRequest, FastifyServerOptions } from 'fastify'
 import fastify from 'fastify'
 import { fpSqlitePlugin } from 'fastify-sqlite-typed'
-import { claimNextAudit, completeAudit, failAudit, recoverInterruptedAudits } from '../db/database.ts'
+import {
+  claimNextAudit,
+  completeAudit,
+  failAudit,
+  recoverInterruptedAudits,
+  removeHiddenAudits
+} from '../db/database.ts'
 import { ASSETS_PREFIX, sendPage, webPages } from '../web/plugin.ts'
 import { missingPage, unknownHostPage } from '../web/status.js'
 import { answersTo, sentHost } from './allowed-host.ts'
@@ -75,21 +81,26 @@ export function build(
 
   app.addHook('onReady', async () => {
     await app.db.exec(`
+    -- SQLite otherwise leaves a deleted row's bytes in the file until the space is reused, and deleted results must be
+    -- gone, not only unlisted.
+    PRAGMA secure_delete = ON;
     CREATE TABLE IF NOT EXISTS audits (
       id TEXT PRIMARY KEY,
       url TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      deleted_at TEXT,
       status TEXT NOT NULL,
       error TEXT,
       attempts INTEGER NOT NULL DEFAULT 0,
       -- Last, so reading the small columns never walks a long report's overflow pages.
       result TEXT
     );
-    -- The worker claims the oldest queued audit every poll. Only queued rows are in this index, so a claim does not
-    -- scan every stored audit.
-    CREATE INDEX IF NOT EXISTS audits_queue ON audits (created_at, id) WHERE status = 'queued' AND deleted_at IS NULL;
+    -- The worker claims the first queued audit, by rowid, every poll. Only queued rows are in this index, so a claim
+    -- does not scan every stored audit. Every index entry ends with its rowid, so an index on (status) of rows that
+    -- all share one status is in rowid order. audits_queue is the index an older version ordered by created_at.
+    DROP INDEX IF EXISTS audits_queue;
+    CREATE INDEX IF NOT EXISTS audits_queued ON audits (status) WHERE status = 'queued';
   `)
+    await removeHiddenAudits(app.db)
   })
 
   app.addHook('onReady', async () => {
