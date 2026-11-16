@@ -14,16 +14,23 @@ const cap = (text, max = MAX_HTML) => limit(collapseWhitespace(text), max)
 // How many elements have an id. An id that is used twice does not find one element.
 const idCount = ($, id) => elementsById($).get(id)?.length ?? 0
 
-// The step for one element: its tag, with :nth-of-type when it has same-tag siblings. One pass over the siblings.
-function step(node) {
-  let before = 0
-  let total = 0
-  for (const sibling of node.parent?.children ?? []) {
-    if (!isElement(sibling) || sibling.name !== node.name) continue
-    if (sibling === node) before = total + 1
-    total++
+// Where each child element of a parent stands among the children with its tag, and how many there are per tag. One
+// pass over the children, kept per parent: every sibling with an issue asks.
+const childPositions = perElement((_, parent) => {
+  const totals = new Map()
+  const positions = new Map()
+  for (const child of parent.children.filter(isElement)) {
+    totals.set(child.name, (totals.get(child.name) ?? 0) + 1)
+    positions.set(child, totals.get(child.name))
   }
-  return total > 1 ? `${node.name}:nth-of-type(${before})` : node.name
+  return { totals, positions }
+})
+
+// The step for one element: its tag, with :nth-of-type when it has same-tag siblings.
+function step($, node) {
+  if (!node.parent) return node.name
+  const { totals, positions } = childPositions($, node.parent)
+  return totals.get(node.name) > 1 ? `${node.name}:nth-of-type(${positions.get(node)})` : node.name
 }
 
 // A CSS selector that finds the element again: the nearest unique #id, or a path of
@@ -36,7 +43,7 @@ export function selectorFor($, el) {
       steps.unshift(`#${id}`)
       break
     }
-    steps.unshift(step(node))
+    steps.unshift(step($, node))
   }
   return steps.join(' > ')
 }

@@ -46,6 +46,10 @@ test('large pages: labelled fields are matched to their labels in one pass', () 
   assertLinear(checkA11y, 3000, (n) => repeat(n, (i) => `<label for="f${i}">x</label><input id="f${i}">`))
 })
 
+test('large pages: evidence for sibling fields counts the siblings once', () => {
+  assertLinear(checkA11y, 4000, (n) => repeat(n, () => '<input>'))
+})
+
 test('large pages: aria-labelledby references are each looked up once', () => {
   assertLinear(checkLinks, 3000, (n) =>
     repeat(n, (i) => `<span id="l${i}">Item</span><a href="/${i}" aria-labelledby="l${i}"></a>`)
