@@ -51,3 +51,11 @@ test('large pages: aria-labelledby references are each looked up once', () => {
     repeat(n, (i) => `<span id="l${i}">Item</span><a href="/${i}" aria-labelledby="l${i}"></a>`)
   )
 })
+
+test('large pages: a large element that many aria-labelledby point at is read once', () => {
+  // Each field has an id, so the selector in the evidence for a nameless field is that id and only names are measured.
+  const fields = (n) => repeat(n, (i) => `<input id="f${i}" aria-labelledby="l">`)
+  assertLinear(checkA11y, 3000, (n) => `<div id="l">${repeat(n, () => '<b>word</b>')}</div>${fields(n)}`)
+  // An empty target leaves the fields without a name, so the check also looks for a name set by script.
+  assertLinear(checkA11y, 1500, (n) => `<div id="l">${repeat(n, () => '<b></b>')}</div>${fields(n)}`)
+})

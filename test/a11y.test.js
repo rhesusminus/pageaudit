@@ -144,6 +144,12 @@ test('labels: a wrapping label without for names only its first labelable descen
   assert.deepEqual(a11y('<label>Name <input id="a"><input id="b"></label>'), ['form-input-no-label'])
 })
 
+test('names: aria-labelledby joins the names of its targets with one space, skipping empty ones', () => {
+  const targets = '<span id="a"> Read </span><span id="b"></span><span id="c">more </span>'
+  assert.deepEqual(links(`${targets}<a href="/" aria-labelledby="a b c"></a>`), ['link-generic-text'])
+  assert.deepEqual(links(`${targets}<a href="/" aria-labelledby="b"></a>`), ['link-no-name'])
+})
+
 test('names: a directly referenced image names with its own alt', () => {
   assert.deepEqual(a11y('<img id="l" alt="Search"><input aria-labelledby="l">'), [])
   assert.deepEqual(links('<img id="l" alt="Pricing"><a href="/a" aria-labelledby="l"></a>'), [])
