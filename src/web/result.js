@@ -4,6 +4,7 @@ import { adviceFor } from '../advice.js'
 import { DESCRIPTION_MAX, TITLE_MAX } from '../checks/page/meta.js'
 import { markup } from '../html/escape.js'
 import { link } from '../html/format.js'
+import { measurementText } from '../measurement.js'
 import { charCount } from '../text.js'
 import { resultBrief } from './brief.js'
 import { findingsOf, verdict } from './findings.js'
@@ -92,14 +93,19 @@ function snippet(page) {
   </section>`
 }
 
+function measured(hit) {
+  const text = measurementText(hit)
+  return text ? markup`<span class="measure">${text}</span>` : ''
+}
+
 function where(group) {
-  const hits = group.hits.filter((hit) => hit.context || hit.expected).slice(0, SHOWN_HITS)
+  const hits = group.hits.filter((hit) => hit.context || measurementText(hit)).slice(0, SHOWN_HITS)
   if (!hits.length) return ''
   const more = group.hits.length - hits.length
   return markup`<div class="where">
     <p class="where-label">Where</p>
     <ul>
-      ${hits.map((hit) => markup`<li>${hit.context ? markup`<code>${hit.context}</code>` : ''}${hit.expected ? markup`<span class="measure">Found ${hit.actual}, expected ${hit.expected}.</span>` : ''}</li>`)}
+      ${hits.map((hit) => markup`<li>${hit.context ? markup`<code>${hit.context}</code>` : ''}${measured(hit)}</li>`)}
     </ul>
     ${more > 0 ? markup`<p class="where-more">And ${count(more, 'more place')}.</p>` : ''}
   </div>`

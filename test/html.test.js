@@ -338,10 +338,21 @@ test('renderHtml: an issue with an element shows its selector, markup and measur
   assert.match(out, /html &gt; head &gt; title/)
   assert.match(out, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/)
   assert.doesNotMatch(out, /<script>alert/)
-  assert.match(out, /Found 74\. Expected at most 60 characters\./)
+  assert.match(out, /Found 74, expected at most 60 characters\./)
   // Once, under "Show where": the page card does not repeat it.
   assert.equal(out.match(/Show the element/g).length, 1)
   assert.doesNotMatch(renderHtml(report), /Show the (element|measurement)/)
+})
+
+test('renderHtml: a measurement with no found value says only what was expected', () => {
+  const issues = [
+    issue('missing-x-default', 'info', { expected: '<link hreflang="x-default">' }),
+    issue('relative-hreflang', 'warning', { selector: 'link', actual: '', expected: 'an absolute URL' })
+  ]
+  const out = renderHtml(wrap([page('https://a.test/', issues)]))
+  assert.match(out, /<p class="note">Expected &lt;link hreflang=&quot;x-default&quot;&gt;\.<\/p>/)
+  assert.match(out, /<p class="note">Expected an absolute URL\.<\/p>/)
+  assert.doesNotMatch(out, /Found/)
 })
 
 test('renderHtml: a problem with advice shows the technical message once, or each one where they differ', () => {

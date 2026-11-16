@@ -1,5 +1,6 @@
 // The evidence behind a finding: the element an issue is about, what Lighthouse found on a page and the
 // less visible facts of a page. All of it sits in collapsed sections, so the report still reads top down.
+import { measurementText } from '../measurement.js'
 import { markup } from './escape.js'
 import { CATEGORY_NAMES, formatBytes, formatMetric, formatPageDate, link, plural } from './format.js'
 
@@ -10,28 +11,23 @@ const EVIDENCE_LABEL = { element: 'Show the element', measurement: 'Show the mea
 // The element an issue is about and, for length checks, what was measured against what was expected.
 // Takes an issue or a group hit, both carry the same optional fields.
 const hasElementOf = ({ selector, html }) => Boolean(selector || html)
-const hasMeasurementOf = ({ actual, expected }) => actual !== undefined || Boolean(expected)
+const hasMeasurementOf = (issue) => measurementText(issue) !== ''
 
 // Whether evidence() has anything to show for the issue or hit.
 export const hasEvidence = (issue) => hasElementOf(issue) || hasMeasurementOf(issue)
 
 export function evidence(issue) {
   if (!hasEvidence(issue)) return ''
-  const { selector, html, parentHtml, actual, expected } = issue
+  const { selector, html, parentHtml } = issue
   const hasElement = hasElementOf(issue)
-  const hasMeasurement = hasMeasurementOf(issue)
+  const measured = measurementText(issue)
   return markup`<details class="evidence">
     <summary>${hasElement ? EVIDENCE_LABEL.element : EVIDENCE_LABEL.measurement}</summary>
     ${selector ? markup`<p class="note">Selector</p><code>${selector}</code>` : ''}
     ${html ? markup`<p class="note">Markup</p><pre><code>${html}</code></pre>` : ''}
     ${parentHtml ? markup`<p class="note">Inside</p><pre><code>${parentHtml}</code></pre>` : ''}
-    ${hasMeasurement ? markup`<p class="note">${measurement(actual, expected)}</p>` : ''}
+    ${measured ? markup`<p class="note">${measured}</p>` : ''}
   </details>`
-}
-
-function measurement(actual, expected) {
-  const found = actual === undefined ? '' : `Found ${actual}.`
-  return [found, expected ? `Expected ${expected}.` : ''].filter(Boolean).join(' ')
 }
 
 // ---- Lighthouse ----

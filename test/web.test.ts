@@ -255,6 +255,20 @@ test('GET /check/:id: escapes text that comes from the checked page', async (t: 
   t.assert.doesNotMatch(response.body, /<img src=x/)
 })
 
+test('GET /check/:id: a finding with nothing found says only what was expected', async (t: TestContext) => {
+  mockFixtureFetch(t)
+
+  const response = await checkPage(makeApp(t), `${FIXTURE_HOST}/bad-hreflang.html`)
+
+  t.assert.ok(
+    response.body.includes(
+      '<span class="measure">Expected &lt;link rel=&quot;alternate&quot; hreflang=&quot;x-default&quot; href=&quot;...&quot;&gt;.</span>'
+    )
+  )
+  t.assert.ok(response.body.includes('<span class="measure">Found /de/, expected an absolute URL'))
+  t.assert.doesNotMatch(response.body, /Found (,|undefined)/)
+})
+
 test('GET /check/:id: explains a page that could not be fetched', async (t: TestContext) => {
   mockFixtureFetch(t)
 
@@ -362,7 +376,62 @@ test('GET /check/:id.md: gives the results as Markdown for Claude', async (t: Te
   t.assert.ok(brief.includes(`- Full results as JSON: http://audit.test:8080/audits/${id}`))
   t.assert.match(brief, /\n## What to fix\n\n### 1\. (Error|Warning): .+ \(`[a-z-]+`\)\n\nWhy it matters: /)
   t.assert.match(brief, /- Title: "The Ultimate Guide to Choosing/)
-  t.assert.match(brief, /, found `\d+`, expected at most 60 characters\n/)
+  t.assert.match(brief, /`\. Found `\d+`, expected at most 60 characters\.\n/)
+})
+
+test('GET /check/:id.md: a finding with nothing found says only what was expected', async (t: TestContext) => {
+  mockFixtureFetch(t)
+  const app = makeApp(t)
+  const { location } = await check(app, `${FIXTURE_HOST}/bad-hreflang.html`)
+
+  const brief = (await app.inject({ method: 'GET', url: `${location}.md` })).body
+
+  t.assert.ok(brief.includes('- `<head>`. Expected \\<link rel="alternate" hreflang="x-default" href="...">.\n'))
+  t.assert.match(brief, /`\. Found `\/de\/`, expected an absolute URL such as https:\/\/example\.com\/en\/page\.\n/)
+  t.assert.doesNotMatch(brief, /undefined|found ,/i)
+})
+
+test('GET /check/:id.md: escapes markup in what a check expected, so a renderer does not take it for HTML', async (t: TestContext) => {
+  mockFixtureFetch(t)
+  const app = makeApp(t)
+  const { location } = await check(app, `${FIXTURE_HOST}/bad-hreflang.html`)
+
+  const brief = (await app.inject({ method: 'GET', url: `${location}.md` })).body
+
+  t.assert.ok(brief.includes('Expected \\<link rel="alternate" hreflang="x-default" href="...">.\n'))
+  t.assert.ok(brief.includes('Expected a \\<link rel="alternate" hreflang> pointing to this page.\n'))
+  t.assert.doesNotMatch(brief, /(?<!\\)<link rel="alternate" hreflang(="x-default" href="\.\.\.")?>(\.| pointing)/)
+})
+
+test('results: an empty found value is left out, on the page and in the brief', async (t: TestContext) => {
+  const html =
+    '<!doctype html><html lang="en"><head><title>Hreflang</title><link rel="alternate" hreflang="sv" href=""></head><body><h1>Hi</h1></body></html>'
+  mockFetch(t, async () => new Response(html, { headers: { 'content-type': 'text/html' } }))
+  const app = makeApp(t)
+  const { location } = await check(app, 'https://empty-href.test/')
+
+  const body = (await page(app, location)).body
+  const brief = (await app.inject({ method: 'GET', url: `${location}.md` })).body
+
+  t.assert.ok(
+    body.includes('<span class="measure">Expected an absolute URL such as https://example.com/en/page.</span>')
+  )
+  t.assert.ok(brief.includes('`. Expected an absolute URL such as https://example.com/en/page.\n'))
+  t.assert.doesNotMatch(body, /Found ,/)
+  t.assert.doesNotMatch(brief, /found ,/i)
+})
+
+test('results: a found value with no expected one is shown on its own, on the page and in the brief', async (t: TestContext) => {
+  mockFixtureFetch(t)
+  const app = makeApp(t)
+  const { location } = await check(app, `${FIXTURE_HOST}/bad-canonical.html`)
+
+  const body = (await page(app, location)).body
+  const brief = (await app.inject({ method: 'GET', url: `${location}.md` })).body
+
+  // canonical-fragment says what it found and expects no particular value.
+  t.assert.ok(body.includes('<span class="measure">Found /products/gentle-shampoo#reviews.</span>'))
+  t.assert.ok(brief.includes('`. Found `/products/gentle-shampoo#reviews`.\n'))
 })
 
 test('GET /check/:id.md: links to the public address when one is set', async (t: TestContext) => {
