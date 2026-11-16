@@ -135,8 +135,19 @@ test('labels: an explicit for wins over a wrapping label', () => {
   assert.deepEqual(a11y('<label for="n">Name<input id="n"></label>'), [])
 })
 
+test('labels: a for names every field with that id, an empty for names none', () => {
+  assert.deepEqual(a11y('<label for="n">Name</label><input id="n"><input id="n">'), ['duplicate-id'])
+  assert.deepEqual(a11y('<label for="">Name</label><input id="">'), ['form-input-no-label'])
+})
+
 test('labels: a wrapping label without for names only its first labelable descendant', () => {
   assert.deepEqual(a11y('<label>Name <input id="a"><input id="b"></label>'), ['form-input-no-label'])
+})
+
+test('names: aria-labelledby joins the names of its targets with one space, skipping empty ones', () => {
+  const targets = '<span id="a"> Read </span><span id="b"></span><span id="c">more </span>'
+  assert.deepEqual(links(`${targets}<a href="/" aria-labelledby="a b c"></a>`), ['link-generic-text'])
+  assert.deepEqual(links(`${targets}<a href="/" aria-labelledby="b"></a>`), ['link-no-name'])
 })
 
 test('names: a directly referenced image names with its own alt', () => {

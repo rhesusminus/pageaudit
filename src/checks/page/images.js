@@ -1,5 +1,6 @@
 import { SOURCES } from '../../sources.js'
 import { withEvidence } from '../evidence.js'
+import { perElement } from '../per-element.js'
 import { snippet } from '../snippet.js'
 import { accessibleName, namedByScript, visibleImages } from './accname.js'
 import { isBound } from './bindings.js'
@@ -16,14 +17,18 @@ function fileName(src) {
   }
 }
 
+// The first visible image of a link/button that nothing names, not even an image alt, or undefined. Kept per link:
+// every image in it asks.
+const unnamedLinkImage = perElement(($, link) => {
+  if (accessibleName($, link, { images: false }) || namedByScript($, link, { images: false })) return undefined
+  const images = visibleImages(link)
+  return images.every((img) => ($(img).attr('alt') ?? '').trim() === '' && !isBound(img, 'alt')) ? images[0] : undefined
+})
+
 // True when the image is the only content of a link/button, so an empty alt leaves it with no accessible name.
 function isOnlyLinkContent($, el) {
-  const link = $(el).closest('a, button')
-  if (!link.length) return false
-  if (accessibleName($, link.get(0), { images: false }) || namedByScript($, link.get(0), { images: false }))
-    return false
-  const images = visibleImages($, link.get(0))
-  return images[0] === el && images.every((img) => ($(img).attr('alt') ?? '').trim() === '' && !isBound(img, 'alt'))
+  const link = $(el).closest('a, button').get(0)
+  return link !== undefined && unnamedLinkImage($, link) === el
 }
 
 function checkAlt($, el, alt) {

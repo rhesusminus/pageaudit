@@ -1,4 +1,6 @@
 import { collapseWhitespace } from '../../text.js'
+import { elementsById } from '../ids.js'
+import { perElement } from '../per-element.js'
 import { hasBoundText, isBound } from './bindings.js'
 
 // A simplified accessible name: what a screen reader would announce for a link or form control.
@@ -33,30 +35,40 @@ function contentText($, el, images, includeHidden = false) {
 const referencedText = ($, target) =>
   target.is('img') ? text(target.attr('alt')) : contentText($, target.get(0), true, isHidden(target.get(0)))
 
-// The elements an aria-labelledby points to. Ids that do not exist give nothing.
+// The elements an aria-labelledby points to, the first element with each id. Ids that do not exist give nothing.
 const labelledByTargets = ($, el) =>
   ($(el).attr('aria-labelledby') ?? '')
     .split(/\s+/)
     .filter(Boolean)
-    .map((id) => $(`[id="${id.replace(/["\\]/g, '\\$&')}"]`).first())
-    .filter((target) => target.length)
+    .map((id) => elementsById($).get(id)?.[0])
+    .filter(Boolean)
+
+// What a referenced element adds to a name: its own aria-label first, then its text. Whitespace is already collapsed.
+// Kept per target, since any number of elements can point at one large element.
+const targetName = perElement(($, target) => text($(target).attr('aria-label')) || referencedText($, $(target)))
 
 // The text of the elements an aria-labelledby points to, hidden ones included. Targets that are empty give nothing.
-// A referenced element's own aria-labelledby is not followed, so references cannot loop.
-function labelledByText($, el) {
-  return text(
-    labelledByTargets($, el)
-      .map((target) => text(target.attr('aria-label')) || referencedText($, target))
-      .join(' ')
-  )
-}
+// A referenced element's own aria-labelledby is not followed, so references cannot loop. Each part is collapsed
+// already, so joining them is enough and a long shared name is not scanned again for every reference.
+const labelledByText = ($, el) =>
+  labelledByTargets($, el)
+    .map((target) => targetName($, target))
+    .filter(Boolean)
+    .join(' ')
 
-// The images inside an element that are not explicitly hidden, on their own or through an ancestor within it.
-export const visibleImages = ($, el) =>
-  $(el)
-    .find('img')
-    .toArray()
-    .filter((img) => !$(img).parentsUntil(el).addBack().toArray().some(isHidden))
+// The images inside an element that are not explicitly hidden, on their own or through an ancestor within it, in
+// document order. A plain walk that skips hidden subtrees: cheerio's find sorts what it finds, comparing positions
+// among siblings, which grows faster than the number of images when they are siblings.
+export function visibleImages(el) {
+  const images = []
+  const walk = (node) => {
+    if (node.type !== 'tag' || isHidden(node)) return
+    if (node.name === 'img') images.push(node)
+    node.children.forEach(walk)
+  }
+  el.children.forEach(walk)
+  return images
+}
 
 // `images: false` leaves image alt out, for the check that reports images on their own.
 // `content: false` ignores what is inside the element, for form fields whose content is not a name.
@@ -78,14 +90,16 @@ function boundContent(node, images, includeHidden = false) {
   return node.children.some((child) => boundContent(child, images, includeHidden))
 }
 
+// A referenced element names with its own aria-label first, images included, as in targetName.
+const boundTarget = perElement(
+  (_, target) => isBound(target, 'aria-label') || boundContent(target, true, isHidden(target))
+)
+
 // True when a framework fills in the name accessibleName looks for, with the same options. Its value is unknown here,
 // but a screen reader reads the rendered page.
 export function namedByScript($, el, { images = true, content = true } = {}) {
   if (['aria-label', 'aria-labelledby', 'title'].some((name) => isBound(el, name))) return true
-  // A referenced element names with its own aria-label first, images included, as in labelledByText.
-  const targets = labelledByTargets($, el).map((target) => target.get(0))
-  const boundTarget = (target) => isBound(target, 'aria-label') || boundContent(target, true, isHidden(target))
-  if (targets.some(boundTarget)) return true
+  if (labelledByTargets($, el).some((target) => boundTarget($, target))) return true
   return content && (hasBoundText(el) || el.children.some((child) => boundContent(child, images)))
 }
 
