@@ -1099,6 +1099,16 @@ test('cli: --content refuses a file and a path a report also names, before the a
   assert.match(same.stderr, /--out and --content name the same path/)
 })
 
+test('cli: a --content path the file system refuses to look at exits 2 before the sitemap is fetched', async (t) => {
+  const content = join(await tempDir(t), 'a'.repeat(300))
+  const fetchMock = mockFixtureFetch(t)
+  const errors = []
+  t.mock.method(console, 'error', (...a) => errors.push(a.join(' ')))
+  assert.equal(await run(['--sitemap', fixtureUrl('sitemap-quality.xml'), '--content', content, '--json']), 2)
+  assert.deepEqual(errors, [`Could not use ${content} for --content: ENAMETOOLONG`])
+  assert.equal(fetchMock.mock.callCount(), 0)
+})
+
 test('cli: --html notes how many URLs a --limit left out', async (t) => {
   const dir = await tempDir(t)
   const path = join(dir, 'report.html')

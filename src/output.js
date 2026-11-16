@@ -106,6 +106,17 @@ export function reportPathProblem(path, { content } = {}) {
   }
 }
 
+// Why `path` cannot be the --content folder, or null when nothing stops it that can be seen before the audit:
+// `{ file: true }` when the path is a file, or `{ code }` when the file system refuses to look, such as a folder that
+// cannot be opened (EACCES) or a name that is too long. The folder may not exist yet, the audit makes it.
+export function contentPathProblem(path) {
+  try {
+    return statSync(path, { throwIfNoEntry: false })?.isFile() ? { file: true } : null
+  } catch (err) {
+    return { code: err.code ?? err.message }
+  }
+}
+
 // A file name to suggest when a report option names a directory.
 const EXAMPLE_NAMES = { '--out': 'report.json', '--digest': 'report.digest.json', '--html': 'report.html' }
 
@@ -118,10 +129,16 @@ function optionPathMessage(option, path, { directory, missingFolder, code }) {
   return `Could not use ${path} for ${option}: ${code}`
 }
 
+// The message for a problem contentPathProblem() found with the --content folder.
+function contentPathMessage(content, { file, code }) {
+  if (file) return `--content needs a folder, but "${content}" is a file`
+  return `Could not use ${content} for --content: ${code}`
+}
+
 // Returns a message for each problem with the report options, or an empty list: a path reportPathProblem() refuses,
-// two reports that would go to the same file, or a `content` folder (--content) that is a file or a report's path.
-// These can only fail at the very end of the audit, so this is checked before it starts.
-export async function reportPathProblems(outputs, { content } = {}) {
+// two reports that would go to the same file, or a `content` folder (--content) that contentPathProblem() refuses or
+// that is a report's path. These can only fail at the very end of the audit, so this is checked before it starts.
+export function reportPathProblems(outputs, { content } = {}) {
   const found = []
   const files = []
   for (const [option, path] of outputs) {
@@ -136,8 +153,7 @@ export async function reportPathProblems(outputs, { content } = {}) {
     }
     if (content && sameFile(path, content)) found.push(`${option} and --content name the same path, give each its own`)
   }
-  if (content && (await stat(content).catch(() => null))?.isFile()) {
-    found.push(`--content needs a folder, but "${content}" is a file`)
-  }
+  const contentProblem = content && contentPathProblem(content)
+  if (contentProblem) found.push(contentPathMessage(content, contentProblem))
   return found
 }
