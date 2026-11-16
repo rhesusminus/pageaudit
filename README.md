@@ -407,6 +407,8 @@ A background worker runs queued audits one at a time. An audit's `status` goes f
 
 **Sites on your own machine.** Set `ALLOW_PRIVATE_DESTINATIONS=1` to audit private addresses too, such as a development site on `localhost:3000`, `127.0.0.1` or another machine on your network, the way the CLI can. It is off by default because a server others can reach would let them use it to reach your network. Only set it on a server you run for yourself, which `npm start` is: it listens on `localhost`. The server logs a warning at startup when it is set.
 
+**Host names it answers to.** The server answers only requests whose `Host` is `localhost` or a name under `.localhost`, an IP address, such as `127.0.0.1` or `[::1]`, or the host of `PUBLIC_URL`, whatever the port. Any other host gets `421 Misdirected Request` from the API and the pages: a page for a browser that asks for one, `{ "error": "..." }` for every other client. Only the stylesheet and script under `/assets/` load at any host, so that page has its style; they hold nothing about anyone's audits. The `Host` header is read as the client sent it, never `X-Forwarded-Host`, which a script can set to anything. This stops DNS rebinding, where a site you visit points its own name at your machine so its scripts can use the server as if it were their own, to queue audits of your network and read the results. Behind a proxy that forwards its own host name, set `PUBLIC_URL` to the address people use.
+
 The same server has web pages for people, which check one page at a time through the same queue:
 
 | Page                     | Does                                                                                                        |
@@ -509,6 +511,7 @@ src/
   api/                  the HTTP server (npm start)
     server.ts           starts the app on PORT, with PUBLIC_URL and ALLOW_PRIVATE_DESTINATIONS
     app.ts              build(): Fastify with the database, the worker, the API routes and the web pages
+    allowed-host.ts     answersTo(): the host names the server answers to, against DNS rebinding
     routes.ts           POST, GET and DELETE /audits
     queue-audit.ts      queueCheckedAudit(): checks an address and queues it, for the API and the web form alike
     audit-errors.js     the error a failed audit stores, which the web pages word for their readers
@@ -521,7 +524,7 @@ src/
     plugin.ts           the page routes, the Content-Security-Policy and the same-site check on posts
     layout.js           the document every page shares
     home.js             the check form
-    status.js           progress, failed, not found, refused and error pages
+    status.js           progress, failed, not found, refused, unknown host and error pages
     result.js           the results page: verdict, search result preview, findings, Copy for Claude, and asking before a delete
     findings.js         the issues of a check grouped into what to fix and notes, and the verdict
     result-facts.js     what the page holds, in words
@@ -567,6 +570,7 @@ test/
   routes.test.ts        the /audits API through fastify.inject
   worker.test.js        the queue worker: order, failures, wake-ups and shutdown
   app.test.ts           audits interrupted by a restart
+  host.test.ts          the host names every route answers to, and the refusal for any other
   web.test.ts           the web pages: form errors, progress, results, escaping, deleting, cross-site posts and the brief for Claude
   fixtures/             HTML pages, sitemaps, robots.txt and urls.txt
   helpers/fixture-fetch.js   mocked fetch that serves the fixtures

@@ -349,7 +349,7 @@ test('GET /check/:id.md: gives the results as Markdown for Claude', async (t: Te
   const app = makeApp(t)
   const { location, id } = await check(app, `${FIXTURE_HOST}/bad-overlong.html`)
 
-  const response = await app.inject({ method: 'GET', url: `${location}.md`, headers: { host: 'audit.test:8080' } })
+  const response = await app.inject({ method: 'GET', url: `${location}.md`, headers: { host: 'app.localhost:8080' } })
 
   t.assert.strictEqual(response.statusCode, 200)
   t.assert.match(response.headers['content-type'] as string, /^text\/markdown; charset=utf-8/)
@@ -359,7 +359,7 @@ test('GET /check/:id.md: gives the results as Markdown for Claude', async (t: Te
   )
   const brief = response.body
   t.assert.match(brief, /^# pageaudit results for fixtures\.test\/bad-overlong\.html\n/)
-  t.assert.ok(brief.includes(`- Full results as JSON: http://audit.test:8080/audits/${id}`))
+  t.assert.ok(brief.includes(`- Full results as JSON: http://app.localhost:8080/audits/${id}`))
   t.assert.match(brief, /\n## What to fix\n\n### 1\. (Error|Warning): .+ \(`[a-z-]+`\)\n\nWhy it matters: /)
   t.assert.match(brief, /- Title: "The Ultimate Guide to Choosing/)
   t.assert.match(brief, /, found `\d+`, expected at most 60 characters\n/)
@@ -370,10 +370,10 @@ test('GET /check/:id.md: links to the public address when one is set', async (t:
   const app = makeApp(t, { publicUrl: 'https://audit.example/' })
   const { location, id } = await check(app, `${FIXTURE_HOST}/good.html`)
 
-  const brief = (await app.inject({ method: 'GET', url: `${location}.md`, headers: { host: 'evil.test' } })).body
+  const brief = (await app.inject({ method: 'GET', url: `${location}.md`, headers: { host: '127.0.0.1:8080' } })).body
 
   t.assert.ok(brief.includes(`- Full results as JSON: https://audit.example/audits/${id}`))
-  t.assert.doesNotMatch(brief, /evil\.test/)
+  t.assert.doesNotMatch(brief, /127\.0\.0\.1/)
 })
 
 test('GET /check/:id.md: quotes the theme name, which comes from the page', async (t: TestContext) => {
