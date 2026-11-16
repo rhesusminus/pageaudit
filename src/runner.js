@@ -7,7 +7,7 @@ import {
   internalLinks,
   mergeRobotsIssues
 } from './checks/page/index.js'
-import { hostThrottle } from './concurrency.js'
+import { hostThrottle, mapLimited } from './concurrency.js'
 import { DEFAULT_TIMEOUT_MS, fetchPage as defaultFetchPage } from './fetch.js'
 import { issueId, uniqueIds } from './issue-id.js'
 import { pageMarkdown } from './markdown.js'
@@ -129,19 +129,11 @@ export async function runAudit(
     onProgress = /** @type {(done: number, total: number) => void} */ (() => {})
   } = {}
 ) {
-  const pages = new Array(urls.length)
-  let next = 0
   let done = 0
-
-  async function worker() {
-    while (next < urls.length) {
-      const i = next++
-      pages[i] = await auditPage(urls[i], { fetchPage, timeout, beforeHop: pace, content })
-      await onPage(pages[i])
-      onProgress(++done, urls.length)
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(concurrency, urls.length) }, worker))
-  return pages
+  return mapLimited(urls, concurrency, async (url) => {
+    const page = await auditPage(url, { fetchPage, timeout, beforeHop: pace, content })
+    await onPage(page)
+    onProgress(++done, urls.length)
+    return page
+  })
 }
