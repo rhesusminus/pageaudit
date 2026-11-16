@@ -71,6 +71,22 @@ export function sameFile(a, b) {
   return destination(a) === destination(b)
 }
 
+// Why a report cannot be written to `path`, or null when nothing stops it that can be seen before the audit:
+// `{ directory: true }` when the path is a folder, `{ missingFolder }` naming the folder the file would go in when
+// that does not exist, or `{ code }` when the file system refuses to look, such as a folder that cannot be opened
+// (EACCES), a name that is too long or a file in place of a folder (ENOTDIR). These only fail when the report is
+// written at the end of the audit, so the CLI and the wizard check them before it starts.
+export function reportPathProblem(path) {
+  try {
+    if (statSync(path, { throwIfNoEntry: false })?.isDirectory()) return { directory: true }
+    const folder = statSync(dirname(path), { throwIfNoEntry: false })
+    if (!folder) return { missingFolder: dirname(path) }
+    return folder.isDirectory() ? null : { code: 'ENOTDIR' }
+  } catch (err) {
+    return { code: err.code ?? err.message }
+  }
+}
+
 // A file name to suggest when a report option names a directory.
 const EXAMPLE_NAMES = { '--out': 'report.json', '--digest': 'report.digest.json', '--html': 'report.html' }
 

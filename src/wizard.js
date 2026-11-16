@@ -1,5 +1,4 @@
 import { accessSync, constants, existsSync, readFileSync, statSync } from 'node:fs'
-import { dirname } from 'node:path'
 import { cancel, confirm, intro, isCancel, log, multiselect, outro, select, text } from '@clack/prompts'
 import stringWidth from 'string-width'
 import { logoType, MAX_LOGO_BYTES } from './html/logo.js'
@@ -7,7 +6,7 @@ import { DEFAULT_TITLE } from './html/render.js'
 import { parseUrlList } from './input/file.js'
 import { normalize } from './input/resolve.js'
 import { OPTIONS } from './options.js'
-import { sameFile } from './output.js'
+import { reportPathProblem, sameFile } from './output.js'
 import { suggest } from './suggest-prompt.js'
 
 // The setup is asked only when nothing was given and a person is at the terminal, so scripts, pipes and CI keep
@@ -70,21 +69,15 @@ export function checkLogoFile(value = '') {
   if (statSync(path).size > MAX_LOGO_BYTES) return `${path} is larger than ${MAX_LOGO_BYTES / 1024} KB`
 }
 
-// A report path must be a file in a folder that exists. A report that cannot be written only fails at the end of
-// the audit, so this is checked when the path is entered. An existing file is fine, the wizard asks before
-// replacing it.
+// A report path must be a file in a folder that exists, checked when the path is entered. An existing file is fine,
+// the wizard asks before replacing it.
 export function checkReportPath(value = '') {
   const path = value.trim()
   if (!path) return 'Enter the path of the file'
-  try {
-    if (statSync(path, { throwIfNoEntry: false })?.isDirectory()) return `${path} is a folder, enter a file path`
-    if (!statSync(dirname(path), { throwIfNoEntry: false })?.isDirectory()) {
-      return `The folder ${dirname(path)} does not exist`
-    }
-  } catch (err) {
-    // Such as a folder that cannot be opened (EACCES) or a name that is too long.
-    return `Could not use ${path}: ${err.code ?? err.message}`
-  }
+  const problem = reportPathProblem(path)
+  if (problem?.directory) return `${path} is a folder, enter a file path`
+  if (problem?.missingFolder) return `The folder ${problem.missingFolder} does not exist`
+  if (problem) return `Could not use ${path}: ${problem.code}`
 }
 
 // The --content folder may not exist yet, the audit makes it. Files an earlier audit wrote there are replaced and
