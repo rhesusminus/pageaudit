@@ -1,4 +1,5 @@
 import { collapseWhitespace } from '../../text.js'
+import { elementsById } from '../ids.js'
 import { hasBoundText, isBound } from './bindings.js'
 
 // A simplified accessible name: what a screen reader would announce for a link or form control.
@@ -33,13 +34,14 @@ function contentText($, el, images, includeHidden = false) {
 const referencedText = ($, target) =>
   target.is('img') ? text(target.attr('alt')) : contentText($, target.get(0), true, isHidden(target.get(0)))
 
-// The elements an aria-labelledby points to. Ids that do not exist give nothing.
+// The elements an aria-labelledby points to, the first element with each id. Ids that do not exist give nothing.
 const labelledByTargets = ($, el) =>
   ($(el).attr('aria-labelledby') ?? '')
     .split(/\s+/)
     .filter(Boolean)
-    .map((id) => $(`[id="${id.replace(/["\\]/g, '\\$&')}"]`).first())
-    .filter((target) => target.length)
+    .map((id) => elementsById($).get(id)?.[0])
+    .filter(Boolean)
+    .map((target) => $(target))
 
 // The text of the elements an aria-labelledby points to, hidden ones included. Targets that are empty give nothing.
 // A referenced element's own aria-labelledby is not followed, so references cannot loop.
