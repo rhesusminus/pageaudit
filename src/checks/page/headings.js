@@ -1,18 +1,26 @@
 import { SOURCES } from '../../sources.js'
 import { collapseWhitespace } from '../../text.js'
 import { evidence, selectorFor } from '../evidence.js'
+import { perElement } from '../per-element.js'
 import { snippet, truncate } from '../snippet.js'
 import { namedByScript } from './accname.js'
 import { visibleText } from './content.js'
 
+// Whether an element holds text or an image with alt text, at any depth. Noscript content is plain text to the parser
+// and no text on a page that runs scripts. Kept per element: a heading inside another one asks again about everything
+// inside it, and a search of each heading would repeat that for every level.
+const holdsText = perElement(($, el) =>
+  el.children.some((child) => {
+    if (child.type === 'text') return child.data.trim() !== ''
+    if (child.type !== 'tag' || child.name === 'noscript') return false
+    return child.name === 'img' ? (child.attribs.alt ?? '').trim() !== '' : holdsText($, child)
+  })
+)
+
 function hasAccessibleText($, el) {
   const heading = $(el)
-  if (visibleText(el).trim() || heading.attr('aria-label') || heading.attr('aria-labelledby')) return true
-  if (namedByScript($, el)) return true
-  return heading
-    .find('img[alt]')
-    .toArray()
-    .some((img) => $(img).attr('alt').trim() !== '')
+  if (holdsText($, el) || heading.attr('aria-label') || heading.attr('aria-labelledby')) return true
+  return namedByScript($, el)
 }
 
 // Google says a page ranks fine with no h1 or several, so these are best practice only.

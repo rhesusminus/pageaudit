@@ -122,6 +122,14 @@ test('names: explicitly hidden descendants do not name a link', () => {
   assert.deepEqual(links('<a href="/"><span aria-hidden="true">x</span> Home</a>'), [])
 })
 
+test('names: content set by script counts once hidden content is looked at, as for an aria-labelledby target', () => {
+  // The same hidden span is first part of a link's own content, where it adds nothing, and then the target of
+  // another link's aria-labelledby, where hidden content counts.
+  const html =
+    '<a href="/a"><span id="l" aria-hidden="true"><b x-text="t"></b></span></a><a href="/b" aria-labelledby="l"></a>'
+  assert.deepEqual(links(html), ['link-no-name'])
+})
+
 test('names: script, style and noscript content does not name a link', () => {
   assert.deepEqual(links('<a href="/a"><style>.a{}</style></a>'), ['link-no-name'])
   assert.deepEqual(links('<a href="/a"><script>x()</script></a>'), ['link-no-name'])

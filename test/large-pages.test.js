@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { evidence } from '../src/checks/evidence.js'
 import { checkA11y } from '../src/checks/page/a11y.js'
+import { checkHeadings } from '../src/checks/page/headings.js'
 import { checkImages } from '../src/checks/page/images.js'
 import { checkLinks } from '../src/checks/page/links.js'
 import { snippet } from '../src/checks/snippet.js'
@@ -118,5 +119,18 @@ test('large pages: nested elements with issues serialize only the start of their
     contextOfHeadings,
     60,
     (n) => `${'<h2><span>'.repeat(n)}${'<i>word</i>'.repeat(20 * n)}${'</span></h2>'.repeat(n)}`
+  )
+})
+
+test('large pages: a heading holding many images is judged once', () => {
+  assertLinear(checkHeadings, 5000, (n) => `<h1>Title</h1><h2>${repeat(n, () => '<img src="/a.png" alt="">')}</h2>`)
+})
+
+test('large pages: nested headings do not each look through everything inside them', () => {
+  // At 4 times the size the headings nest 240 deep, two elements each, below the depth parse() caps the page at.
+  assertLinear(
+    checkHeadings,
+    3000,
+    (n) => `<h1>Title</h1>${'<h2><span>'.repeat(n / 50)}${'<i></i>'.repeat(n)}${'</span></h2>'.repeat(n / 50)}`
   )
 })
