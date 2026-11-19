@@ -71,7 +71,7 @@ test('GET /audits/:id: returns a stored result of another schema version as it i
   const app = makeApp(t)
   const { id, result } = await runAudit(app, `${FIXTURE_HOST}/good.html`)
   const later = { ...result, schemaVersion: 2 }
-  await app.db.run('UPDATE audits SET result = ? WHERE id = ?', JSON.stringify(later), id)
+  app.db.prepare('UPDATE audits SET result = ? WHERE id = ?').run(JSON.stringify(later), id)
 
   const response = await app.inject({ method: 'GET', url: `/audits/${id}` })
 
@@ -249,7 +249,7 @@ test('DELETE /audits/:id: removes the audit so it can no longer be fetched', asy
   t.assert.strictEqual(deleted.statusCode, 204)
   t.assert.strictEqual(fetched.statusCode, 404)
   // Gone from the database too, not only hidden.
-  t.assert.strictEqual(await app.db.get('SELECT id FROM audits WHERE id = ?', id), undefined)
+  t.assert.strictEqual(app.db.prepare('SELECT id FROM audits WHERE id = ?').get(id), undefined)
 })
 
 test('DELETE /audits/:id: an audit deleted while it runs ends quietly, and the next one runs', async (t: TestContext) => {
@@ -274,7 +274,7 @@ test('DELETE /audits/:id: an audit deleted while it runs ends quietly, and the n
 
   t.assert.strictEqual(deleted.statusCode, 204)
   t.assert.strictEqual((await waitForAudit(app, next)).status, 'completed')
-  t.assert.strictEqual(await app.db.get('SELECT id FROM audits WHERE id = ?', running), undefined)
+  t.assert.strictEqual(app.db.prepare('SELECT id FROM audits WHERE id = ?').get(running), undefined)
   t.assert.strictEqual(logged.mock.callCount(), 0)
 })
 

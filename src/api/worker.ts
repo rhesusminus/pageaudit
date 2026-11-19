@@ -1,16 +1,16 @@
 import type { FastifyInstance } from 'fastify'
+import type { Db } from '../db/database.ts'
 import { runAudit } from '../runner.js'
 import { AUDIT_ERROR } from './audit-errors.js'
 import { fetchPublicPage } from './public-destination.js'
 
-type Db = FastifyInstance['db']
 type AuditPage = Awaited<ReturnType<typeof runAudit>>[number]
 type AuditJob = { id: string; url: string }
 
 export type AuditWorkerHelpers = {
-  claimNextAudit: (db: Db) => Promise<AuditJob | undefined>
-  completeAudit: (db: Db, id: string, page: AuditPage) => Promise<unknown>
-  failAudit: (db: Db, id: string, error: string) => Promise<unknown>
+  claimNextAudit: (db: Db) => AuditJob | undefined
+  completeAudit: (db: Db, id: string, page: AuditPage) => void
+  failAudit: (db: Db, id: string, error: string) => void
 }
 
 type WorkerOptions = {
@@ -54,11 +54,12 @@ async function runJob({ app, audit }: WorkerContext, job: AuditJob): Promise<Out
   return page.status === null ? { error: AUDIT_ERROR.fetchFailed } : { page }
 }
 
-// Errors that mean another connection holds the database for now, so the same write can pass on a later try.
-const TRANSIENT = new Set(['SQLITE_BUSY', 'SQLITE_LOCKED'])
+// SQLITE_BUSY and SQLITE_LOCKED: another connection holds the database for now, so the same write can pass on a later
+// try. node:sqlite puts SQLite's result code in errcode, which can be an extended code whose low byte is the primary one.
+const TRANSIENT = new Set([5, 6])
 
 const isTransient = (error: unknown) =>
-  typeof error === 'object' && error !== null && 'code' in error && TRANSIENT.has(String(error.code))
+  typeof error === 'object' && error !== null && 'errcode' in error && TRANSIENT.has(Number(error.errcode) & 0xff)
 
 function saveOutcome({ app, helpers }: WorkerContext, id: string, outcome: Outcome) {
   return 'page' in outcome
@@ -78,7 +79,7 @@ async function finish(worker: WorkerContext, job: AuditJob, outcome: Outcome) {
   for (;;) {
     if (wait && !(await pause())) return
     try {
-      await save()
+      save()
       return
     } catch (error) {
       app.log.error({ err: error, auditId: job.id }, 'Could not save the audit result')
@@ -92,7 +93,7 @@ async function finish(worker: WorkerContext, job: AuditJob, outcome: Outcome) {
 
 // False when there was no audit to run.
 async function processNextAudit(worker: WorkerContext) {
-  const job = await worker.helpers.claimNextAudit(worker.app.db)
+  const job = worker.helpers.claimNextAudit(worker.app.db)
   if (!job) {
     return false
   }

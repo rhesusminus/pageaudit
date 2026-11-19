@@ -1,5 +1,4 @@
-import type { FastifyInstance } from 'fastify'
-import { queueAudit } from '../db/database.ts'
+import { type Db, queueAudit } from '../db/database.ts'
 import { normalize } from '../input/resolve.js'
 import { DestinationError, MAX_ADDRESS_LENGTH, validateDestination } from './public-destination.js'
 
@@ -17,7 +16,7 @@ function checkLength(address: string) {
 // is refused throws a DestinationError, whose `reason` each caller words for its readers. `allowPrivate` lets a server
 // on someone's own machine check private addresses too.
 export async function queueCheckedAudit(
-  db: FastifyInstance['db'],
+  db: Db,
   value: string,
   { allowPrivate = false }: { allowPrivate?: boolean } = {}
 ) {

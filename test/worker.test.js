@@ -8,12 +8,12 @@ function setup(t, jobs, { claim, ...options } = {}) {
   const saved = []
   const finished = Promise.withResolvers()
   const helpers = {
-    claimNextAudit: t.mock.fn(claim ?? (async () => jobs.shift())),
-    completeAudit: async (_db, id, page) => {
+    claimNextAudit: t.mock.fn(claim ?? (() => jobs.shift())),
+    completeAudit: (_db, id, page) => {
       saved.push({ id, page })
       finished.resolve()
     },
-    failAudit: async (_db, id, error) => {
+    failAudit: (_db, id, error) => {
       saved.push({ id, error })
       finished.resolve()
     }
@@ -77,7 +77,7 @@ test('worker: saves failed fetches and thrown audit errors, then processes the n
 test('worker: retries after a database error', { timeout: 1000 }, async (t) => {
   const state = setup(t, [], { audit: async () => ({ status: 200 }) })
   let attempts = 0
-  state.helpers.claimNextAudit.mock.mockImplementation(async () => {
+  state.helpers.claimNextAudit.mock.mockImplementation(() => {
     attempts++
     if (attempts === 1) throw new Error('database busy')
     return { id: 'retry', url: 'https://job.test' }
@@ -101,14 +101,16 @@ test('worker: wakes immediately on idle shutdown and workers have independent li
   assert.equal(second.saved[0].id, 'new')
 })
 
-// An error as the SQLite driver throws it, with its code.
-const sqliteError = (code) => Object.assign(new Error(`${code}: database error`), { code })
+// An error as node:sqlite throws it, with SQLite's result code in errcode.
+const RESULT_CODES = { SQLITE_BUSY: 5, SQLITE_LOCKED: 6, SQLITE_FULL: 13, SQLITE_TOOBIG: 18 }
+const sqliteError = (name) =>
+  Object.assign(new Error('database error'), { code: 'ERR_SQLITE_ERROR', errcode: RESULT_CODES[name], errstr: name })
 
 test('worker: a result that cannot be saved marks the audit failed instead of leaving it running', {
   timeout: 1000
 }, async (t) => {
   const state = setup(t, [{ id: 'save', url: 'https://job.test' }], { audit: async () => ({ status: 200 }) })
-  state.helpers.completeAudit = async () => {
+  state.helpers.completeAudit = () => {
     throw sqliteError('SQLITE_TOOBIG')
   }
   await state.finished
@@ -123,7 +125,7 @@ function lockFor(state, name, writes = 3) {
   const write = state.helpers[name]
   let attempts = 0
   const claims = { whenSaved: undefined }
-  state.helpers[name] = async (...args) => {
+  state.helpers[name] = (...args) => {
     if (++attempts <= writes) throw sqliteError(attempts % 2 ? 'SQLITE_BUSY' : 'SQLITE_LOCKED')
     claims.whenSaved ??= state.helpers.claimNextAudit.mock.callCount()
     return write(...args)
@@ -166,10 +168,10 @@ test('worker: stop ends the retries of an outcome that cannot be saved', { timeo
     pollIntervalMs: 60_000,
     audit: async () => ({ status: 200 })
   })
-  state.helpers.completeAudit = async () => {
+  state.helpers.completeAudit = () => {
     throw sqliteError('SQLITE_FULL')
   }
-  state.helpers.failAudit = async () => {
+  state.helpers.failAudit = () => {
     tried.resolve()
     throw sqliteError('SQLITE_FULL')
   }
@@ -194,12 +196,14 @@ test('worker: a wake during an empty claim is not lost', { timeout: 1000 }, asyn
   const jobs = []
   let state
   let claims = 0
-  // The first claim finds nothing, but an audit is queued and the worker woken before that answer arrives.
-  const claim = async () => {
+  // The first claim finds nothing, but a request queues an audit and wakes the worker before the worker acts on that
+  // answer: a microtask queued during the claim runs before the worker continues.
+  const claim = () => {
     if (++claims > 1) return jobs.shift()
-    await nextTurn()
-    jobs.push({ id: 'raced', url: 'https://job.test' })
-    state.worker.wake()
+    queueMicrotask(() => {
+      jobs.push({ id: 'raced', url: 'https://job.test' })
+      state.worker.wake()
+    })
     return undefined
   }
   state = setup(t, jobs, { claim, pollIntervalMs: 60_000, audit: async () => ({ status: 200 }) })

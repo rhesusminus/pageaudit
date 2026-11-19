@@ -331,7 +331,7 @@ test('schema: the result the server stores and returns for a page matches it', a
     assert.deepEqual(check(audit.result), [], audit.url)
     // Only the fields of the report, never the runner's links and response.
     assert.deepEqual(Object.keys(audit.result.pages[0]).toSorted(), schema.$defs.page.required.toSorted())
-    const { result } = await app.db.get('SELECT result FROM audits WHERE id = ?', audit.id)
+    const { result } = app.db.prepare('SELECT result FROM audits WHERE id = ?').get(audit.id)
     assert.deepEqual(JSON.parse(result), audit.result)
   }
 })
@@ -341,11 +341,11 @@ test('schema: a result an older server stored as the runner page is returned in 
   await app.ready()
   const [page] = await runAudit([url('bad-overlong.html')], { pace: async () => {} })
   assert.ok(page.links && 'response' in page)
-  await app.db.run(
-    `INSERT INTO audits (id, url, status, result, created_at) VALUES ('old', ?, 'completed', ?, '2026-11-01 10:00:00')`,
-    url('bad-overlong.html'),
-    JSON.stringify(page)
-  )
+  app.db
+    .prepare(
+      `INSERT INTO audits (id, url, status, result, created_at) VALUES ('old', ?, 'completed', ?, '2026-11-01 10:00:00')`
+    )
+    .run(url('bad-overlong.html'), JSON.stringify(page))
 
   const audit = (await app.inject({ method: 'GET', url: '/audits/old' })).json()
 

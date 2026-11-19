@@ -1,10 +1,11 @@
 import type { FastifyError, FastifyReply, FastifyRequest, FastifyServerOptions } from 'fastify'
 import fastify from 'fastify'
-import { fpSqlitePlugin } from 'fastify-sqlite-typed'
 import {
   claimNextAudit,
   completeAudit,
+  type Db,
   failAudit,
+  openDatabase,
   recoverInterruptedAudits,
   removeHiddenAudits
 } from '../db/database.ts'
@@ -14,6 +15,12 @@ import { answersTo, sentHost } from './allowed-host.ts'
 import { errorStatus } from './error-status.ts'
 import { routes } from './routes.ts'
 import { startAuditWorker } from './worker.ts'
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    db: Db
+  }
+}
 
 type AppOptions = {
   // ':memory:' gives the app a private database that disappears when it closes.
@@ -60,7 +67,8 @@ export function build(
     return sendError(request, reply, 421, error, unknownHostPage)
   })
 
-  app.register(fpSqlitePlugin, { dbFilename })
+  const db = openDatabase(dbFilename)
+  app.decorate('db', db)
   app.register(routes, { onAuditQueued, allowPrivateDestinations })
   app.register(webPages, { onAuditQueued, allowPrivateDestinations, publicOrigin: publicAddress?.origin })
 
@@ -80,7 +88,7 @@ export function build(
   app.setNotFoundHandler((request, reply) => sendError(request, reply, 404, 'Not found', missingPage))
 
   app.addHook('onReady', async () => {
-    await app.db.exec(`
+    db.exec(`
     -- SQLite otherwise leaves a deleted row's bytes in the file until the space is reused, and deleted results must be
     -- gone, not only unlisted.
     PRAGMA secure_delete = ON;
@@ -100,17 +108,21 @@ export function build(
     DROP INDEX IF EXISTS audits_queue;
     CREATE INDEX IF NOT EXISTS audits_queued ON audits (status) WHERE status = 'queued';
   `)
-    await removeHiddenAudits(app.db)
+    removeHiddenAudits(db)
   })
 
   app.addHook('onReady', async () => {
-    await recoverInterruptedAudits(app.db)
+    recoverInterruptedAudits(db)
     worker = startAuditWorker(app, { claimNextAudit, completeAudit, failAudit }, { allowPrivateDestinations })
   })
 
-  // Finish using SQLite before the database plugin's onClose hook closes it.
+  // Finish using SQLite before the onClose hook closes it.
   app.addHook('preClose', async () => {
     await worker?.stop()
+  })
+
+  app.addHook('onClose', async () => {
+    db.close()
   })
 
   return app

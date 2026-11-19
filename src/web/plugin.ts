@@ -26,7 +26,7 @@ type WebOptions = {
 // Where the stylesheet and the script are served. @fastify/static serves them through one route, this prefix and *.
 export const ASSETS_PREFIX = '/assets/'
 
-type Audit = NonNullable<Awaited<ReturnType<typeof getAudit>>>
+type Audit = NonNullable<ReturnType<typeof getAudit>>
 
 // Pages load only their own stylesheet and script, and can only send forms and requests back here.
 const CONTENT_SECURITY_POLICY = [
@@ -153,18 +153,18 @@ export const webPages: FastifyPluginAsync<WebOptions> = async (
   )
 
   fastify.get<{ Params: { id: string } }>('/check/:id', async (request, reply) => {
-    const audit = await getAudit(fastify.db, request.params.id)
+    const audit = getAudit(fastify.db, request.params.id)
     if (!audit) return sendPage(reply, 404, notFoundPage())
     return sendPage(reply, 200, auditPage(audit, originOf(request, publicOrigin)))
   })
 
   fastify.get<{ Params: { id: string } }>('/check/:id.md', async (request, reply) => {
-    return sendBrief(reply, await getAudit(fastify.db, request.params.id), originOf(request, publicOrigin))
+    return sendBrief(reply, getAudit(fastify.db, request.params.id), originOf(request, publicOrigin))
   })
 
   // The results page asks in a dialog before it deletes. Without JavaScript its button opens this page, which asks.
   fastify.get<{ Params: { id: string } }>('/check/:id/delete', async (request, reply) => {
-    const audit = await getAudit(fastify.db, request.params.id)
+    const audit = getAudit(fastify.db, request.params.id)
     if (!audit) return sendPage(reply, 404, notFoundPage())
     return sendPage(reply, 200, deletePage(audit))
   })
@@ -173,7 +173,7 @@ export const webPages: FastifyPluginAsync<WebOptions> = async (
     '/check/:id/delete',
     { preHandler: sameOriginOnly },
     async (request, reply) => {
-      if (!(await deleteAudit(fastify.db, request.params.id))) return sendPage(reply, 404, notFoundPage())
+      if (!deleteAudit(fastify.db, request.params.id)) return sendPage(reply, 404, notFoundPage())
       return reply.redirect('/?deleted', 303)
     }
   )

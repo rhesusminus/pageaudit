@@ -11,7 +11,8 @@ const REBOUND = { host: 'attacker.example:8080' }
 
 const HOST_ERROR = { error: 'This server only answers at localhost, an IP address or the host of PUBLIC_URL' }
 
-const storedAudits = async (app: App) => (await app.db.get<{ n: number }>('SELECT count(*) AS n FROM audits'))?.n
+const storedAudits = async (app: App) =>
+  (app.db.prepare('SELECT count(*) AS n FROM audits').get() as { n: number } | undefined)?.n
 
 test('answersTo: localhost, IP addresses and the public host, on any port', (t: TestContext) => {
   const cases: Record<string, boolean> = {
