@@ -142,6 +142,20 @@ test('labels: a for names every field with that id, an empty for names none', ()
 
 test('labels: a wrapping label without for names only its first labelable descendant', () => {
   assert.deepEqual(a11y('<label>Name <input id="a"><input id="b"></label>'), ['form-input-no-label'])
+  assert.deepEqual(a11y('<label>Name <button>Go</button><input></label>'), ['form-input-no-label'])
+})
+
+test('labels: nested labels each name their own first labelable descendant', () => {
+  assert.deepEqual(a11y('<label>Name <label><input></label></label>'), [])
+  assert.deepEqual(a11y('<label>Name <label>Inner</label><input></label>'), [])
+  assert.deepEqual(a11y('<label>Name <label for="x">Other</label><input></label>'), [])
+  assert.deepEqual(a11y('<label>Name <label>Inner<input id="a"></label><input id="b"></label>'), [
+    'form-input-no-label'
+  ])
+})
+
+test('labels: a wrapping label does not name a field after it', () => {
+  assert.deepEqual(a11y('<label>Name <label>Inner</label></label><input>'), ['form-input-no-label'])
 })
 
 test('names: aria-labelledby joins the names of its targets with one space, skipping empty ones', () => {

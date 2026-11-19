@@ -12,16 +12,42 @@ const issue = ($, el, fields) =>
 
 const LABELABLE = 'input:not([type=hidden]), select, textarea, button, meter, output, progress'
 
+// The first labelable descendant of each label without a `for`, from one walk over the page instead of a search
+// inside each label, which nested labels would repeat for every level. The labels still waiting for an element are
+// the ones the walk is inside, so the next labelable element is the first one of each.
+function firstLabelable($) {
+  const labelable = new Set($(LABELABLE).toArray())
+  const found = new Map()
+  let waiting = []
+  const visit = (node) => {
+    for (const child of node.children ?? []) {
+      if (child.type !== 'tag') continue
+      if (labelable.has(child)) {
+        for (const label of waiting) found.set(label, child)
+        waiting = []
+      }
+      const isLabel = child.name === 'label' && child.attribs.for === undefined
+      if (isLabel) waiting.push(child)
+      visit(child)
+      // A label still waiting is the last one added, since the labels inside it were removed when the walk left them.
+      if (isLabel && waiting.at(-1) === child) waiting.pop()
+    }
+  }
+  visit($.root().get(0))
+  return found
+}
+
 // Whether a label with a name applies to a control, from one pass over the labels instead of one per control. An
 // explicit `for` always wins over containment: a label with a `for` belongs to every element with that id, and a label
 // without one belongs to its first labelable descendant.
 function namedByLabel($) {
   const ids = new Set()
   const controls = new Set()
+  const firstInside = firstLabelable($)
   for (const label of $('label').toArray()) {
     if (!accessibleName($, label) && !namedByScript($, label)) continue
     const target = $(label).attr('for')
-    if (target === undefined) controls.add($(label).find(LABELABLE).get(0))
+    if (target === undefined) controls.add(firstInside.get(label))
     else if (target) ids.add(target)
   }
   return (el) => controls.has(el) || ids.has($(el).attr('id'))
