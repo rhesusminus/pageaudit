@@ -1,7 +1,7 @@
 import { withoutFragment } from '../../input/resolve.js'
 import { collapseWhitespace, limit, MAX_URL } from '../../text.js'
 import { isBound } from './bindings.js'
-import { headingExcerpts, imageSamples, mainText, visibleText } from './content.js'
+import { headingExcerpts, imageSamples, mainText, visibleText, visibleTextStart } from './content.js'
 import { jsonLdBlocks, jsonLdNodes, typesOf } from './json-ld.js'
 
 const MAX_HEADINGS = 40
@@ -59,7 +59,7 @@ function headings($) {
     .slice(0, MAX_HEADINGS)
     .map((el) => ({
       level: Number(el.tagName[1]),
-      text: clean(visibleText(el)) ?? '',
+      text: clean(visibleTextStart(el, MAX_TEXT + 1)) ?? '',
       excerpt: excerpts.get(el) ?? null
     }))
 }

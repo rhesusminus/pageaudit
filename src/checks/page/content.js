@@ -1,4 +1,4 @@
-import { collapseWhitespace, limit } from '../../text.js'
+import { collapseWhitespace, limit, nonSpaceEnd } from '../../text.js'
 import { absolute } from './signals.js'
 
 const MAX_MAIN_TEXT = 1500
@@ -17,13 +17,35 @@ const NOT_VISIBLE = new Set(['script', 'style', 'noscript', 'template', 'svg'])
 // between elements, so "<b>Sh</b>op" stays "Shop". domhandler gives script and style their own node types, so walking
 // only into tags leaves them out. Unlike NOT_VISIBLE, which keeps svg out of prose, svg stays in, so the <title> of
 // an icon link still counts as its text. Templates are already removed by parse(). No node gives no text.
+const readsInto = (child) => child.type === 'tag' && child.name !== 'noscript'
+
 export const visibleText = (node) =>
   (node?.children ?? [])
     .map((child) => {
       if (child.type === 'text') return child.data
-      return child.type === 'tag' && child.name !== 'noscript' ? visibleText(child) : ''
+      return readsInto(child) ? visibleText(child) : ''
     })
     .join('')
+
+// The start of visibleText(node) up to where it has held `count` characters that are not whitespace, or all of it if
+// it holds fewer. Collapsed and cut to fewer than `count` characters it reads the same as all of it, without walking
+// everything inside an element that only shows a few words, such as a heading with other headings nested in it.
+export function visibleTextStart(node, count) {
+  const parts = []
+  let left = count
+  const walk = (parent) => {
+    for (const child of parent.children ?? []) {
+      if (left <= 0) return
+      if (child.type === 'text') {
+        const { end, found } = nonSpaceEnd(child.data, left)
+        parts.push(child.data.slice(0, end))
+        left -= found
+      } else if (readsInto(child)) walk(child)
+    }
+  }
+  if (node) walk(node)
+  return parts.join('')
+}
 
 const PAGE_CHROME = new Set(['nav', 'header', 'footer', 'aside'])
 const HEADING = /^h[1-6]$/

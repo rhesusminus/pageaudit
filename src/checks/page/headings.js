@@ -2,9 +2,9 @@ import { SOURCES } from '../../sources.js'
 import { collapseWhitespace } from '../../text.js'
 import { evidence, selectorFor } from '../evidence.js'
 import { perElement } from '../per-element.js'
-import { snippet, truncate } from '../snippet.js'
+import { MAX_CONTEXT, snippet, truncate } from '../snippet.js'
 import { namedByScript } from './accname.js'
-import { visibleText } from './content.js'
+import { visibleTextStart } from './content.js'
 
 // Whether an element holds text or an image with alt text, at any depth. Noscript content is plain text to the parser
 // and no text on a page that runs scripts. Kept per element: a heading inside another one asks again about everything
@@ -16,6 +16,10 @@ const holdsText = perElement(($, el) =>
     return child.name === 'img' ? (child.attribs.alt ?? '').trim() !== '' : holdsText($, child)
   })
 )
+
+// As much of a heading's text as an issue context can show. A context is cut to MAX_CONTEXT characters, and more
+// characters than that are enough to cut it at the same place.
+const headingText = (el) => collapseWhitespace(visibleTextStart(el, MAX_CONTEXT + 1))
 
 function hasAccessibleText($, el) {
   const heading = $(el)
@@ -46,7 +50,7 @@ function checkH1s($, headings) {
         category: 'best-practice',
         source: SOURCES.starterGuide,
         message: `${h1s.length} <h1> elements found (Google does not mind, one is the common convention)`,
-        context: truncate(h1s.map((el) => `<h1>${collapseWhitespace(visibleText(el))}</h1>`).join(' ')),
+        context: truncate(h1s.map((el) => `<h1>${headingText(el)}</h1>`).join(' ')),
         selector: h1s.map((el) => selectorFor($, el)).join(', ')
       }
     ]
@@ -67,7 +71,7 @@ function checkHeadingOrder($, headings) {
         category: 'accessibility',
         source: SOURCES.headings,
         message: `Heading level skipped: <h${level}> after ${index ? `<h${previous}>` : 'no heading'}`,
-        context: truncate(`<h${level}>${collapseWhitespace(visibleText(el))}</h${level}>`),
+        context: truncate(`<h${level}>${headingText(el)}</h${level}>`),
         ...evidence($, el)
       })
     }
