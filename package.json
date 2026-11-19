@@ -54,5 +54,8 @@
   },
   "allowScripts": {
     "sqlite3@5.1.7": true
+  },
+  "overrides": {
+    "parse5": "^8.1.1"
   }
 }

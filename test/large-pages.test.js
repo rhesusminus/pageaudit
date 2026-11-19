@@ -19,18 +19,19 @@ const cpuMs = () => {
   return (user + system) / 1000
 }
 
-// Each run gets a page of its own, so nothing a check keeps per page carries over to the next run.
-function timed(check, html) {
-  const $ = parse(html)
+// Each run gets a page of its own, so nothing a check keeps per page carries over to the next run. The page is
+// prepared before the clock starts: parsed for a check, kept as text when parsing itself is measured.
+function timed(check, html, prepare) {
+  const input = prepare(html)
   const start = cpuMs()
-  check($)
+  check(input)
   return cpuMs() - start
 }
 
-function assertLinear(check, n, page) {
+function assertLinear(check, n, page, prepare = parse) {
   const [small, large] = [page(n), page(4 * n)]
-  timed(check, small)
-  const runs = Array.from({ length: RUNS }, () => [timed(check, small), timed(check, large)])
+  timed(check, small, prepare)
+  const runs = Array.from({ length: RUNS }, () => [timed(check, small, prepare), timed(check, large, prepare)])
   const fastestSmall = Math.min(...runs.map(([time]) => time))
   const fastestLarge = Math.min(...runs.map(([, time]) => time))
   const ratio = fastestLarge / fastestSmall
@@ -41,6 +42,17 @@ function assertLinear(check, n, page) {
 }
 
 const repeat = (count, part) => Array.from({ length: count }, (_, i) => part(i)).join('')
+
+test('large pages: deeply nested elements are parsed in one pass', () => {
+  // parse5 before 8.1.1 searched its stack of open elements for each new element, so parsing took time in the square of
+  // the nesting depth. cheerio still asks for parse5 7, and package.json overrides it.
+  assertLinear(
+    parse,
+    10000,
+    (n) => `${'<div>'.repeat(n)}x${'</div>'.repeat(n)}`,
+    (html) => html
+  )
+})
 
 test('large pages: labelled fields are matched to their labels in one pass', () => {
   assertLinear(checkA11y, 1250, (n) => repeat(n, () => '<label><input type="checkbox"> x</label>'))
