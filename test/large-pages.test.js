@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { evidence } from '../src/checks/evidence.js'
 import { checkA11y } from '../src/checks/page/a11y.js'
 import { checkImages } from '../src/checks/page/images.js'
 import { checkLinks } from '../src/checks/page/links.js'
+import { snippet } from '../src/checks/snippet.js'
 import { parse } from '../src/parse.js'
 
 // Work over page-sized input stays linear. A check runs on a page of size n and of size 4n: a linear check takes about
@@ -106,5 +108,15 @@ test('large pages: a link holding many decorative images is judged once', () => 
     checkImages,
     1000,
     (n) => `<a href="/">${repeat(n, () => '<img src="/a.png" alt="" width="1" height="1">')}</a>`
+  )
+})
+
+test('large pages: nested elements with issues serialize only the start of their markup', () => {
+  // Each heading has a context and evidence. The page grows in depth and in content together, since depth is capped.
+  const contextOfHeadings = ($) => $('h2').each((_, el) => void [snippet($, el), evidence($, el)])
+  assertLinear(
+    contextOfHeadings,
+    60,
+    (n) => `${'<h2><span>'.repeat(n)}${'<i>word</i>'.repeat(20 * n)}${'</span></h2>'.repeat(n)}`
   )
 })

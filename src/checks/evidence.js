@@ -1,6 +1,7 @@
 import { isElement } from '../parse.js'
-import { collapseWhitespace, limit } from '../text.js'
+import { limit } from '../text.js'
 import { elementsById } from './ids.js'
+import { markupStart } from './markup.js'
 import { perElement } from './per-element.js'
 
 const MAX_HTML = 500
@@ -8,8 +9,6 @@ const MAX_PARENT_HTML = 200
 // The page frame says nothing about where in it an element sits.
 const FRAME = new Set(['html', 'head', 'body'])
 const VALID_ID = /^[A-Za-z][\w-]*$/
-
-const cap = (text, max = MAX_HTML) => limit(collapseWhitespace(text), max)
 
 // How many elements have an id. An id that is used twice does not find one element.
 const idCount = ($, id) => elementsById($).get(id)?.length ?? 0
@@ -53,7 +52,7 @@ const openingTag = (el) =>
     .map(([name, value]) => ` ${name}="${value}"`)
     .join('')}>`
 
-const markupOf = ($, el, max) => (FRAME.has(el.name) ? limit(openingTag(el), max) : cap($.html(el), max))
+const markupOf = ($, el, max) => (FRAME.has(el.name) ? limit(openingTag(el), max) : markupStart($, el, max))
 
 const parentMarkup = perElement(($, parent) => markupOf($, parent, MAX_PARENT_HTML))
 
