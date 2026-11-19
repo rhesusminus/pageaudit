@@ -20,11 +20,9 @@ const databaseFile = async () => join(await mkdtemp(join(tmpdir(), 'pageaudit-ap
 const interruptedAudit = async (dbFilename: string, attempts: number) => {
   const app = build({}, { dbFilename })
   await app.ready()
-  await app.db.run(
-    `INSERT INTO audits (id, url, status, attempts) VALUES ('interrupted', ?, 'running', ?)`,
-    `${FIXTURE_HOST}/good.html`,
-    attempts
-  )
+  app.db
+    .prepare(`INSERT INTO audits (id, url, status, attempts) VALUES ('interrupted', ?, 'running', ?)`)
+    .run(`${FIXTURE_HOST}/good.html`, attempts)
   await app.close()
 }
 
@@ -42,8 +40,11 @@ const restart = async (t: TestContext, dbFilename: string) => {
 
 const waitForRow = async (app: FastifyInstance, done: (row: Row) => boolean) => {
   for (;;) {
-    const row = await app.db.get<Row>(`SELECT status, attempts, error FROM audits WHERE id = 'interrupted'`)
-    if (row && done(row)) return row
+    const row = app.db.prepare(`SELECT status, attempts, error FROM audits WHERE id = 'interrupted'`).get() as
+      | Row
+      | undefined
+    // A plain object, so it compares equal to one: node:sqlite rows have no prototype.
+    if (row && done(row)) return { ...row }
     await sleep(5)
   }
 }
@@ -84,10 +85,10 @@ test('app: an older database gets the index that claims queued audits in the ord
   olderDatabase(dbFilename).close()
 
   const app = await restart(t, dbFilename)
-  const indexes = await app.db.all<{ name: string }[]>(
-    `SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'audits' AND sql IS NOT NULL`
-  )
-  const plan = await app.db.all<{ detail: string }[]>(`EXPLAIN QUERY PLAN ${CLAIM_NEXT_AUDIT}`)
+  const indexes = app.db
+    .prepare(`SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'audits' AND sql IS NOT NULL`)
+    .all() as { name: string }[]
+  const plan = app.db.prepare(`EXPLAIN QUERY PLAN ${CLAIM_NEXT_AUDIT}`).all() as { detail: string }[]
 
   t.assert.deepStrictEqual(
     indexes.map(({ name }) => name),
@@ -110,8 +111,8 @@ test('app: an older database loses the results it only hid when they were delete
   db.close()
 
   const app = await restart(t, dbFilename)
-  const ids = await app.db.all<{ id: string }[]>('SELECT id FROM audits')
-  const columns = await app.db.all<{ name: string }[]>(`SELECT name FROM pragma_table_info('audits')`)
+  const ids = app.db.prepare('SELECT id FROM audits').all() as { id: string }[]
+  const columns = app.db.prepare(`SELECT name FROM pragma_table_info('audits')`).all() as { name: string }[]
 
   t.assert.deepStrictEqual(
     ids.map(({ id }) => id),
@@ -119,16 +120,15 @@ test('app: an older database loses the results it only hid when they were delete
   )
   t.assert.ok(!columns.some(({ name }) => name === 'deleted_at'))
   t.assert.strictEqual((await app.inject({ method: 'DELETE', url: '/audits/kept' })).statusCode, 204)
-  t.assert.strictEqual(await app.db.get('SELECT id FROM audits'), undefined)
+  t.assert.strictEqual(app.db.prepare('SELECT id FROM audits').get(), undefined)
 })
 
 test('app: a deleted audit leaves nothing of its address or results in the database file', async (t: TestContext) => {
   const dbFilename = await databaseFile()
   const app = await restart(t, dbFilename)
-  await app.db.run(
-    `INSERT INTO audits (id, url, status, result) VALUES ('secret', 'https://secret.test/', 'completed', ?)`,
-    JSON.stringify({ title: 'Secret plans' })
-  )
+  app.db
+    .prepare(`INSERT INTO audits (id, url, status, result) VALUES ('secret', 'https://secret.test/', 'completed', ?)`)
+    .run(JSON.stringify({ title: 'Secret plans' }))
 
   t.assert.strictEqual((await app.inject({ method: 'DELETE', url: '/audits/secret' })).statusCode, 204)
 

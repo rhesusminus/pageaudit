@@ -76,7 +76,7 @@ export const routes: FastifyPluginAsyncTypebox<RoutesOptions> = async (
       schema: getAuditSchema
     },
     async (request, reply) => {
-      const audit = await getAudit(fastify.db, request.params.id)
+      const audit = getAudit(fastify.db, request.params.id)
 
       if (!audit) {
         return reply.code(404).send({ error: 'Audit not found' })
@@ -87,7 +87,7 @@ export const routes: FastifyPluginAsyncTypebox<RoutesOptions> = async (
   )
 
   fastify.delete('/audits/:id', { schema: deleteAuditSchema }, async (request, reply) => {
-    const deleted = await deleteAudit(fastify.db, request.params.id)
+    const deleted = deleteAudit(fastify.db, request.params.id)
 
     if (!deleted) {
       return reply.code(404).send({ error: 'Audit not found' })

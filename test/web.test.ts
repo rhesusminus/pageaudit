@@ -190,7 +190,7 @@ test('POST /check: refuses an address longer than the API takes, as typed or as 
   }
   const longest = await postCheck(app, `${base}${'a'.repeat(MAX_ADDRESS_LENGTH - base.length)}`)
   t.assert.strictEqual(longest.statusCode, 303)
-  const stored = await app.db.get<{ n: number }>('SELECT count(*) AS n FROM audits')
+  const stored = app.db.prepare('SELECT count(*) AS n FROM audits').get() as { n: number } | undefined
   t.assert.strictEqual(stored?.n, 1)
 })
 
@@ -298,11 +298,9 @@ test('GET /check/:id: shows results an older version stored as the runner page',
   const app = makeApp(t)
   await app.ready()
   const [checked] = await runAudit([`${FIXTURE_HOST}/good.html`], { pace: async () => {} })
-  await app.db.run(
-    `INSERT INTO audits (id, url, status, result) VALUES ('old', ?, 'completed', ?)`,
-    `${FIXTURE_HOST}/good.html`,
-    JSON.stringify(checked)
-  )
+  app.db
+    .prepare(`INSERT INTO audits (id, url, status, result) VALUES ('old', ?, 'completed', ?)`)
+    .run(`${FIXTURE_HOST}/good.html`, JSON.stringify(checked))
 
   const response = await page(app, '/check/old')
   const brief = await app.inject({ method: 'GET', url: '/check/old.md' })
@@ -352,10 +350,9 @@ test('GET /check/:id: explains a page that could not be fetched', async (t: Test
 test('GET /check/:id: says when the results could not be saved', async (t: TestContext) => {
   const app = makeApp(t)
   await app.ready()
-  await app.db.run(
-    `INSERT INTO audits (id, url, status, error) VALUES ('unsaved', 'https://a.test/', 'failed', ?)`,
-    AUDIT_ERROR.notSaved
-  )
+  app.db
+    .prepare(`INSERT INTO audits (id, url, status, error) VALUES ('unsaved', 'https://a.test/', 'failed', ?)`)
+    .run(AUDIT_ERROR.notSaved)
 
   const response = await page(app, '/check/unsaved')
   const brief = (await app.inject({ method: 'GET', url: '/check/unsaved.md' })).body
@@ -390,7 +387,7 @@ test('POST /check/:id/delete: deletes the results and says so', async (t: TestCo
   t.assert.strictEqual(deleted.headers.location, '/?deleted')
   t.assert.match((await page(app, '/?deleted')).body, /The results were deleted\./)
   t.assert.strictEqual((await page(app, location)).statusCode, 404)
-  t.assert.strictEqual(await app.db.get('SELECT id FROM audits WHERE id = ?', idOf(location)), undefined)
+  t.assert.strictEqual(app.db.prepare('SELECT id FROM audits WHERE id = ?').get(idOf(location)), undefined)
 })
 
 test('GET /check/:id/delete: asks before deleting, for a browser that runs no script', async (t: TestContext) => {

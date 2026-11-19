@@ -34,7 +34,6 @@
     "cli-table3": "^0.6.5",
     "entities": "^7.0.1",
     "fastify": "^5.12.7",
-    "fastify-sqlite-typed": "^5.0.2",
     "ipaddr.js": "^2.5.0",
     "lighthouse": "^13.5.0",
     "ora": "^9.4.1",
