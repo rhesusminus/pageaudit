@@ -134,6 +134,30 @@ test('fetch: a cause with a code prefers the code', async (t) => {
   await assert.rejects(fetchHtml('http://x.test/'), /Could not fetch http:\/\/x\.test\/: ECONNREFUSED$/)
 })
 
+test('fetch: the innermost cause names the failure, with its message when undici gives only its own code', async (t) => {
+  // What Node's fetch throws when an HTTP proxy refuses the tunnel: the middle error's code is the number 0.
+  const refused = Object.assign(new Error('Proxy response (403) !== 200 when HTTP Tunneling'), {
+    name: 'AbortError',
+    code: 'UND_ERR_ABORTED'
+  })
+  mockFetch(t, async () => {
+    throw new TypeError('fetch failed', {
+      cause: Object.assign(new Error('Request was cancelled.'), { code: 0, cause: refused })
+    })
+  })
+  await assert.rejects(
+    fetchHtml('https://x.test/'),
+    (err) => err.reason === 'Proxy response (403) !== 200 when HTTP Tunneling'
+  )
+})
+
+test('fetch: a system error code deep in the causes is shown', async (t) => {
+  mockFetch(t, async () => {
+    throw new TypeError('fetch failed', { cause: new Error('wrapper', { cause: { code: 'ENOTFOUND' } }) })
+  })
+  await assert.rejects(fetchHtml('https://x.test/'), (err) => err.reason === 'ENOTFOUND')
+})
+
 // Answers each request from a map of URL -> Response factory and records the requests.
 function serve(t, routes) {
   const requests = []
