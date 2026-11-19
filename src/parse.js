@@ -67,11 +67,23 @@ function capDepth(root) {
   }
 }
 
+// <template> content is inert (never rendered), but cheerio exposes it to selectors. Removing the element also removes
+// any nested templates. A walk instead of $('template'): this runs before capDepth, and a selector over the whole tree
+// takes time in the square of its depth.
+function removeTemplates($) {
+  const templates = []
+  const stack = [$.root()[0]]
+  while (stack.length) {
+    const node = stack.pop()
+    if (isElement(node) && node.name === 'template') templates.push(node)
+    else for (const child of node.children ?? []) stack.push(child)
+  }
+  $(templates).remove()
+}
+
 export function parse(html) {
   const $ = cheerio.load(html)
-  // <template> content is inert (never rendered), but cheerio exposes it to selectors.
-  // Removing the element also removes any nested templates.
-  $('template').remove()
+  removeTemplates($)
   capDepth($.root()[0])
   return $
 }
