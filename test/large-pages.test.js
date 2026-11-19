@@ -28,16 +28,37 @@ function timed(check, html, prepare) {
   return cpuMs() - start
 }
 
-function assertLinear(check, n, page, prepare = parse) {
-  const [small, large] = [page(n), page(4 * n)]
-  timed(check, small, prepare)
-  const runs = Array.from({ length: RUNS }, () => [timed(check, small, prepare), timed(check, large, prepare)])
-  const fastestSmall = Math.min(...runs.map(([time]) => time))
-  const fastestLarge = Math.min(...runs.map(([, time]) => time))
-  const ratio = fastestLarge / fastestSmall
+// The fastest time of each of two pages, after one warm-up run of each. The pages take turns.
+function fastestTimes(check, first, second, prepare) {
+  timed(check, first, prepare)
+  timed(check, second, prepare)
+  const runs = Array.from({ length: RUNS }, () => [timed(check, first, prepare), timed(check, second, prepare)])
+  return [Math.min(...runs.map(([time]) => time)), Math.min(...runs.map(([, time]) => time))]
+}
+
+function assertLinear(check, n, page) {
+  const [small, large] = fastestTimes(check, page(n), page(4 * n), parse)
+  const ratio = large / small
   assert.ok(
     ratio < MAX_RATIO,
-    `4 times the page took ${ratio.toFixed(1)} times as long (${fastestSmall.toFixed(1)} ms, ${fastestLarge.toFixed(1)} ms)`
+    `4 times the page took ${ratio.toFixed(1)} times as long (${small.toFixed(1)} ms, ${large.toFixed(1)} ms)`
+  )
+}
+
+// Parsing takes about as long however deeply the same elements nest. Comparing sizes does not work here: a deep tree
+// costs a little more per element even when parsing it is linear, so 4 times the depth measured over 6 times as long.
+// A deep page against a flat page with as many elements measures up to about 1.7, and twice that under load, while
+// work in the square of the depth makes the deep page 10 or more times slower.
+const MAX_DEPTH_RATIO = 4
+
+function assertDepthFree(n) {
+  const flatPage = '<div>x</div>'.repeat(n)
+  const deepPage = `${'<div>'.repeat(n)}x${'</div>'.repeat(n)}`
+  const [flat, deep] = fastestTimes(parse, flatPage, deepPage, (html) => html)
+  const ratio = deep / flat
+  assert.ok(
+    ratio < MAX_DEPTH_RATIO,
+    `${n} nested elements took ${ratio.toFixed(1)} times as long as ${n} flat ones (${flat.toFixed(1)} ms, ${deep.toFixed(1)} ms)`
   )
 }
 
@@ -46,12 +67,7 @@ const repeat = (count, part) => Array.from({ length: count }, (_, i) => part(i))
 test('large pages: deeply nested elements are parsed in one pass', () => {
   // parse5 before 8.1.1 searched its stack of open elements for each new element, so parsing took time in the square of
   // the nesting depth. cheerio still asks for parse5 7, and package.json overrides it.
-  assertLinear(
-    parse,
-    10000,
-    (n) => `${'<div>'.repeat(n)}x${'</div>'.repeat(n)}`,
-    (html) => html
-  )
+  assertDepthFree(20000)
 })
 
 test('large pages: labelled fields are matched to their labels in one pass', () => {
