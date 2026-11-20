@@ -874,6 +874,14 @@ test('facts: heading excerpts are capped', async () => {
   assert.equal(Array.from(headings[0].excerpt).length, 200)
 })
 
+// An emoji is two UTF-16 units but one character, so text can look full by its length while it still fits.
+test('facts: a heading excerpt full of emoji still says the text goes on', async () => {
+  const text = `${'a'.repeat(190)}${'😀'.repeat(10)}${' '.repeat(300)}`
+  const { headings } = await factsOf(`<body><h1>Top</h1><p>${text}</p><p>more words here</p></body>`)
+  assert.equal(Array.from(headings[0].excerpt).length, 200)
+  assert.ok(headings[0].excerpt.endsWith('...'))
+})
+
 test('facts: linkSamples list page links with absolute address, text and classification', async () => {
   const html = `<body><a href="/about">About us</a><a href="https://other.test/x" rel="nofollow">Other</a>
     <a href="#top">Top</a><a href="mailto:a@b.c">Mail</a><a href="/logo"><img src="l.png" alt="Home logo"></a></body>`
