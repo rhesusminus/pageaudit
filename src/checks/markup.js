@@ -17,8 +17,8 @@ const COMMENT_DELIMITERS = '<!---->'.length
 // it if it is smaller. Its markup begins with the same characters as the element's own, up to where the copy stops,
 // and then closes the elements still open. A tag counts as its "<" and name, an attribute as its name and "=", and a
 // comment as its "<!--" and "-->": the serializer always writes them and whitespace never shrinks them. Copies keep
-// their parent, which tells the serializer how to escape text, as in script. A template
-// keeps its content fragment even when nothing of it fits, since the serializer reads it from there.
+// their parent, which tells the serializer how to escape text, as in script. A template keeps its content fragment
+// even when nothing of it fits, since the serializer reads it from there.
 function startOf(el, needed) {
   let left = needed
   const copy = (node, parent) => {
