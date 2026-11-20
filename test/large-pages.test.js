@@ -74,6 +74,7 @@ test('large pages: deeply nested elements are parsed in one pass', () => {
 test('large pages: labelled fields are matched to their labels in one pass', () => {
   assertLinear(checkA11y, 1250, (n) => repeat(n, () => '<label><input type="checkbox"> x</label>'))
   assertLinear(checkA11y, 3000, (n) => repeat(n, (i) => `<label for="f${i}">x</label><input id="f${i}">`))
+  assertLinear(checkA11y, 2000, (n) => `${'<label>x'.repeat(n)}<input>${'</label>'.repeat(n)}`)
 })
 
 test('large pages: evidence for sibling fields counts the siblings once', () => {
