@@ -1,7 +1,7 @@
-import { collapseWhitespace } from '../../text.js'
+import { collapseWhitespace, limit } from '../../text.js'
 import { checkA11y } from './a11y.js'
 import { pageAuthorship } from './authorship.js'
-import { visibleText } from './content.js'
+import { visibleTextStart } from './content.js'
 import { checkEscapedText } from './escaped-text.js'
 import { checkHeadings } from './headings.js'
 import { checkHreflang } from './hreflang.js'
@@ -52,6 +52,11 @@ export function pageCanonical($, finalUrl) {
 // report. Empty values are null so a missing title is never reported as a duplicate
 // of another missing title. `response` holds what the response said about the page: `robotsHeader`, the X-Robots-Tag
 // value, and `lastModified`, the Last-Modified header, each null or left out when not sent.
+// An h1 is kept up to a length no real heading reaches. The report shows less still, so the rest only told apart h1s
+// for the duplicate check, and reading it all made each h1 nested in another read the same text again. A page wrapped
+// in an h1 by mistake would also carry its whole text as a fact.
+const MAX_H1 = 1000
+
 export function extractFacts($, finalUrl, { robotsHeader = null, lastModified = null } = {}) {
   const base = baseUrl($, finalUrl)
   const { jsonLd, dates, author } = pageAuthorship($, lastModified)
@@ -62,7 +67,7 @@ export function extractFacts($, finalUrl, { robotsHeader = null, lastModified = 
       ...new Set(
         $('h1')
           .toArray()
-          .map((el) => collapseWhitespace(visibleText(el)))
+          .map((el) => limit(collapseWhitespace(visibleTextStart(el, MAX_H1 + 1)), MAX_H1))
           .filter(Boolean)
       )
     ],
