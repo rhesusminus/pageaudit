@@ -246,7 +246,7 @@ test('headings: empty heading is flagged unless it has an image with alt or aria
   assert.deepEqual(types(checkHeadings(parse('<h1 aria-labelledby="t"></h1><p id="t">Title</p>'))), [])
 })
 
-test('headings: only an image with alt text at any depth names a heading', () => {
+test('headings: an image names a heading at any depth, but only with alt text', () => {
   assert.deepEqual(types(checkHeadings(parse('<h1><span><b><img src="a.png" alt="Logo"></b></span></h1>'))), [])
   assert.deepEqual(types(checkHeadings(parse('<h1><img src="a.png" alt=" "></h1>'))), ['empty-heading'])
   assert.deepEqual(types(checkHeadings(parse('<h1><img src="a.png"></h1>'))), ['empty-heading'])
