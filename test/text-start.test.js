@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
 import { test } from 'node:test'
+import * as cheerio from 'cheerio'
 import { markupStart } from '../src/checks/markup.js'
 import { visibleText, visibleTextStart } from '../src/checks/page/content.js'
 import { parse } from '../src/parse.js'
 import { collapseWhitespace, limit } from '../src/text.js'
 
 const SIZES = [1, 5, 10, 40, 120, 500]
+
+// What markupStart stands in for: the whole element serialized, collapsed and cut.
+const wholeMarkup = ($, el, max) => limit(collapseWhitespace($.html(el)), max)
 
 // Pages built where a cut could go wrong, checked along with the fixture pages.
 const TRICKY_PAGES = {
@@ -44,9 +48,7 @@ function forEveryElement(assertSame) {
 }
 
 test('markup start: the same as cutting the whole markup of any element', () => {
-  forEveryElement(($, el, max, label) =>
-    assert.equal(markupStart($, el, max), limit(collapseWhitespace($.html(el)), max), label)
-  )
+  forEveryElement(($, el, max, label) => assert.equal(markupStart($, el, max), wholeMarkup($, el, max), label))
 })
 
 test('visible text start: the same as cutting the whole visible text of any element', () => {
@@ -54,4 +56,14 @@ test('visible text start: the same as cutting the whole visible text of any elem
   forEveryElement((_, el, max, label) =>
     assert.equal(cut(visibleTextStart(el, max + 1), max), cut(visibleText(el), max), label)
   )
+})
+
+// parse() removes templates, but markupStart must not depend on it: the serializer reads a template's content from
+// its first child, so a copy that stops at the template still needs that child.
+test('markup start: the same as cutting the whole markup for a template where the cut falls', () => {
+  const $ = cheerio.load(`<div>${'x'.repeat(115)}<template><p>hi there</p></template></div>`)
+  const div = $('div').get(0)
+  for (let max = 110; max <= 140; max++) {
+    assert.equal(markupStart($, div, max), wholeMarkup($, div, max), `cut at ${max}`)
+  }
 })

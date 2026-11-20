@@ -1,9 +1,13 @@
 import { collapseWhitespace, limit, nonSpaceEnd } from '../text.js'
 
+const COMMENT_DELIMITERS = '<!---->'.length
+
 // A copy of an element with only as much of its start as holds `needed` characters that are not whitespace, or all of
 // it if it is smaller. Its markup begins with the same characters as the element's own, up to where the copy stops,
-// and then closes the elements still open. Tags and attribute names count as their name, since whitespace never
-// shrinks them. Copies keep their parent, which tells the serializer how to escape text, as in script.
+// and then closes the elements still open. A tag counts as its "<" and name, an attribute as its name and "=", and a
+// comment as its "<!--" and "-->": the serializer always writes them and whitespace never shrinks them. Copies keep
+// their parent, which tells the serializer how to escape text, as in script. A template keeps its content fragment
+// even when nothing of it fits, since the serializer reads it from there.
 function startOf(el, needed) {
   let left = needed
   const copy = (node, parent) => {
@@ -14,12 +18,13 @@ function startOf(el, needed) {
       clone.data = node.data.slice(0, end)
       left -= found
     }
+    if (node.type === 'comment') left -= COMMENT_DELIMITERS
     if (node.attribs) {
       left -= node.name.length + 1
       for (const name of Object.keys(node.attribs)) left -= name.length + 1
     }
     for (const child of node.children ?? []) {
-      if (left <= 0) break
+      if (left <= 0 && !(node.name === 'template' && clone.children.length === 0)) break
       clone.children.push(copy(child, clone))
     }
     return clone
