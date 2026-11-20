@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
 import { test } from 'node:test'
+import * as cheerio from 'cheerio'
 import { markupStart } from '../src/checks/markup.js'
 import { parse } from '../src/parse.js'
 import { collapseWhitespace, limit } from '../src/text.js'
@@ -43,4 +44,14 @@ test('markup start: the same as cutting the whole markup where a cut could go wr
     tables: `<table>${'<tr><td> a </td><td>b</td></tr>'.repeat(100)}</table>`
   }
   for (const [label, html] of Object.entries(cases)) assertSameForEveryElement(html, label)
+})
+
+// parse() removes templates, but markupStart must not depend on it: the serializer reads a template's content from
+// its first child, so a copy that stops at the template still needs that child.
+test('markup start: the same as cutting the whole markup for a template where the cut falls', () => {
+  const $ = cheerio.load(`<div>${'x'.repeat(115)}<template><p>hi there</p></template></div>`)
+  const div = $('div').get(0)
+  for (let max = 110; max <= 140; max++) {
+    assert.equal(markupStart($, div, max), wholeMarkup($, div, max), `cut at ${max}`)
+  }
 })
