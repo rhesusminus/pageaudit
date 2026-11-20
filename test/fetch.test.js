@@ -158,6 +158,19 @@ test('fetch: a system error code deep in the causes is shown', async (t) => {
   await assert.rejects(fetchHtml('https://x.test/'), (err) => err.reason === 'ENOTFOUND')
 })
 
+test('fetch: a body cut off while it is read says the other side closed', async (t) => {
+  // What Node's fetch throws when the server closes the connection partway through the body.
+  const closed = Object.assign(new Error('other side closed'), { name: 'SocketError', code: 'UND_ERR_SOCKET' })
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('<html>'))
+      controller.error(new TypeError('terminated', { cause: closed }))
+    }
+  })
+  mockFetch(t, async () => new Response(body, { headers: { 'content-type': 'text/html' } }))
+  await assert.rejects(fetchHtml('https://x.test/'), (err) => err.reason === 'other side closed')
+})
+
 // Answers each request from a map of URL -> Response factory and records the requests.
 function serve(t, routes) {
   const requests = []
