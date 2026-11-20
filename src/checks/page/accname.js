@@ -83,13 +83,25 @@ export function accessibleName($, el, { images = true, content = true } = {}) {
 }
 
 // Content with text or a name set by script, see bindings.js. It mirrors contentText: explicitly hidden subtrees and
-// noscript add nothing, and an image counts through its alt.
-function boundContent(node, images, includeHidden = false) {
-  if (node.type !== 'tag' || node.name === 'noscript' || (!includeHidden && isHidden(node))) return false
-  if (node.name === 'img') return images && isBound(node, 'alt')
-  if (hasBoundText(node) || isBound(node, 'aria-label')) return true
-  return node.children.some((child) => boundContent(child, images, includeHidden))
+// noscript add nothing, and an image counts through its alt. Kept per node for each set of options: nested elements,
+// such as headings or labels, each ask about everything inside them.
+function boundContentOf(images, includeHidden) {
+  const check = perElement((_, node) => {
+    if (node.type !== 'tag' || node.name === 'noscript' || (!includeHidden && isHidden(node))) return false
+    if (node.name === 'img') return images && isBound(node, 'alt')
+    if (hasBoundText(node) || isBound(node, 'aria-label')) return true
+    return node.children.some((child) => check(null, child))
+  })
+  return (node) => check(null, node)
 }
+
+// The four checks, indexed [images][includeHidden], each option read as a boolean.
+const BOUND_CONTENT = [false, true].map((images) =>
+  [false, true].map((includeHidden) => boundContentOf(images, includeHidden))
+)
+
+const boundContent = (node, images, includeHidden = false) =>
+  BOUND_CONTENT[Number(Boolean(images))][Number(Boolean(includeHidden))](node)
 
 // A referenced element names with its own aria-label first, images included, as in targetName.
 const boundTarget = perElement(

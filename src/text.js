@@ -3,6 +3,17 @@ import { decodeHTMLStrict } from 'entities'
 // Browsers and Google collapse whitespace runs, so measure and display text the same way.
 export const collapseWhitespace = (text) => text.replace(/\s+/g, ' ').trim()
 
+const NON_SPACE = /\S/gu
+
+// Where `text` has held `count` characters that are not whitespace, or its end if it holds fewer, and how many it
+// holds up to there. A character is a code point, so a cut never splits one.
+export function nonSpaceEnd(text, count) {
+  NON_SPACE.lastIndex = 0
+  let found = 0
+  while (found < count && NON_SPACE.exec(text)) found++
+  return { end: found < count ? text.length : NON_SPACE.lastIndex, found }
+}
+
 // Counts characters (code points), so an emoji is one character rather than two UTF-16 units.
 export const charCount = (text) => Array.from(text).length
 

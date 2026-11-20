@@ -1,15 +1,4 @@
-import { collapseWhitespace, limit } from '../text.js'
-
-const NON_SPACE = /\S/gu
-
-// Where `text` has held `count` characters that are not whitespace, or its end if it holds fewer, and how many it
-// holds up to there. A character is a code point, so a cut never splits one.
-function nonSpaceEnd(text, count) {
-  NON_SPACE.lastIndex = 0
-  let found = 0
-  while (found < count && NON_SPACE.exec(text)) found++
-  return { end: found < count ? text.length : NON_SPACE.lastIndex, found }
-}
+import { collapseWhitespace, limit, nonSpaceEnd } from '../text.js'
 
 const COMMENT_DELIMITERS = '<!---->'.length
 

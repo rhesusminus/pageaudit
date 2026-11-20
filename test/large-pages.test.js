@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import { evidence } from '../src/checks/evidence.js'
 import { checkA11y } from '../src/checks/page/a11y.js'
 import { headingExcerpts } from '../src/checks/page/content.js'
+import { checkHeadings } from '../src/checks/page/headings.js'
 import { checkImages } from '../src/checks/page/images.js'
 import { checkLinks } from '../src/checks/page/links.js'
 import { snippet } from '../src/checks/snippet.js'
@@ -121,6 +122,30 @@ test('large pages: nested elements with issues serialize only the start of their
     60,
     (n) => `${'<h2><span>'.repeat(n)}${'<i>word</i>'.repeat(20 * n)}${'</span></h2>'.repeat(n)}`
   )
+})
+
+test('large pages: a heading holding many images is judged once', () => {
+  assertLinear(checkHeadings, 5000, (n) => `<h1>Title</h1><h2>${repeat(n, () => '<img src="/a.png" alt="">')}</h2>`)
+})
+
+test('large pages: nested headings do not each look through everything inside them', () => {
+  // At 4 times the size the headings nest 240 deep, two elements each, below the depth parse() caps the page at.
+  assertLinear(
+    checkHeadings,
+    3000,
+    (n) => `<h1>Title</h1>${'<h2><span>'.repeat(n / 50)}${'<i></i>'.repeat(n)}${'</span></h2>'.repeat(n / 50)}`
+  )
+})
+
+test('large pages: nested headings show only the start of their text in an issue', () => {
+  // At 4 times the size the headings nest 120 deep for skipped levels and 240 deep for h1s, below the depth cap. An id
+  // keeps each selector short: a path through every heading above would grow with the depth on its own.
+  const words = (n) => repeat(n, () => '<i>word</i>')
+  const open = (n) => repeat(n / 100, (i) => `<h2><span><h4 id="h${i}"><span>`)
+  const skipped = (n) => `<h1>Title</h1>${open(n)}${words(n)}${'</span></h4></span></h2>'.repeat(n / 100)}`
+  assertLinear(checkHeadings, 3000, skipped)
+  const h1s = (n) => `${repeat(n / 50, (i) => `<h1 id="t${i}"><span>`)}${words(n)}${'</span></h1>'.repeat(n / 50)}`
+  assertLinear(checkHeadings, 3000, h1s)
 })
 
 test('large pages: a long section under a heading is read only up to the excerpt', () => {
