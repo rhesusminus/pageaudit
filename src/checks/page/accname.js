@@ -94,13 +94,13 @@ function boundContentOf(images, includeHidden) {
   return (node) => check(null, node)
 }
 
-const BOUND_CONTENT = new Map(
-  [true, false].flatMap((images) =>
-    [true, false].map((includeHidden) => [`${images} ${includeHidden}`, boundContentOf(images, includeHidden)])
-  )
+// The four checks, indexed [images][includeHidden], each option read as a boolean.
+const BOUND_CONTENT = [false, true].map((images) =>
+  [false, true].map((includeHidden) => boundContentOf(images, includeHidden))
 )
 
-const boundContent = (node, images, includeHidden = false) => BOUND_CONTENT.get(`${images} ${includeHidden}`)(node)
+const boundContent = (node, images, includeHidden = false) =>
+  BOUND_CONTENT[Number(Boolean(images))][Number(Boolean(includeHidden))](node)
 
 // A referenced element names with its own aria-label first, images included, as in targetName.
 const boundTarget = perElement(
