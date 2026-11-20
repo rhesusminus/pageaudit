@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { checkA11y } from '../src/checks/page/a11y.js'
+import { headingExcerpts } from '../src/checks/page/content.js'
 import { checkImages } from '../src/checks/page/images.js'
 import { checkLinks } from '../src/checks/page/links.js'
 import { parse } from '../src/parse.js'
@@ -107,4 +108,8 @@ test('large pages: a link holding many decorative images is judged once', () => 
     1000,
     (n) => `<a href="/">${repeat(n, () => '<img src="/a.png" alt="" width="1" height="1">')}</a>`
   )
+})
+
+test('large pages: a long section under a heading is read only up to the excerpt', () => {
+  assertLinear(headingExcerpts, 16000, (n) => `<h1>Title</h1><p>${repeat(n, () => '<b>word</b> ')}</p><h2>Next</h2>`)
 })
