@@ -18,8 +18,9 @@ function contentText($, el, images, includeHidden = false) {
   const walk = (node) => {
     if (node.type === 'text') parts.push(node.data)
     if (node.type !== 'tag' || node.name === 'noscript' || (!includeHidden && isHidden(node))) return
-    if (node.name === 'img') return void (images && parts.push($(node).attr('alt') ?? ''))
-    const label = $(node).attr('aria-label')
+    // Attributes are read from the node: a cheerio wrapper for every node walked costs more than the walk itself.
+    if (node.name === 'img') return void (images && parts.push(node.attribs.alt ?? ''))
+    const label = node.attribs['aria-label']
     if (label) return void parts.push(label)
     if (node.name === 'svg') {
       const title = $(node).children('title').first().text()
