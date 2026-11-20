@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { evidence } from '../src/checks/evidence.js'
 import { checkA11y } from '../src/checks/page/a11y.js'
+import { headingExcerpts } from '../src/checks/page/content.js'
 import { checkHeadings } from '../src/checks/page/headings.js'
 import { checkImages } from '../src/checks/page/images.js'
 import { checkLinks } from '../src/checks/page/links.js'
@@ -76,6 +77,7 @@ test('large pages: deeply nested elements are parsed in one pass', () => {
 test('large pages: labelled fields are matched to their labels in one pass', () => {
   assertLinear(checkA11y, 1250, (n) => repeat(n, () => '<label><input type="checkbox"> x</label>'))
   assertLinear(checkA11y, 3000, (n) => repeat(n, (i) => `<label for="f${i}">x</label><input id="f${i}">`))
+  assertLinear(checkA11y, 2000, (n) => `${'<label>x'.repeat(n)}<input>${'</label>'.repeat(n)}`)
 })
 
 test('large pages: evidence for sibling fields counts the siblings once', () => {
@@ -144,4 +146,8 @@ test('large pages: nested headings show only the start of their text in an issue
   assertLinear(checkHeadings, 3000, skipped)
   const h1s = (n) => `${repeat(n / 50, (i) => `<h1 id="t${i}"><span>`)}${words(n)}${'</span></h1>'.repeat(n / 50)}`
   assertLinear(checkHeadings, 3000, h1s)
+})
+
+test('large pages: a long section under a heading is read only up to the excerpt', () => {
+  assertLinear(headingExcerpts, 16000, (n) => `<h1>Title</h1><p>${repeat(n, () => '<b>word</b> ')}</p><h2>Next</h2>`)
 })

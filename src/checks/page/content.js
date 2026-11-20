@@ -1,4 +1,4 @@
-import { collapseWhitespace, limit, nonSpaceEnd } from '../../text.js'
+import { charCount, collapseWhitespace, limit, nonSpaceEnd } from '../../text.js'
 import { absolute } from './signals.js'
 
 const MAX_MAIN_TEXT = 1500
@@ -69,15 +69,20 @@ function walk(node, { skip, onText, onHeading }) {
   return false
 }
 
-// Gathers text and says when it holds more than `max` characters once whitespace is collapsed, so the walk can stop.
+// Gathers text and says when it holds more than `max` characters (code points, as limit() counts them) once
+// whitespace is collapsed, so the walk can stop. Once full it takes no more text: a walk that goes on past it, as for
+// the headings after it, would otherwise make it collapse all the text gathered so far again for each piece added.
 function collector(max) {
   let raw = ''
+  let full = false
   return {
     add(value) {
+      if (full) return true
       raw += value
       if (raw.length <= max * 2) return false
       raw = collapseWhitespace(raw)
-      return raw.length > max
+      full = charCount(raw) > max
+      return full
     },
     text: () => limit(collapseWhitespace(raw), max) || null
   }
