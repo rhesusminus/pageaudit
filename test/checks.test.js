@@ -895,6 +895,13 @@ test('facts: a heading excerpt full of emoji still says the text goes on', async
   assert.ok(headings[0].excerpt.endsWith('...'))
 })
 
+test('facts: an h1 is kept up to a length no real heading reaches', async () => {
+  const { h1s } = await factsOf(`<body><h1>Short</h1><h1>${'word '.repeat(500)}</h1></body>`)
+  assert.equal(h1s[0], 'Short')
+  assert.equal(Array.from(h1s[1]).length, 1000)
+  assert.ok(h1s[1].endsWith('...'))
+})
+
 test('facts: linkSamples list page links with absolute address, text and classification', async () => {
   const html = `<body><a href="/about">About us</a><a href="https://other.test/x" rel="nofollow">Other</a>
     <a href="#top">Top</a><a href="mailto:a@b.c">Mail</a><a href="/logo"><img src="l.png" alt="Home logo"></a></body>`

@@ -5,6 +5,7 @@ import { checkA11y } from '../src/checks/page/a11y.js'
 import { headingExcerpts } from '../src/checks/page/content.js'
 import { checkHeadings } from '../src/checks/page/headings.js'
 import { checkImages } from '../src/checks/page/images.js'
+import { extractFacts } from '../src/checks/page/index.js'
 import { checkLinks } from '../src/checks/page/links.js'
 import { snippet } from '../src/checks/snippet.js'
 import { parse } from '../src/parse.js'
@@ -150,4 +151,12 @@ test('large pages: nested headings show only the start of their text in an issue
 
 test('large pages: a long section under a heading is read only up to the excerpt', () => {
   assertLinear(headingExcerpts, 16000, (n) => `<h1>Title</h1><p>${repeat(n, () => '<b>word</b> ')}</p><h2>Next</h2>`)
+})
+
+test('large pages: nested h1s each keep only the start of their text as a fact', () => {
+  // At 4 times the size the h1s nest 240 deep, two elements each, below the depth parse() caps the page at. An id keeps
+  // each selector short: a path through every h1 above would grow with the depth on its own.
+  const words = (n) => repeat(n, () => '<i>word</i> ')
+  const h1s = (n) => `${repeat(n / 50, (i) => `<h1 id="t${i}"><span>`)}${words(n)}${'</span></h1>'.repeat(n / 50)}`
+  assertLinear(($) => extractFacts($, 'https://a.test/'), 3000, h1s)
 })

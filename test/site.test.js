@@ -110,6 +110,15 @@ test('site: inputs that land on the same page report a foreign canonical once', 
   assert.deepEqual(brief(checkSite(pages)), [['canonical-elsewhere', ['http://a.test/x', 'https://a.test/x']]])
 })
 
+test('site: h1s that differ only past the length kept count as the same', async () => {
+  const start = 'word '.repeat(300)
+  const pages = await audit({
+    'https://a.test/x': { title: 'X', h1s: [`${start}one`] },
+    'https://a.test/y': { title: 'Y', h1s: [`${start}two`] }
+  })
+  assert.deepEqual(brief(checkSite(pages)), [['duplicate-h1', ['https://a.test/x', 'https://a.test/y']]])
+})
+
 test('site: a page repeating an h1 in different cases is listed once', async () => {
   const pages = await audit({
     'https://a.test/x': { title: 'X', h1s: ['Home', 'HOME'] },
