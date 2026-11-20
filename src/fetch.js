@@ -21,12 +21,24 @@ export class FetchError extends Error {
   }
 }
 
+// What went wrong, from the innermost cause: the outer errors only wrap it ("fetch failed"). A system error code such
+// as ECONNREFUSED is short and well known. undici's own codes (UND_ERR_*) are not, and an outer error can carry a
+// number, so the message says more. Behind an HTTP proxy that refuses a tunnel, only the innermost message says so.
+function causeReason(err) {
+  const seen = new Set([err])
+  let cause = err
+  while (cause.cause && !seen.has(cause.cause)) {
+    cause = cause.cause
+    seen.add(cause)
+  }
+  const { code, message } = cause
+  if (typeof code === 'string' && !code.startsWith('UND_ERR')) return code
+  return message || err.message
+}
+
 function fetchError(url, err, timeout) {
   if (err instanceof FetchError) return err
-  const reason =
-    err.name === 'TimeoutError'
-      ? `timed out after ${timeout / 1000}s`
-      : (err.cause?.code ?? err.cause?.message ?? err.message)
+  const reason = err.name === 'TimeoutError' ? `timed out after ${timeout / 1000}s` : causeReason(err)
   return new FetchError(url, reason)
 }
 
