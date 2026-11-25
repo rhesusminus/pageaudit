@@ -1,3 +1,4 @@
+// Hreflang checks on one page: codes, URLs, duplicates, the self link and x-default.
 import { pageKey } from '../../input/resolve.js'
 import { SOURCES } from '../../sources.js'
 import { evidence, selectorFor } from '../evidence.js'

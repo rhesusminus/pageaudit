@@ -1,3 +1,4 @@
+// issueId(): a stable short id per issue.
 import { createHash } from 'node:crypto'
 
 // A short id for one issue, so a suggestion can refer back to it. It depends on the page, the issue type and where

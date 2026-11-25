@@ -1,3 +1,4 @@
+// loadRobots(origin): reads and parses a robots.txt the way Google treats the answer.
 import robotsParser from 'robots-parser'
 import { request } from './fetch.js'
 

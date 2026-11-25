@@ -1,3 +1,4 @@
+// queueCheckedAudit(): checks an address and queues it, for the API and the web form alike.
 import { type Db, queueAudit } from '../db/database.ts'
 import { normalize } from '../input/resolve.js'
 import { DestinationError, MAX_ADDRESS_LENGTH, validateDestination } from './public-destination.js'

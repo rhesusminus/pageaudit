@@ -1,3 +1,4 @@
+// The HTML report's view of the audit: site-wide issues, the verdict and metric bands.
 import { METRIC_BANDS } from '../lighthouse-limits.js'
 import { countSeverities } from '../severity.js'
 

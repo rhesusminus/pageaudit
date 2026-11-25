@@ -1,3 +1,4 @@
+// pageProducts(): the Product markup stored in the facts.
 import { SOURCES } from '../../sources.js'
 import { MAX_URL } from '../../text.js'
 import { seoIssue } from '../snippet.js'

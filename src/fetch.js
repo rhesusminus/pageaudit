@@ -1,3 +1,4 @@
+// fetchPage(url) and request(): redirects, timeout, User-Agent, encoding sniffing, X-Robots-Tag.
 import pkg from '../package.json' with { type: 'json' }
 
 export const USER_AGENT = `pageaudit/${pkg.version} (+https://github.com/rhesusminus/pageaudit)`

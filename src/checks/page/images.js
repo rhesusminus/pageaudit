@@ -1,3 +1,4 @@
+// checkImages(): alt text, src, file names and dimensions of images.
 import { SOURCES } from '../../sources.js'
 import { withEvidence } from '../evidence.js'
 import { perElement } from '../per-element.js'

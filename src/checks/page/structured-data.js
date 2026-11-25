@@ -1,3 +1,4 @@
+// JSON-LD checks: parsing, @context, absolute URLs, supported types, required properties and product offers.
 import { SOURCES } from '../../sources.js'
 import { seoIssue } from '../snippet.js'
 import { jsonLdBlocks, jsonLdNodes, typesOf } from './json-ld.js'

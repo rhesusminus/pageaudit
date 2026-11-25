@@ -1,3 +1,4 @@
+// checkDuplicates(): titles, descriptions and h1s shared by several pages.
 import { pageKey } from '../../input/resolve.js'
 import { SOURCES } from '../../sources.js'
 import { truncate } from '../snippet.js'

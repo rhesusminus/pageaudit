@@ -1,3 +1,4 @@
+// Hygiene checks: URL, HTML size, mixed content and client-side rendered pages.
 import { HTML_MAX_BYTES } from '../../fetch.js'
 import { SOURCES } from '../../sources.js'
 import { charCount, collapseWhitespace } from '../../text.js'

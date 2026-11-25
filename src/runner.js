@@ -1,3 +1,4 @@
+// Runs the page checks over all URLs with concurrency and a per-host delay.
 import {
   checkFetchError,
   checkHtml,

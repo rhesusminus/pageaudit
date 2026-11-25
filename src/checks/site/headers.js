@@ -1,3 +1,4 @@
+// checkResponseHeaders(): security headers and compression, one issue per origin.
 import { SOURCES } from '../../sources.js'
 import { truncate } from '../snippet.js'
 

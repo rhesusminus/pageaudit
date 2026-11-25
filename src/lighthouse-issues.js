@@ -1,3 +1,4 @@
+// lighthouseIssues(): slow LCP, CLS, TBT and low scores as issues.
 import { issueId } from './issue-id.js'
 import { METRIC_BANDS } from './lighthouse-limits.js'
 import { SOURCES } from './sources.js'

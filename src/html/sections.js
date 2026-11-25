@@ -1,3 +1,4 @@
+// The sections of the HTML report: cover, summary, what to fix, pages and method.
 import { adviceFor } from '../advice.js'
 import { countSeverities, worstFirst } from '../severity.js'
 import {

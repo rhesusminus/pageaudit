@@ -1,3 +1,4 @@
+// main(): runs the wizard when there are no arguments in a terminal, then run().
 import { run } from './cli.js'
 import { askArgs, wantsWizard } from './wizard.js'
 

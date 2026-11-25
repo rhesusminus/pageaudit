@@ -1,3 +1,4 @@
+// jsonLdBlocks(), pageObjects() and textValue(): reading the JSON-LD of a page.
 import { collapseWhitespace, limit } from '../../text.js'
 
 const MAX_DEPTH = 4

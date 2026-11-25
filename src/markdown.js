@@ -1,3 +1,4 @@
+// pageMarkdown(): the main content of a page as Markdown, for --content.
 import { imageSrc, mainArea } from './checks/page/content.js'
 import { absolute, baseUrl } from './checks/page/signals.js'
 import { isElement } from './parse.js'

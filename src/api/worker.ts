@@ -1,3 +1,4 @@
+// Runs queued audits one at a time.
 import type { FastifyInstance } from 'fastify'
 import type { AuditResult, Db } from '../db/database.ts'
 import { AUDIT_ERROR } from './audit-errors.js'

@@ -1,3 +1,4 @@
+// writeReportFile(): writes a report file without throwing.
 import { randomBytes } from 'node:crypto'
 import { lstatSync, readlinkSync, realpathSync, statSync } from 'node:fs'
 import { chmod, lstat, rename, rm, stat, writeFile } from 'node:fs/promises'

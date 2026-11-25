@@ -1,3 +1,4 @@
+// extractSignals(): content and metadata signals stored in the facts.
 import { withoutFragment } from '../../input/resolve.js'
 import { collapseWhitespace, limit, MAX_URL } from '../../text.js'
 import { isBound } from './bindings.js'

@@ -1,3 +1,4 @@
+// answersTo(): the host names the server answers to, against DNS rebinding.
 import { isIP } from 'node:net'
 import type { FastifyRequest } from 'fastify'
 import { isLocalhostName } from './public-destination.js'

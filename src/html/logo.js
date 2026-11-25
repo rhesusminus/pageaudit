@@ -1,3 +1,4 @@
+// Reads a logo file into a data URI.
 import { readFile } from 'node:fs/promises'
 import { extname } from 'node:path'
 

@@ -1,3 +1,4 @@
+// checkHeadings(): missing and multiple h1s, skipped heading levels and empty headings.
 import { SOURCES } from '../../sources.js'
 import { collapseWhitespace } from '../../text.js'
 import { evidence, selectorFor } from '../evidence.js'

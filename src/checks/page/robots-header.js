@@ -1,3 +1,4 @@
+// checkRobotsHeader(): noindex and nofollow sent in the X-Robots-Tag header, and the rules it gives each crawler.
 import { SOURCES } from '../../sources.js'
 import { limit } from '../../text.js'
 import { seoIssue } from '../snippet.js'

@@ -1,3 +1,5 @@
+// checkRobotsTxt(): pages the robots.txt blocks, and aiCrawlerAccess() and originsWithPlatform(): the report's
+// `origins`.
 import { mapLimited } from '../../concurrency.js'
 import { loadRobots } from '../../robots.js'
 import { SOURCES } from '../../sources.js'

@@ -1,3 +1,4 @@
+// renderHtml(): the HTML report as one document.
 import pkg from '../../package.json' with { type: 'json' }
 import { averageScores, groupIssues, pageHealth, pagesWithSiteIssues } from '../overview.js'
 import { markup, raw } from './escape.js'

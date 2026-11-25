@@ -1,3 +1,4 @@
+// pagePlatform(): the shop or site builder the page runs on.
 import { collapseWhitespace, limit } from '../../text.js'
 
 const MAX_TEXT = 120

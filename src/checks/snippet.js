@@ -1,3 +1,4 @@
+// truncate()/snippet(): caps issue contexts at 120 characters.
 import { limit } from '../text.js'
 import { markupStart } from './markup.js'
 

@@ -1,3 +1,4 @@
+// Social preview checks: Open Graph and the Twitter card.
 import { SOURCES } from '../../sources.js'
 import { truncate } from '../snippet.js'
 import { metaContent, ogSelector, TWITTER_CARD } from './signals.js'

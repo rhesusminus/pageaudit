@@ -1,3 +1,4 @@
+// checkLinkTargets(): where the internal links lead, for --check-links.
 import { pageCanonical } from './checks/page/index.js'
 import { hostThrottle, mapLimited } from './concurrency.js'
 import { DEFAULT_TIMEOUT_MS, request as defaultRequest, readHtml } from './fetch.js'

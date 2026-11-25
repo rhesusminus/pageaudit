@@ -1,3 +1,4 @@
+// checkHtml() and extractFacts(): facts for the site checks and the report.
 import { collapseWhitespace, limit } from '../../text.js'
 import { checkA11y } from './a11y.js'
 import { pageAuthorship } from './authorship.js'

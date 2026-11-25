@@ -1,3 +1,4 @@
+// Indexing checks: noindex, nofollow, viewport and lang.
 import { SOURCES } from '../../sources.js'
 import { evidence } from '../evidence.js'
 import { seoIssue } from '../snippet.js'

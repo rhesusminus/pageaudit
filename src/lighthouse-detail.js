@@ -1,3 +1,4 @@
+// The affected items, descriptions and savings of a failing audit.
 import { collapseWhitespace, limit } from './text.js'
 
 const MAX_ITEMS = 3
