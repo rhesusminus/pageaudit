@@ -2,7 +2,13 @@ import assert from 'node:assert/strict'
 import dns from 'node:dns/promises'
 import { createServer } from 'node:http'
 import { test } from 'node:test'
-import { DestinationError, fetchPublicPage, publicLookup, validateDestination } from '../src/api/public-destination.js'
+import {
+  DestinationError,
+  fetchPublicPage,
+  loadPublicRobots,
+  publicLookup,
+  validateDestination
+} from '../src/api/public-destination.js'
 import { mockFetch } from './helpers/mock-fetch.js'
 
 const answers = (...addresses) => addresses.map((address) => ({ address, family: address.includes(':') ? 6 : 4 }))
@@ -178,4 +184,24 @@ test('public destinations: real transport blocks DNS rebinding before connecting
   await assert.rejects(fetchPublicPage(`http://rebind.test:${server.address().port}/`), /public network/)
   assert.equal(dnsMock.mock.callCount(), 2)
   assert.equal(received, 0)
+})
+
+test('public robots.txt: a robots.txt on a private address is not requested', async (t) => {
+  const fetched = mockFetch(t, async () => new Response('User-agent: *\nDisallow: /'))
+  const robots = await loadPublicRobots('http://127.0.0.1:8080')
+  assert.equal(robots.status, 'failed')
+  assert.match(robots.reason, /public network/)
+  assert.equal(fetched.mock.callCount(), 0)
+})
+
+test('public robots.txt: a redirect to a private address is refused at the redirect', async (t) => {
+  t.mock.method(dns, 'lookup', async () => answers('8.8.8.8'))
+  const fetched = mockFetch(t, async (_url, options) => {
+    assert.ok(options.dispatcher)
+    return new Response(null, { status: 301, headers: { location: 'http://127.0.0.1/robots.txt' } })
+  })
+  const robots = await loadPublicRobots('https://public.test')
+  assert.equal(robots.status, 'failed')
+  assert.match(robots.reason, /public network/)
+  assert.equal(fetched.mock.callCount(), 1)
 })
