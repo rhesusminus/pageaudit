@@ -1,9 +1,8 @@
 import { basename, dirname, relative, resolve } from 'node:path'
 import chalk from 'chalk'
-import { originPlatform } from './checks/page/platform.js'
 import { checkSite } from './checks/site/index.js'
 import { checkLinks } from './checks/site/links.js'
-import { aiCrawlerAccess, checkRobotsTxt } from './checks/site/robots.js'
+import { checkRobotsTxt, originsWithPlatform } from './checks/site/robots.js'
 import {
   checkSitemapDeclared,
   checkSitemapEntries,
@@ -179,8 +178,7 @@ async function checkRobotsAndSitemaps(pages, inputs, options, { progress, pace }
       ...(await checkSitemapHosts(inputs.sitemapFiles, { load })),
       ...(options.sitemaps.length ? [] : await checkSitemapDeclared(pages, { load }))
     ]
-    const origins = await aiCrawlerAccess(pages, { load })
-    return { issues, origins: origins.map((entry) => ({ ...entry, platform: originPlatform(pages, entry.origin) })) }
+    return { issues, origins: await originsWithPlatform(pages, { load }) }
   } finally {
     spinner.stop()
   }

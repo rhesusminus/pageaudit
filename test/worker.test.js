@@ -3,14 +3,17 @@ import { test } from 'node:test'
 import { setImmediate as nextTurn } from 'node:timers/promises'
 import { startAuditWorker } from '../src/api/worker.ts'
 
+// What an audit of a page with this status finds, the way auditOnePage() returns it.
+const audited = (status) => ({ page: { status }, site: [], origins: [] })
+
 function setup(t, jobs, { claim, ...options } = {}) {
   const app = { db: {}, log: { error: t.mock.fn() } }
   const saved = []
   const finished = Promise.withResolvers()
   const helpers = {
     claimNextAudit: t.mock.fn(claim ?? (() => jobs.shift())),
-    completeAudit: (_db, id, page) => {
-      saved.push({ id, page })
+    completeAudit: (_db, id, result) => {
+      saved.push({ id, result })
       finished.resolve()
     },
     failAudit: (_db, id, error) => {
@@ -26,7 +29,7 @@ function setup(t, jobs, { claim, ...options } = {}) {
 test('worker: processes jobs sequentially and stop waits for the active audit', { timeout: 1000 }, async (t) => {
   const started = Promise.withResolvers()
   const result = Promise.withResolvers()
-  const page = { status: 200 }
+  const audit = audited(200)
   const jobs = [
     { id: 'first', url: 'https://first.test' },
     { id: 'second', url: 'https://second.test' }
@@ -45,9 +48,9 @@ test('worker: processes jobs sequentially and stop waits for the active audit', 
   await nextTurn()
   assert.equal(stopped, false)
   assert.equal(state.helpers.claimNextAudit.mock.callCount(), 1)
-  result.resolve(page)
+  result.resolve(audit)
   await stopping
-  assert.deepEqual(state.saved, [{ id: 'first', page }])
+  assert.deepEqual(state.saved, [{ id: 'first', result: audit }])
   assert.equal(jobs.length, 1)
 })
 
@@ -58,10 +61,10 @@ test('worker: saves failed fetches and thrown audit errors, then processes the n
   const done = Promise.withResolvers()
   const state = setup(t, jobs, {
     audit: async (url) => {
-      if (url.endsWith('/1')) return { status: null }
+      if (url.endsWith('/1')) return audited(null)
       if (url.endsWith('/2')) throw new Error('audit crashed')
       done.resolve()
-      return { status: 200 }
+      return audited(200)
     }
   })
   await done.promise
@@ -69,13 +72,13 @@ test('worker: saves failed fetches and thrown audit errors, then processes the n
   assert.deepEqual(state.saved, [
     { id: '1', error: 'Could not fetch page' },
     { id: '2', error: 'Audit failed' },
-    { id: '3', page: { status: 200 } }
+    { id: '3', result: audited(200) }
   ])
   assert.equal(state.app.log.error.mock.callCount(), 1)
 })
 
 test('worker: retries after a database error', { timeout: 1000 }, async (t) => {
-  const state = setup(t, [], { audit: async () => ({ status: 200 }) })
+  const state = setup(t, [], { audit: async () => audited(200) })
   let attempts = 0
   state.helpers.claimNextAudit.mock.mockImplementation(() => {
     attempts++
@@ -95,7 +98,7 @@ test('worker: wakes immediately on idle shutdown and workers have independent li
   await nextTurn()
   await first.worker.stop()
   await first.worker.stop()
-  const second = setup(t, [{ id: 'new', url: 'https://job.test' }], { audit: async () => ({ status: 200 }) })
+  const second = setup(t, [{ id: 'new', url: 'https://job.test' }], { audit: async () => audited(200) })
   await second.finished
   await second.worker.stop()
   assert.equal(second.saved[0].id, 'new')
@@ -109,7 +112,7 @@ const sqliteError = (name) =>
 test('worker: a result that cannot be saved marks the audit failed instead of leaving it running', {
   timeout: 1000
 }, async (t) => {
-  const state = setup(t, [{ id: 'save', url: 'https://job.test' }], { audit: async () => ({ status: 200 }) })
+  const state = setup(t, [{ id: 'save', url: 'https://job.test' }], { audit: async () => audited(200) })
   state.helpers.completeAudit = () => {
     throw sqliteError('SQLITE_TOOBIG')
   }
@@ -141,11 +144,11 @@ const twoJobs = () => [
 test('worker: a result is saved once the database frees up, before the next audit starts', {
   timeout: 1000
 }, async (t) => {
-  const state = setup(t, twoJobs(), { audit: async () => ({ status: 200 }) })
+  const state = setup(t, twoJobs(), { audit: async () => audited(200) })
   const claims = lockFor(state, 'completeAudit')
   await state.finished
   await state.worker.stop()
-  assert.deepEqual(state.saved[0], { id: 'locked', page: { status: 200 } })
+  assert.deepEqual(state.saved[0], { id: 'locked', result: audited(200) })
   assert.equal(state.app.log.error.mock.callCount(), 3)
   assert.equal(claims.whenSaved, 1)
 })
@@ -153,7 +156,7 @@ test('worker: a result is saved once the database frees up, before the next audi
 test('worker: a failure is saved once the database frees up, before the next audit starts', {
   timeout: 1000
 }, async (t) => {
-  const state = setup(t, twoJobs(), { audit: async () => ({ status: null }) })
+  const state = setup(t, twoJobs(), { audit: async () => audited(null) })
   const claims = lockFor(state, 'failAudit')
   await state.finished
   await state.worker.stop()
@@ -166,7 +169,7 @@ test('worker: stop ends the retries of an outcome that cannot be saved', { timeo
   const tried = Promise.withResolvers()
   const state = setup(t, [{ id: 'full', url: 'https://job.test' }], {
     pollIntervalMs: 60_000,
-    audit: async () => ({ status: 200 })
+    audit: async () => audited(200)
   })
   state.helpers.completeAudit = () => {
     throw sqliteError('SQLITE_FULL')
@@ -183,13 +186,13 @@ test('worker: stop ends the retries of an outcome that cannot be saved', { timeo
 
 test('worker: wake starts a newly queued audit without waiting for the next poll', { timeout: 1000 }, async (t) => {
   const jobs = []
-  const state = setup(t, jobs, { pollIntervalMs: 60_000, audit: async () => ({ status: 200 }) })
+  const state = setup(t, jobs, { pollIntervalMs: 60_000, audit: async () => audited(200) })
   await nextTurn()
   assert.equal(state.helpers.claimNextAudit.mock.callCount(), 1)
   jobs.push({ id: 'woken', url: 'https://job.test' })
   state.worker.wake()
   await state.finished
-  assert.deepEqual(state.saved, [{ id: 'woken', page: { status: 200 } }])
+  assert.deepEqual(state.saved, [{ id: 'woken', result: audited(200) }])
 })
 
 test('worker: a wake during an empty claim is not lost', { timeout: 1000 }, async (t) => {
@@ -206,7 +209,7 @@ test('worker: a wake during an empty claim is not lost', { timeout: 1000 }, asyn
     })
     return undefined
   }
-  state = setup(t, jobs, { claim, pollIntervalMs: 60_000, audit: async () => ({ status: 200 }) })
+  state = setup(t, jobs, { claim, pollIntervalMs: 60_000, audit: async () => audited(200) })
   await state.finished
   assert.equal(state.saved[0].id, 'raced')
 })

@@ -1,15 +1,14 @@
 import type { FastifyInstance } from 'fastify'
-import type { Db } from '../db/database.ts'
-import { runAudit } from '../runner.js'
+import type { AuditResult, Db } from '../db/database.ts'
 import { AUDIT_ERROR } from './audit-errors.js'
-import { fetchPublicPage } from './public-destination.js'
+import { auditOnePage } from './audit-page.js'
+import { fetchPublicPage, loadPublicRobots } from './public-destination.js'
 
-type AuditPage = Awaited<ReturnType<typeof runAudit>>[number]
 type AuditJob = { id: string; url: string }
 
 export type AuditWorkerHelpers = {
   claimNextAudit: (db: Db) => AuditJob | undefined
-  completeAudit: (db: Db, id: string, page: AuditPage) => void
+  completeAudit: (db: Db, id: string, result: AuditResult) => void
   failAudit: (db: Db, id: string, error: string) => void
 }
 
@@ -17,41 +16,35 @@ type WorkerOptions = {
   pollIntervalMs?: number
   // Fetch private network addresses too, as the CLI does, for a server on someone's own machine.
   allowPrivateDestinations?: boolean
-  audit?: (url: string) => Promise<AuditPage>
+  audit?: (url: string) => Promise<AuditResult>
 }
 
-async function runPublicAudit(url: string) {
-  const [page] = await runAudit([url], { fetchPage: fetchPublicPage })
-  return page
-}
+const runPublicAudit = (url: string) => auditOnePage(url, { fetchPage: fetchPublicPage, loadRobots: loadPublicRobots })
 
-async function runAnyAudit(url: string) {
-  const [page] = await runAudit([url])
-  return page
-}
+const runAnyAudit = (url: string) => auditOnePage(url)
 
-// What became of an audit: the page it read, or the error a failed audit stores.
-type Outcome = { page: AuditPage } | { error: string }
+// What became of an audit: what it found, or the error a failed audit stores.
+type Outcome = { result: AuditResult } | { error: string }
 
 type WorkerContext = {
   app: FastifyInstance
   helpers: AuditWorkerHelpers
-  audit: (url: string) => Promise<AuditPage>
+  audit: (url: string) => Promise<AuditResult>
   // Waits one poll interval before something is tried again. False once the worker is stopping.
   pause: () => Promise<boolean>
 }
 
 async function runJob({ app, audit }: WorkerContext, job: AuditJob): Promise<Outcome> {
-  let page: AuditPage
+  let result: AuditResult
   try {
-    page = await audit(job.url)
+    result = await audit(job.url)
   } catch (error) {
     app.log.error({ err: error, auditId: job.id }, 'Audit failed')
     return { error: AUDIT_ERROR.failed }
   }
 
   // A failed fetch is returned as a page, rather than thrown by the runner.
-  return page.status === null ? { error: AUDIT_ERROR.fetchFailed } : { page }
+  return result.page.status === null ? { error: AUDIT_ERROR.fetchFailed } : { result }
 }
 
 // SQLITE_BUSY and SQLITE_LOCKED: another connection holds the database for now, so the same write can pass on a later
@@ -62,8 +55,8 @@ const isTransient = (error: unknown) =>
   typeof error === 'object' && error !== null && 'errcode' in error && TRANSIENT.has(Number(error.errcode) & 0xff)
 
 function saveOutcome({ app, helpers }: WorkerContext, id: string, outcome: Outcome) {
-  return 'page' in outcome
-    ? helpers.completeAudit(app.db, id, outcome.page)
+  return 'result' in outcome
+    ? helpers.completeAudit(app.db, id, outcome.result)
     : helpers.failAudit(app.db, id, outcome.error)
 }
 
@@ -84,7 +77,7 @@ async function finish(worker: WorkerContext, job: AuditJob, outcome: Outcome) {
     } catch (error) {
       app.log.error({ err: error, auditId: job.id }, 'Could not save the audit result')
       // A result that can never be saved is stored as failed instead, at once.
-      const giveUp = 'page' in outcome && !isTransient(error) && save !== saveFailure
+      const giveUp = 'result' in outcome && !isTransient(error) && save !== saveFailure
       if (giveUp) save = saveFailure
       wait = !giveUp
     }

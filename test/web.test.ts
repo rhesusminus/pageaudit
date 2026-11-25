@@ -293,6 +293,43 @@ test('GET /check/:id: shows page text as long as the report keeps it, and says i
   t.assert.ok(brief.includes('(over 300 characters)'))
 })
 
+test('GET /check/:id: shows what robots.txt tells search and AI crawlers about the page', async (t: TestContext) => {
+  mockFixtureFetch(t)
+  const app = makeApp(t)
+  const { location } = await check(app, `${FIXTURE_HOST}/ai-blocked.html`)
+
+  const body = (await page(app, location)).body
+  const brief = (await app.inject({ method: 'GET', url: `${location}.md` })).body
+
+  for (const text of [body, brief]) t.assert.ok(text.includes('AI search tools are told to stay away from the page'))
+  t.assert.ok(
+    body.includes(
+      '<dt>AI crawlers</dt><dd>AI search blocked for ChatGPT search (OAI-SearchBot), AI training blocked for OpenAI (GPTBot)</dd>'
+    )
+  )
+  t.assert.ok(body.includes('<dt>Content signal</dt><dd>search=yes, ai-train=no</dd>'))
+  t.assert.ok(
+    brief.includes(
+      '- AI crawlers: AI search blocked for ChatGPT search (OAI-SearchBot), AI training blocked for OpenAI (GPTBot)\n'
+    )
+  )
+  t.assert.ok(brief.includes('- Content signal: "search=yes, ai-train=no"\n'))
+})
+
+test('GET /check/:id: says when robots.txt blocks Google from the page', async (t: TestContext) => {
+  mockFixtureFetch(t)
+  const app = makeApp(t)
+  const { location } = await check(app, `${FIXTURE_HOST}/blocked.html`)
+
+  const body = (await page(app, location)).body
+  const brief = (await app.inject({ method: 'GET', url: `${location}.md` })).body
+
+  for (const text of [body, brief]) {
+    t.assert.ok(text.includes('Search engines are told to stay away from the page'))
+    t.assert.ok(text.includes('https://fixtures.test/robots.txt'))
+  }
+})
+
 test('GET /check/:id: shows results an older version stored as the runner page', async (t: TestContext) => {
   mockFixtureFetch(t)
   const app = makeApp(t)
@@ -309,6 +346,8 @@ test('GET /check/:id: shows results an older version stored as the runner page',
   t.assert.ok(response.body.includes('<p class="snippet-title">Gentle Shampoo - Example Store</p>'))
   t.assert.strictEqual(brief.statusCode, 200)
   t.assert.ok(brief.body.includes('- Title: "Gentle Shampoo - Example Store"'))
+  // It was stored before the site checks ran, so there is nothing to say about robots.txt.
+  for (const text of [response.body, brief.body]) t.assert.ok(!text.includes('AI crawlers'))
 })
 
 test('GET /check/:id: escapes text that comes from the checked page', async (t: TestContext) => {

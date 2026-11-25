@@ -67,8 +67,8 @@ function section(heading, groups, first) {
   return [`## ${heading}`, ...groups.map((group, i) => finding(group, first + i))]
 }
 
-function factList(f) {
-  const rows = factRows(f).map(([term, { value, fromPage, note }]) => {
+function factList(f, origin) {
+  const rows = factRows(f, origin).map(([term, { value, fromPage, note }]) => {
     const text = fromPage ? quoted(value) : value
     return `- ${term}: ${text}${note ? ` (${note})` : ''}`
   })
@@ -105,7 +105,7 @@ export function resultBrief(audit, origin) {
     verdict(groups),
     ...section('What to fix', toFix, 1),
     ...section('Notes', notes, toFix.length + 1),
-    ...(page.facts ? factList(page.facts) : [])
+    ...(page.facts ? factList(page.facts, audit.result.origins?.[0]) : [])
   ]
   return plain(blocks)
 }

@@ -196,7 +196,7 @@ export function resultPage(audit, origin) {
       ${page.facts ? snippet(page) : ''}
       ${findings('fix-title', 'What to fix', toFix, { openFirst: true })}
       ${findings('notes-title', 'Notes', notes)}
-      ${page.facts ? facts(page.facts) : ''}
+      ${page.facts ? facts(page.facts, audit.result.origins?.[0]) : ''}
       ${claudeSection(audit, origin)}
       <p class="source-link">Open the page: ${link(page.finalUrl, shortAddress(page.finalUrl))}</p>
     </article>`

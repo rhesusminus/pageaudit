@@ -37,6 +37,7 @@ test('POST /audits: runs audits queued in the same second in the order they were
   const fetched: string[] = []
   mockFetch(t, async (url: URL) => {
     const { pathname } = new URL(url)
+    if (pathname === '/robots.txt') return new Response(null, { status: 404 })
     if (pathname === '/first') await release.promise
     fetched.push(pathname)
     return new Response('<!doctype html><title>Page</title>', { headers: { 'content-type': 'text/html' } })
@@ -64,6 +65,47 @@ test('GET /audits/:id: returns the completed audit with the fetched page facts',
   t.assert.strictEqual(audit.url, `${FIXTURE_HOST}/good.html`)
   t.assert.strictEqual(audit.result.pages[0].finalUrl, `${FIXTURE_HOST}/good.html`)
   t.assert.strictEqual(audit.result.pages[0].status, 200)
+})
+
+test('GET /audits/:id: includes the site checks about the page and how its origin treats AI crawlers', async (t: TestContext) => {
+  mockFixtureFetch(t)
+  const app = makeApp(t)
+
+  const { result } = await runAudit(app, `${FIXTURE_HOST}/blocked.html`)
+
+  const blocked = result.site.find((issue: { type: string }) => issue.type === 'blocked-by-robots')
+  t.assert.deepStrictEqual(blocked.urls, [`${FIXTURE_HOST}/blocked.html`])
+  // robots.txt disallows the page for every crawler.
+  const blockedFor = (agents: string[]) => Object.fromEntries(agents.map((agent) => [agent, 'blocked']))
+  t.assert.deepStrictEqual(result.origins, [
+    {
+      origin: FIXTURE_HOST,
+      robotsTxt: 'ok',
+      aiSearch: blockedFor(['OAI-SearchBot', 'Claude-SearchBot', 'PerplexityBot']),
+      aiTraining: blockedFor(['GPTBot', 'ClaudeBot', 'Google-Extended', 'Applebot-Extended', 'CCBot']),
+      contentSignal: 'search=yes, ai-train=no',
+      platform: null
+    }
+  ])
+})
+
+test('GET /audits/:id: does not follow a robots.txt to a private address', async (t: TestContext) => {
+  const requested: string[] = []
+  mockFetch(t, async (url: URL) => {
+    requested.push(String(url))
+    if (new URL(url).pathname === '/robots.txt') {
+      return new Response(null, { status: 301, headers: { location: 'http://127.0.0.1/robots.txt' } })
+    }
+    return new Response('<!doctype html><title>Page</title>', { headers: { 'content-type': 'text/html' } })
+  })
+  const app = makeApp(t)
+
+  const { result } = await runAudit(app, 'https://public.test/page')
+
+  t.assert.deepStrictEqual(requested, ['https://public.test/page', 'https://public.test/robots.txt'])
+  const failed = result.site.find((issue: { type: string }) => issue.type === 'robots-txt-failed')
+  t.assert.match(failed.message, /public network addresses/)
+  t.assert.strictEqual(result.origins[0].robotsTxt, 'failed')
 })
 
 test('GET /audits/:id: returns a stored result of another schema version as it is', async (t: TestContext) => {

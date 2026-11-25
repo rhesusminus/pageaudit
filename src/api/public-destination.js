@@ -3,6 +3,7 @@ import { isIP } from 'node:net'
 import ipaddr from 'ipaddr.js'
 import { Agent } from 'undici'
 import { fetchPage } from '../fetch.js'
+import { loadRobots } from '../robots.js'
 
 // An audit destination the API refuses, with the HTTP status the refusal should answer with. `reason` says why, so a
 // caller can word it for its own readers: 'invalid' (not a web address), 'too-long' (longer than MAX_ADDRESS_LENGTH),
@@ -105,14 +106,19 @@ export function publicLookup(hostname, options, callback) {
 
 const dispatcher = new Agent({ connect: { lookup: publicLookup } })
 
+// The request options that keep every hop of a request on public addresses: each hop is checked before it is
+// requested, and the socket connects only to the checked answers. `options.beforeHop` still runs first.
+const publicOnly = (options) => ({
+  ...options,
+  dispatcher,
+  beforeHop: async (destination) => {
+    await options.beforeHop?.(destination)
+    await validateDestination(destination)
+  }
+})
+
 // API-only policy: local development sites remain available to the CLI.
-export function fetchPublicPage(url, options = {}) {
-  return fetchPage(url, {
-    ...options,
-    dispatcher,
-    beforeHop: async (destination) => {
-      await options.beforeHop?.(destination)
-      await validateDestination(destination)
-    }
-  })
-}
+export const fetchPublicPage = (url, options = {}) => fetchPage(url, publicOnly(options))
+
+// loadRobots for the API: a public page can name, or redirect its robots.txt to, a private address.
+export const loadPublicRobots = (origin, options = {}) => loadRobots(origin, publicOnly(options))

@@ -74,7 +74,7 @@ export const SCHEMA_VERSION = 1
 // The JSON report, which doubles as the data handed to Claude. `facts` is null for
 // pages that returned no HTML. `contentFiles` holds the --content file of each page by URL, relative to the report.
 // `origins` says how the robots.txt of each audited origin treats AI crawlers. The server's report of one page has no
-// `origins` or `coverage`.
+// `coverage`, and no `origins` when it was stored before the server ran the site checks.
 /**
  * @param {{ pages: object[], site: object[], origins?: object[], skipped?: object[], coverage?: object,
  *   contentFiles?: Map<string, string>, now?: Date }} input
