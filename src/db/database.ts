@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import { AUDIT_ERROR } from '../api/audit-errors.js'
+import type { auditOnePage } from '../api/audit-page.js'
 import { buildReport } from '../report.js'
-import type { runAudit } from '../runner.js'
 
 export type Db = DatabaseSync
-type AuditPage = Awaited<ReturnType<typeof runAudit>>[number]
+export type AuditResult = Awaited<ReturnType<typeof auditOnePage>>
 type AuditStatus = 'running' | 'completed' | 'failed' | 'queued'
 
 type AuditRow = {
@@ -51,13 +51,16 @@ export const isoTime = (sqliteTime: string) => `${sqliteTime.replace(' ', 'T')}Z
 
 // What a completed audit stores and GET /audits/:id returns: the JSON report of its one page, as the CLI writes it
 // (schema/report.schema.json), never the runner's page with its internal fields.
-const reportOf = (page: AuditPage, now?: Date) => buildReport({ pages: [page], site: [], now })
+// A result without `origins` is one stored before the site checks ran, see storedResult().
+type StoredAudit = { page: AuditResult['page']; site: AuditResult['site']; origins?: AuditResult['origins'] }
+const reportOf = ({ page, site, origins }: StoredAudit, now?: Date) =>
+  buildReport({ pages: [page], site, origins, now })
 
 // Older versions stored the runner's page itself. It holds everything the report is built from, so it becomes one
 // when it is read. The time it was made was not kept, so the report says the time the audit was queued.
 function storedResult(result: string, createdAt: string) {
   const stored = JSON.parse(result)
-  return 'schemaVersion' in stored ? stored : reportOf(stored, new Date(isoTime(createdAt)))
+  return 'schemaVersion' in stored ? stored : reportOf({ page: stored, site: [] }, new Date(isoTime(createdAt)))
 }
 
 export function getAudit(db: Db, id: string) {
@@ -116,11 +119,11 @@ export function failAudit(db: Db, id: string, error: string) {
   ).run(error, id)
 }
 
-export function completeAudit(db: Db, id: string, page: AuditPage) {
+export function completeAudit(db: Db, id: string, result: AuditResult) {
   db.prepare(
     `UPDATE audits
      SET status = 'completed', result = ?
      WHERE id = ?
        AND status = 'running'`
-  ).run(JSON.stringify(reportOf(page)), id)
+  ).run(JSON.stringify(reportOf(result)), id)
 }
