@@ -17,6 +17,10 @@ export function nonSpaceEnd(text, count) {
 // Counts characters (code points), so an emoji is one character rather than two UTF-16 units.
 export const charCount = (text) => Array.from(text).length
 
+// A list as a sentence says it: "a", "a and b", "a, b and c".
+export const inWords = (list) =>
+  list.length < 2 ? list.join('') : `${list.slice(0, -1).join(', ')} and ${list.at(-1)}`
+
 // URLs get a much higher cap than other text: a URL cut short is not a URL any more.
 export const MAX_URL = 2000
 

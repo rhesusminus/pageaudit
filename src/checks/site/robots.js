@@ -1,7 +1,7 @@
 import { mapLimited } from '../../concurrency.js'
 import { loadRobots } from '../../robots.js'
 import { SOURCES } from '../../sources.js'
-import { limit } from '../../text.js'
+import { inWords, limit } from '../../text.js'
 import { originPlatform } from '../page/platform.js'
 
 const GOOGLEBOT = 'Googlebot'
@@ -18,12 +18,20 @@ const AI_SEARCH = [
   { agent: 'PerplexityBot', product: 'Perplexity', source: SOURCES.perplexityBots }
 ]
 // Tokens that only say whether the content may train models (Google-Extended also covers grounding Gemini). Blocking
-// them is a choice that keeps a site in search, so they are facts, never issues.
-const AI_TRAINING = ['GPTBot', 'ClaudeBot', 'Google-Extended', 'Applebot-Extended', 'CCBot']
+// them is a choice that keeps a site in search, so they are facts, never issues. `product` is whose models they feed.
+const AI_TRAINING = [
+  { agent: 'GPTBot', product: 'OpenAI' },
+  { agent: 'ClaudeBot', product: 'Anthropic' },
+  { agent: 'Google-Extended', product: 'Gemini' },
+  { agent: 'Applebot-Extended', product: 'Apple Intelligence' },
+  { agent: 'CCBot', product: 'Common Crawl' }
+]
+const TRAINING_AGENTS = AI_TRAINING.map(({ agent }) => agent)
+
+// The product each AI crawler token in `origins` works for, for readers who do not know the tokens.
+export const AI_CRAWLER_PRODUCT = new Map([...AI_SEARCH, ...AI_TRAINING].map(({ agent, product }) => [agent, product]))
 
 const issue = (fields) => ({ category: 'seo', source: SOURCES.robotsTxt, ...fields })
-
-const words = (list) => (list.length < 2 ? list.join('') : `${list.slice(0, -1).join(', ')} and ${list.at(-1)}`)
 
 // Pages Googlebot may crawl and an AI search crawler may not, one issue per set of crawlers kept out. A page Googlebot
 // cannot crawl is already blocked-by-robots. The context names the crawlers, so issues for different sets on one
@@ -41,14 +49,14 @@ function aiSearchBlocked(origin, robots, pages) {
     .filter(([agents]) => agents)
     .map(([, group]) => {
       const crawlers = blockedFor(group[0])
-      const agents = words(crawlers.map(({ agent }) => agent))
+      const agents = inWords(crawlers.map(({ agent }) => agent))
       return issue({
         type: 'ai-search-blocked',
         severity: 'warning',
         source: crawlers[0].source,
         message:
           `robots.txt does not allow ${agents} to crawl the page, so ` +
-          `${words(crawlers.map(({ product }) => product))} cannot use it in answers`,
+          `${inWords(crawlers.map(({ product }) => product))} cannot use it in answers`,
         context: `${origin}/robots.txt disallows ${agents}`,
         urls: group.map((page) => page.url)
       })
@@ -155,14 +163,20 @@ function originAccess(origin, robots, pages) {
   const searchAgents = AI_SEARCH.map(({ agent }) => agent)
   if (robotsTxt === 'missing') {
     const allowed = (agents) => Object.fromEntries(agents.map((agent) => [agent, 'allowed']))
-    return { origin, robotsTxt, aiSearch: allowed(searchAgents), aiTraining: allowed(AI_TRAINING), contentSignal: null }
+    return {
+      origin,
+      robotsTxt,
+      aiSearch: allowed(searchAgents),
+      aiTraining: allowed(TRAINING_AGENTS),
+      contentSignal: null
+    }
   }
   if (robotsTxt !== 'ok') return { origin, robotsTxt, aiSearch: null, aiTraining: null, contentSignal: null }
   return {
     origin,
     robotsTxt,
     aiSearch: access(robots, pages, searchAgents),
-    aiTraining: access(robots, pages, AI_TRAINING),
+    aiTraining: access(robots, pages, TRAINING_AGENTS),
     contentSignal: contentSignal(robots.text ?? '')
   }
 }
