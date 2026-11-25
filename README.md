@@ -410,7 +410,7 @@ Judgment calls that are not straight from those pages:
 | `GET /audits/:id`    | Returns an audit with its `status`, `error` and `result`, `404` if it is unknown                           |
 | `DELETE /audits/:id` | Deletes an audit from the database with `204`, `404` if it is unknown or already deleted                   |
 
-A background worker runs queued audits one at a time. An audit's `status` goes from `queued` to `running`, then to `completed` with the results in `result`, or to `failed` with the reason in `error`, for example `Could not fetch page`. Poll `GET /audits/:id` until it is one of the last two. `result` is the JSON report of the one page, the same shape `--json` writes (`schema/report.schema.json`) with no `origins` or `coverage`, as no site-wide checks run. A result an earlier version stored as the internal page is returned in that shape too. An audit that was running when the server stopped is queued again at startup, and fails after three interrupted attempts. An audit whose result cannot be saved, such as when the disk is full, fails with `Audit result could not be saved` rather than staying `running`. Deleting an audit removes it from `database.db`, with SQLite's `secure_delete` on so its address and results do not linger in the file. An audit deleted while it runs still finishes, but nothing of it is saved. Audits that an earlier version only hid when they were deleted are removed at startup.
+A background worker runs queued audits one at a time. An audit's `status` goes from `queued` to `running`, then to `completed` with the results in `result`, or to `failed` with the reason in `error`, for example `Could not fetch page`. Poll `GET /audits/:id` until it is one of the last two. `result` is the JSON report of the one page, the same shape `--json` writes (`schema/report.schema.json`) with no `coverage`. Its `site` holds the site checks that mean something for one page: `canonical-elsewhere`, the response header checks, the checks of the origin's `robots.txt` (`blocked-by-robots`, `ai-search-blocked`, `robots-txt-failed`, `robots-txt-unreachable`) and `no-sitemap-declared`, and `origins` how that `robots.txt` treats AI crawlers. The link check and the sitemap checks do not run: one would request every linked page, the others need a sitemap. `robots.txt` is fetched under the same rules as the page, so with private destinations off, one on or redirected to a private address is not read and the audit reports `robots-txt-failed`. A result an earlier version stored, as the internal page or before these checks ran, is returned with an empty `site` and no `origins`. An audit that was running when the server stopped is queued again at startup, and fails after three interrupted attempts. An audit whose result cannot be saved, such as when the disk is full, fails with `Audit result could not be saved` rather than staying `running`. Deleting an audit removes it from `database.db`, with SQLite's `secure_delete` on so its address and results do not linger in the file. An audit deleted while it runs still finishes, but nothing of it is saved. Audits that an earlier version only hid when they were deleted are removed at startup.
 
 `POST /audits` answers `400` for a URL it cannot audit, including a private network address, a host that does not resolve or an address longer than 2048 characters, counted as sent and once percent-encoded, and `503` when DNS fails for a reason that may pass on retry. The web form refuses the same addresses. Every error answers `{ "error": "..." }`.
 
@@ -524,7 +524,8 @@ src/
     routes.ts           POST, GET and DELETE /audits
     queue-audit.ts      queueCheckedAudit(): checks an address and queues it, for the API and the web form alike
     audit-errors.js     the error a failed audit stores, which the web pages word for their readers
-    public-destination.js  validateDestination() and fetchPublicPage(): only public network addresses are fetched
+    public-destination.js  validateDestination(), fetchPublicPage() and loadPublicRobots(): only public network addresses are fetched
+    audit-page.js       auditOnePage(): one page with the site checks that mean something for it
     error-status.ts     errorStatus(): the status an error answers with, its own or 500
     worker.ts           runs queued audits one at a time
   db/
@@ -548,6 +549,7 @@ test/
   input.test.js         URL files, sitemaps and normalization, against fixtures
   runner.test.js        runner with a mocked fetchPage: concurrency, delay, failures
   site.test.js          site checks over runner results
+  audit-page.test.js    the one-page audit the server runs: its site checks and one robots.txt read
   checks.test.js        unit tests for each page check
   escaped-text.test.js  text in the title, description and preview tags escaped twice
   a11y.test.js          form labels, duplicate ids, the main landmark and link names
