@@ -2,6 +2,7 @@ import { mapLimited } from '../../concurrency.js'
 import { loadRobots } from '../../robots.js'
 import { SOURCES } from '../../sources.js'
 import { limit } from '../../text.js'
+import { originPlatform } from '../page/platform.js'
 
 const GOOGLEBOT = 'Googlebot'
 // Most audits touch one or a few hosts, a sitemap index can span many.
@@ -171,4 +172,11 @@ function originAccess(origin, robots, pages) {
 // lists are null when the file could not be read.
 export async function aiCrawlerAccess(pages, { load = loadRobots } = {}) {
   return perOrigin(pages, load, originAccess)
+}
+
+// The `origins` of a report: how each audited origin treats the AI crawlers, see aiCrawlerAccess(), and the platform
+// its pages run on.
+export async function originsWithPlatform(pages, { load = loadRobots } = {}) {
+  const origins = await aiCrawlerAccess(pages, { load })
+  return origins.map((entry) => ({ ...entry, platform: originPlatform(pages, entry.origin) }))
 }
