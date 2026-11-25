@@ -36,10 +36,15 @@
         }
       },
       "style": {
+        "useConst": "error",
         "useFilenamingConvention": {
           "level": "error",
           "options": { "filenameCases": ["kebab-case"] }
         }
+      },
+      "suspicious": {
+        "noExplicitAny": "error",
+        "noVar": "error"
       }
     }
   },
