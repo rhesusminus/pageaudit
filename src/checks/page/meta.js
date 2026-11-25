@@ -1,3 +1,4 @@
+// checkMeta(): the title, the meta description and the canonical link.
 import { SOURCES } from '../../sources.js'
 import { charCount, collapseWhitespace } from '../../text.js'
 import { evidence, selectorFor } from '../evidence.js'

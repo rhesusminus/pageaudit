@@ -1,3 +1,4 @@
+// Link checks: link names, generic link text and empty hrefs.
 import { SOURCES } from '../../sources.js'
 import { evidence } from '../evidence.js'
 import { seoIssue, snippet } from '../snippet.js'

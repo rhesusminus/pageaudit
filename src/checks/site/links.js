@@ -1,3 +1,4 @@
+// checkLinks(): broken, unreachable and redirecting link targets, links to non-canonical pages, and orphan pages.
 import { pageKey } from '../../input/resolve.js'
 import { linkTargets } from '../../links.js'
 import { SOURCES } from '../../sources.js'

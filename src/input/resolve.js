@@ -1,3 +1,4 @@
+// resolveUrls(): merges, normalizes and dedupes the inputs, and applies --limit.
 const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i
 
 // Returns the URL to fetch (fragment removed) and a key that identifies the page:

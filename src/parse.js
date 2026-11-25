@@ -1,3 +1,4 @@
+// parse(html): Cheerio DOM, with inert <template> content removed and the depth capped like Chrome.
 import * as cheerio from 'cheerio'
 
 // Chrome's HTML parser nests elements no deeper than this (kMaximumHTMLParserDOMTreeDepth + 1, the document being

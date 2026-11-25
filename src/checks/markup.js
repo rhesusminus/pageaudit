@@ -1,3 +1,4 @@
+// markupStart(): the start of an element's markup, whitespace collapsed, read only as far as it is shown.
 import { collapseWhitespace, limit, nonSpaceEnd } from '../text.js'
 
 const COMMENT_DELIMITERS = '<!---->'.length

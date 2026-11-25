@@ -1,3 +1,4 @@
+// The audits table: queue, claim, save, get and delete.
 import { randomUUID } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import { AUDIT_ERROR } from '../api/audit-errors.js'

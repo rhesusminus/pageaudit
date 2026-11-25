@@ -1,3 +1,4 @@
+// Accessibility checks: form labels, duplicate ids and the main landmark.
 import { SOURCES } from '../../sources.js'
 import { evidence } from '../evidence.js'
 import { elementsById } from '../ids.js'

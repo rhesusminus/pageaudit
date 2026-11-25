@@ -1,3 +1,4 @@
+// suggest(): a text question with a suggested answer that Tab puts in to edit.
 import { styleText } from 'node:util'
 import { settings, TextPrompt } from '@clack/core'
 import { S_BAR, S_BAR_END, symbol } from '@clack/prompts'

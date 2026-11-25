@@ -1,3 +1,4 @@
+// buildDigest(): the short form of the report for a model to read first.
 import { averageScores, groupIssues, pageHealth, pagesWithSiteIssues } from './overview.js'
 import { countSeverities } from './severity.js'
 import { limit, MAX_URL } from './text.js'

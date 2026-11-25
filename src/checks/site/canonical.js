@@ -1,3 +1,4 @@
+// checkCanonicalTargets(): pages whose canonical names another URL.
 import { pageKey } from '../../input/resolve.js'
 import { SOURCES } from '../../sources.js'
 import { truncate } from '../snippet.js'

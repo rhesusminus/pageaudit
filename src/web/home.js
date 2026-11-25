@@ -1,3 +1,4 @@
+// The home page: the check form.
 import { MAX_ADDRESS_LENGTH } from '../api/public-destination.js'
 import { markup } from '../html/escape.js'
 import { document } from './layout.js'

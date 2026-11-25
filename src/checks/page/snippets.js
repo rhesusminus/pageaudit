@@ -1,3 +1,4 @@
+// Snippet checks: nosnippet and max-snippet for Google, noarchive and nocache for Bing.
 import { SOURCES } from '../../sources.js'
 import { seoIssue } from '../snippet.js'
 import { robotsTags } from './indexing.js'

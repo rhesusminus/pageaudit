@@ -1,3 +1,4 @@
+// elementsById(): the elements with each id, found in one pass per document.
 import { perElement } from './per-element.js'
 
 // The elements with each id, in document order, found in one pass and kept per document. Checks look ids up through

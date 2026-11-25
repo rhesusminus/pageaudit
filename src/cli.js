@@ -1,3 +1,4 @@
+// run(): wires the pipeline together and writes the report files.
 import { basename, dirname, relative, resolve } from 'node:path'
 import chalk from 'chalk'
 import { checkSite } from './checks/site/index.js'

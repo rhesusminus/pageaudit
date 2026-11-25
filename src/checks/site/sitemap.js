@@ -1,3 +1,5 @@
+// The sitemap checks: listed pages that send mixed signals, the sitemap files themselves, URLs on other hosts and a
+// robots.txt that names no sitemap.
 import { mapLimited } from '../../concurrency.js'
 import { pageKey } from '../../input/resolve.js'
 import { loadRobots } from '../../robots.js'

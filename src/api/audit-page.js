@@ -1,3 +1,4 @@
+// auditOnePage(): one page with the site checks that mean something for it.
 import { checkSite } from '../checks/site/index.js'
 import { checkRobotsTxt, originsWithPlatform } from '../checks/site/robots.js'
 import { checkSitemapDeclared } from '../checks/site/sitemap.js'

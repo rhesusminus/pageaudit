@@ -1,3 +1,4 @@
+// askArgs(): the questions asked when run with no arguments in a terminal, turned into arguments.
 import { accessSync, constants, existsSync, readFileSync, statSync } from 'node:fs'
 import { cancel, confirm, intro, isCancel, log, multiselect, outro, select, text } from '@clack/prompts'
 import stringWidth from 'string-width'

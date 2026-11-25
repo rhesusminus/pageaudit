@@ -1,3 +1,4 @@
+// The --content folder: file names, writing as pages finish, replacing an earlier run's files at the end.
 import { lstat, mkdir, mkdtemp, open, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { HEAD_LENGTH, writtenByPageaudit } from './markdown.js'

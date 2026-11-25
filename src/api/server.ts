@@ -1,3 +1,4 @@
+// Starts the app on PORT, with PUBLIC_URL and ALLOW_PRIVATE_DESTINATIONS.
 import { build } from './app.ts'
 
 const allowPrivateDestinations = process.env.ALLOW_PRIVATE_DESTINATIONS === '1'

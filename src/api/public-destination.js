@@ -1,3 +1,4 @@
+// validateDestination(), fetchPublicPage() and loadPublicRobots(): only public network addresses are fetched.
 import dns from 'node:dns/promises'
 import { isIP } from 'node:net'
 import ipaddr from 'ipaddr.js'

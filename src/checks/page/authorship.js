@@ -1,3 +1,4 @@
+// pageAuthorship(): the JSON-LD nodes, dates and author stored in the facts.
 import { MAX_URL } from '../../text.js'
 import { idIndex, nameOf, pageObjects, text, textValue, typesOf } from './json-ld.js'
 import { metaContent } from './signals.js'

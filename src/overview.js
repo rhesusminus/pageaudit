@@ -1,3 +1,4 @@
+// Views over a finished report: issues grouped by type, page health, average scores.
 import { compareSeverity, countSeverities, worseSeverity } from './severity.js'
 
 // One entry per issue type across the whole report, so a problem that shows up on forty

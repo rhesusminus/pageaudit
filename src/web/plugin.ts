@@ -1,3 +1,4 @@
+// The page routes, the Content-Security-Policy and the same-site check on posts.
 import { join } from 'node:path'
 import formbody from '@fastify/formbody'
 import fastifyStatic from '@fastify/static'

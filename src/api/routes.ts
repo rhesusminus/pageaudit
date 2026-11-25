@@ -1,3 +1,4 @@
+// The API routes: POST, GET and DELETE /audits.
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox'
 import { Type } from '@fastify/type-provider-typebox'
 import { deleteAudit, getAudit } from '../db/database.ts'

@@ -1,3 +1,4 @@
+// runLighthouse(urls): optional Lighthouse run, trimmed to scores, metrics and failing audits.
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { issueId } from './issue-id.js'

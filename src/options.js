@@ -1,3 +1,4 @@
+// parseOptions(): the option list and the --help text.
 import { parseArgs } from 'node:util'
 import { DEFAULT_TITLE } from './html/render.js'
 import { DEFAULT_CONCURRENCY, DEFAULT_DELAY_MS } from './runner.js'

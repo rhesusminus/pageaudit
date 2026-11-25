@@ -1,3 +1,4 @@
+// Category names, plurals, links and numbers shared by the sections of the HTML report.
 import { markup } from './escape.js'
 
 export const CATEGORY_NAMES = {

@@ -1,3 +1,4 @@
+// Response checks: status, redirects, content type and fetch failures.
 import { SOURCES } from '../../sources.js'
 import { seoIssue } from '../snippet.js'
 import { checkRobotsHeader } from './robots-header.js'

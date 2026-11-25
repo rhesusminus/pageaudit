@@ -1,3 +1,4 @@
+// Finds text in the title, description and preview tags that was escaped twice.
 import { SOURCES } from '../../sources.js'
 import { charCount, collapseWhitespace, htmlEntities } from '../../text.js'
 import { evidence } from '../evidence.js'

@@ -1,3 +1,4 @@
+// mainText(), headingExcerpts() and imageSamples(): page text, section excerpts and image context for the facts.
 import { charCount, collapseWhitespace, limit, nonSpaceEnd } from '../../text.js'
 import { absolute } from './signals.js'
 

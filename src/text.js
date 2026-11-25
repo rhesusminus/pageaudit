@@ -1,3 +1,4 @@
+// Text helpers shared by the checks and the reports: whitespace, character counts, limits, lists and entities.
 import { decodeHTMLStrict } from 'entities'
 
 // Browsers and Google collapse whitespace runs, so measure and display text the same way.

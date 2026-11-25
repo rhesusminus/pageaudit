@@ -1,3 +1,4 @@
+// The spinner and the Lighthouse progress bar on stderr.
 import ora from 'ora'
 import { limit } from './text.js'
 

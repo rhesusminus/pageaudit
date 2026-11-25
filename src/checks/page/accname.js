@@ -1,3 +1,4 @@
+// accessibleName(): a simplified accessible name for links and form controls.
 import { collapseWhitespace } from '../../text.js'
 import { elementsById } from '../ids.js'
 import { perElement } from '../per-element.js'

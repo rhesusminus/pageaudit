@@ -1,3 +1,4 @@
+// URLs from --urls-file (or stdin), with the optional lighthouse marker.
 import { readFile } from 'node:fs/promises'
 import { text } from 'node:stream/consumers'
 

@@ -1,3 +1,4 @@
+// The selector, html and parentHtml of the element behind an issue.
 import { isElement } from '../parse.js'
 import { limit } from '../text.js'
 import { elementsById } from './ids.js'

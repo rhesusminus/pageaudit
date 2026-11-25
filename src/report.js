@@ -1,3 +1,4 @@
+// buildReport(): the JSON report (with SCHEMA_VERSION).
 import { adviceFor } from './advice.js'
 import { issueId, uniqueIds } from './issue-id.js'
 import { countSeverities } from './severity.js'

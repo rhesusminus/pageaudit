@@ -1,3 +1,4 @@
+// checkSite(): the checks that compare pages, run once every page is audited.
 import { checkCanonicalTargets } from './canonical.js'
 import { checkDuplicates } from './duplicates.js'
 import { checkResponseHeaders } from './headers.js'

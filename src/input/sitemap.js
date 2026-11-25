@@ -1,3 +1,4 @@
+// URLs from --sitemap, following a sitemap index one level deep.
 import { gunzipSync } from 'node:zlib'
 import * as cheerio from 'cheerio'
 import { request } from '../fetch.js'

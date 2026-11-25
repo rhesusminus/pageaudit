@@ -1,3 +1,4 @@
+// build(): Fastify with the database, the worker, the API routes and the web pages.
 import type { FastifyError, FastifyReply, FastifyRequest, FastifyServerOptions } from 'fastify'
 import fastify from 'fastify'
 import {

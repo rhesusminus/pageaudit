@@ -1,3 +1,4 @@
+// buildCoverage(): what the audit looked at and which checks did not run.
 import pkg from '../package.json' with { type: 'json' }
 import { linksComplete } from './links.js'
 import { DEFAULT_CONCURRENCY, DEFAULT_DELAY_MS } from './runner.js'

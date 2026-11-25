@@ -1,3 +1,4 @@
+// formatReport(): the report as tables for the terminal.
 import chalk from 'chalk'
 import Table from 'cli-table3'
 import stringWidth from 'string-width'

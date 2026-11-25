@@ -1,3 +1,4 @@
+// errorStatus(): the status an error answers with, its own or 500.
 import type { FastifyError } from 'fastify'
 
 // The status an error answers with: its own when that is an error status, and 500 otherwise. Below 500 the request was
