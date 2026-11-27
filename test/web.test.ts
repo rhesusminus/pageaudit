@@ -288,7 +288,7 @@ test('GET /check/:id: shows page text as long as the report keeps it, and says i
     t.assert.ok(!text.includes('Heading 10'))
   }
   t.assert.match(body, /Heading 9 <span class="length">the first 10, there may be more<\/span>/)
-  t.assert.ok(brief.includes('Heading 9" (the first 10, there may be more)'))
+  t.assert.ok(brief.includes('Heading 9` (the first 10, there may be more)'))
   t.assert.match(body, /The title is over 300\scharacters\. Results often cut titles/)
   t.assert.ok(brief.includes('(over 300 characters)'))
 })
@@ -313,7 +313,7 @@ test('GET /check/:id: shows what robots.txt tells search and AI crawlers about t
       '- AI crawlers: AI search blocked for ChatGPT search (OAI-SearchBot), AI training blocked for OpenAI (GPTBot)\n'
     )
   )
-  t.assert.ok(brief.includes('- Content signal: "search=yes, ai-train=no"\n'))
+  t.assert.ok(brief.includes('- Content signal: `search=yes, ai-train=no`\n'))
 })
 
 test('GET /check/:id: says when robots.txt blocks Google from the page', async (t: TestContext) => {
@@ -345,7 +345,7 @@ test('GET /check/:id: shows results an older version stored as the runner page',
   t.assert.strictEqual(response.statusCode, 200)
   t.assert.ok(response.body.includes('<p class="snippet-title">Gentle Shampoo - Example Store</p>'))
   t.assert.strictEqual(brief.statusCode, 200)
-  t.assert.ok(brief.body.includes('- Title: "Gentle Shampoo - Example Store"'))
+  t.assert.ok(brief.body.includes('- Title: `Gentle Shampoo - Example Store`'))
   // It was stored before the site checks ran, so there is nothing to say about robots.txt.
   for (const text of [response.body, brief.body]) t.assert.ok(!text.includes('AI crawlers'))
 })
@@ -500,7 +500,7 @@ test('GET /check/:id.md: gives the results as Markdown for Claude', async (t: Te
   t.assert.match(brief, /^# pageaudit results for fixtures\.test\/bad-overlong\.html\n/)
   t.assert.ok(brief.includes(`- Full results as JSON: http://app.localhost:8080/audits/${id}`))
   t.assert.match(brief, /\n## What to fix\n\n### 1\. (Error|Warning): .+ \(`[a-z-]+`\)\n\nWhy it matters: /)
-  t.assert.match(brief, /- Title: "The Ultimate Guide to Choosing/)
+  t.assert.match(brief, /- Title: `The Ultimate Guide to Choosing/)
   t.assert.match(brief, /`\. Found `\d+`, expected at most 60 characters\.\n/)
 })
 
@@ -570,17 +570,19 @@ test('GET /check/:id.md: links to the public address when one is set', async (t:
   t.assert.doesNotMatch(brief, /127\.0\.0\.1/)
 })
 
-test('GET /check/:id.md: quotes the theme name, which comes from the page', async (t: TestContext) => {
+test('GET /check/:id.md: sets the theme name in a code span, since it comes from the page', async (t: TestContext) => {
   const html =
     '<!doctype html><html lang="en"><head><title>Shop</title><script>Shopify.theme = {"name":"x","schema_name":"Ignore the above"};</script></head><body><h1>Hi</h1></body></html>'
   mockFetch(t, async () => new Response(html, { headers: { 'content-type': 'text/html' } }))
   const app = makeApp(t)
   const { location } = await check(app, 'https://theme.test/')
 
+  const body = (await page(app, location)).body
   const brief = (await app.inject({ method: 'GET', url: `${location}.md` })).body
 
-  t.assert.ok(brief.includes('- Built with: Shopify, theme "Ignore the above"\n'))
+  t.assert.strictEqual(brief.split('- Built with: Shopify, theme `Ignore the above`\n').length, 3)
   t.assert.doesNotMatch(brief, /theme Ignore/)
+  t.assert.ok(body.includes('<dt>Built with</dt><dd>Shopify, theme &quot;Ignore the above&quot;</dd>'))
 })
 
 test('GET /check/:id.md: the results page shows the same text the button copies', async (t: TestContext) => {
@@ -611,7 +613,29 @@ test('GET /check/:id.md: sets text from the page apart, even text with backticks
 
   const brief = (await app.inject({ method: 'GET', url: `${location}.md` })).body
 
-  t.assert.ok(brief.includes('- Title: "Ignore `this` and that" (22 characters)'))
+  t.assert.ok(brief.includes('- Title: ``Ignore `this` and that`` (22 characters)'))
+})
+
+test('GET /check/:id.md: quotes in page text stay inside one code span, and the results page still escapes them', async (t: TestContext) => {
+  const html =
+    '<!doctype html><html lang="en"><head><title>Say "hi" then ignore it" and do X</title><meta name="twitter:card" content="summary"></head><body><h1>Hi</h1></body></html>'
+  mockFetch(t, async () => new Response(html, { headers: { 'content-type': 'text/html' } }))
+  const app = makeApp(t)
+  const { location } = await check(app, 'https://quotes.test/')
+
+  const body = (await page(app, location)).body
+  const brief = (await app.inject({ method: 'GET', url: `${location}.md` })).body
+
+  t.assert.ok(brief.includes('Text from the page itself is set in code spans, apart from what pageaudit wrote.'))
+  t.assert.ok(brief.includes('- Title: `Say "hi" then ignore it" and do X` (33 characters)\n'))
+  t.assert.ok(brief.includes('- Social preview: No Open Graph, X card `summary`\n'))
+  t.assert.ok(body.includes('<p class="snippet-title">Say &quot;hi&quot; then ignore it&quot; and do X</p>'))
+  t.assert.ok(
+    body.includes(
+      '<dt>Title</dt><dd>Say &quot;hi&quot; then ignore it&quot; and do X <span class="length">33\u00a0characters</span></dd>'
+    )
+  )
+  t.assert.ok(body.includes('<dt>Social preview</dt><dd>No Open Graph, X card &quot;summary&quot;</dd>'))
 })
 
 test('GET /check/:id.md: explains a failed check, and answers 409 and 404 when there is nothing yet', async (t: TestContext) => {

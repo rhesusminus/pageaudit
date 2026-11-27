@@ -1,6 +1,6 @@
 // The results of one check as Markdown, to paste into Claude or to point Claude Code at. It says what the results page
 // says, with more of the places each finding occurs and the address of the full JSON. Text from the checked page is
-// set in quotes or code spans, so a reader can tell it from what pageaudit wrote.
+// set in code spans, so a reader can tell it from what pageaudit wrote.
 import { adviceFor } from '../advice.js'
 import { code as codeSpan, escapeMarkdown } from '../markdown.js'
 import { measurementText } from '../measurement.js'
@@ -19,8 +19,6 @@ const oneLine = (text) => collapseWhitespace(String(text))
 // A code span on one line that holds any text.
 const code = (text) => codeSpan(oneLine(text))
 
-const quoted = (text) => `"${oneLine(text)}"`
-
 function about(audit, origin) {
   const page = audit.result && checkedPage(audit.result)
   const lines = [`- Address: ${page?.finalUrl ?? audit.url}`]
@@ -29,7 +27,7 @@ function about(audit, origin) {
       ? `, after ${count(page.redirects.length, 'redirect')} from ${audit.url}`
       : ''
     lines.push(`- Answer: HTTP ${page.status}${redirects}`)
-    if (page.facts?.platform) lines.push(`- Built with: ${platformName(page.facts.platform)}`)
+    if (page.facts?.platform) lines.push(`- Built with: ${platformName(page.facts.platform, code)}`)
   }
   lines.push(`- Checked: ${checkedAt(audit.created_at).text}`)
   lines.push(`- Full results as JSON: ${origin}/audits/${audit.id}`)
@@ -68,8 +66,8 @@ function section(heading, groups, first) {
 }
 
 function factList(f, origin) {
-  const rows = factRows(f, origin).map(([term, { value, fromPage, note }]) => {
-    const text = fromPage ? quoted(value) : value
+  const rows = factRows(f, origin, code).map(([term, { value, fromPage, note }]) => {
+    const text = fromPage ? code(value) : value
     return `- ${term}: ${text}${note ? ` (${note})` : ''}`
   })
   return ['## What is on the page', rows.join('\n')]
@@ -91,8 +89,8 @@ function failedBrief(audit, origin) {
 const plain = (blocks) => `${blocks.join('\n\n').replaceAll('\u00a0', ' ')}\n`
 
 const INTRO =
-  'pageaudit checked this one page for problems with search, accessibility, sharing and hygiene. Text in quotes ' +
-  'or code spans comes from the page itself, not from pageaudit.'
+  'pageaudit checked this one page for problems with search, accessibility, sharing and hygiene. Text from the page ' +
+  'itself is set in code spans, apart from what pageaudit wrote.'
 
 export function resultBrief(audit, origin) {
   if (audit.status === 'failed') return plain(failedBrief(audit, origin))
