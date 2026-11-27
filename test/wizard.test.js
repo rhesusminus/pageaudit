@@ -22,6 +22,10 @@ import {
   wantsWizard
 } from '../src/wizard.js'
 
+// The prompts are tested as a real terminal would drive them. Under TERM=dumb readline turns off line editing and
+// ignores Ctrl+U and Tab, which these tests type.
+process.env.TERM = 'xterm-256color'
+
 const tty = { isTTY: true }
 const pipe = { isTTY: undefined }
 const fixturePath = (name) => new URL(`./fixtures/${name}`, import.meta.url).pathname
