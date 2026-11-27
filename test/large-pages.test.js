@@ -91,6 +91,14 @@ test('large pages: aria-labelledby references are each looked up once', () => {
   )
 })
 
+test('large pages: repeated aria-labelledby ids on one link are read once', () => {
+  assertLinear(
+    checkLinks,
+    3000,
+    (n) => `<div id="l">${'word '.repeat(n)}</div><a href="/" aria-labelledby="${'l '.repeat(n)}"></a>`
+  )
+})
+
 test('large pages: a large element that many aria-labelledby point at is read once', () => {
   // Each field has an id, so the selector in the evidence for a nameless field is that id and only names are measured.
   const fields = (n) => repeat(n, (i) => `<input id="f${i}" aria-labelledby="l">`)

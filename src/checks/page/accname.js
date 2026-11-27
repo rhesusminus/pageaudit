@@ -37,11 +37,10 @@ function contentText($, el, images, includeHidden = false) {
 const referencedText = ($, target) =>
   target.is('img') ? text(target.attr('alt')) : contentText($, target.get(0), true, isHidden(target.get(0)))
 
-// The elements an aria-labelledby points to, the first element with each id. Ids that do not exist give nothing.
+// The elements an aria-labelledby points to: the first element with each id, each id once. Ids that do not exist give
+// nothing.
 const labelledByTargets = ($, el) =>
-  ($(el).attr('aria-labelledby') ?? '')
-    .split(/\s+/)
-    .filter(Boolean)
+  [...new Set(($(el).attr('aria-labelledby') ?? '').split(/\s+/).filter(Boolean))]
     .map((id) => elementsById($).get(id)?.[0])
     .filter(Boolean)
 
