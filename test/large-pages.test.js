@@ -91,11 +91,14 @@ test('large pages: aria-labelledby references are each looked up once', () => {
   )
 })
 
-test('large pages: repeated aria-labelledby ids on one link are read once', () => {
+test('large pages: aria-labelledby that repeats an id reads it once', () => {
+  // Many links, so the page takes long enough to time. Each repeats the id of one large element, which a name that
+  // read it every time would join over and over.
+  const ids = 'l '.repeat(20)
   assertLinear(
     checkLinks,
-    3000,
-    (n) => `<div id="l">${'word '.repeat(n)}</div><a href="/" aria-labelledby="${'l '.repeat(n)}"></a>`
+    1500,
+    (n) => `<div id="l">${'word '.repeat(n)}</div>${repeat(n, () => `<a href="/" aria-labelledby="${ids}"></a>`)}`
   )
 })
 
