@@ -27,7 +27,7 @@ npm test
 
 The `pageaudit` bin is declared in `package.json`, so `npm link` makes it available as `pageaudit`.
 
-Run with no arguments in a terminal, `pageaudit` asks what to audit (page URLs, a sitemap or a URL file), which extra checks to run and which report files to write, suggesting names such as `example.com-2026-10-26-1430.html` (Enter takes a suggestion, Tab puts it in to edit). It then shows the audit as a command you can paste into a script, and asks whether to run it now. Ctrl+C exits 130. Without a terminal, as in scripts and CI, no arguments is a usage error.
+Run with no arguments in a terminal, `pageaudit` asks what to audit (page URLs, a sitemap or a URL file), which extra checks to run and which report files to write, suggesting names such as `example.com-2026-10-26-1430.html` (Enter takes a suggestion, Tab puts it in to edit). It then shows the audit as a command you can paste into a script, and asks whether to run it now. Ctrl+C exits 130. Without a terminal or in a dumb one, as in scripts and CI, no arguments is a usage error.
 
 ### Inputs
 

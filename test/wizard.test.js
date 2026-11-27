@@ -76,11 +76,14 @@ function tempDir(t) {
 const ONE_PAGE = [ENTER, 'https://a.test/\r', ENTER]
 
 test('wizard: only runs with no arguments and a terminal on both ends', () => {
-  assert.equal(wantsWizard([], tty, tty), true)
-  assert.equal(wantsWizard(['https://a.test/'], tty, tty), false)
-  assert.equal(wantsWizard(['--help'], tty, tty), false)
-  assert.equal(wantsWizard([], pipe, tty), false)
-  assert.equal(wantsWizard([], tty, pipe), false)
+  const term = { TERM: 'xterm-256color' }
+  assert.equal(wantsWizard([], tty, tty, term), true)
+  assert.equal(wantsWizard([], tty, tty, {}), true)
+  assert.equal(wantsWizard([], tty, tty, { TERM: 'dumb' }), false)
+  assert.equal(wantsWizard(['https://a.test/'], tty, tty, term), false)
+  assert.equal(wantsWizard(['--help'], tty, tty, term), false)
+  assert.equal(wantsWizard([], pipe, tty, term), false)
+  assert.equal(wantsWizard([], tty, pipe, term), false)
 })
 
 test('wizard: page URLs are checked like any other input', () => {
