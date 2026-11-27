@@ -9,52 +9,61 @@ import { hasBoundText, isBound } from './bindings.js'
 // and honours only explicit hiding (aria-hidden, hidden), since a static check cannot see CSS.
 // Script, style and noscript content is not part of a name: a browser that runs scripts does not show noscript.
 
-// Accessible names only feed emptiness checks and the generic-text match, so 500 characters of collapsed text
-// answers every check the same as the whole name.
+// Accessible names only feed emptiness checks and the generic-text match. The cap counts collapsed characters (not
+// just letters and digits), so a name cut short is judged the same unless it holds hundreds of punctuation characters
+// or symbols, which link names do not.
 const MAX_NAME = 500
 
 const text = (value) => {
   const raw = value ?? ''
-  return collapseWhitespace(raw.slice(0, nonSpaceEnd(raw, MAX_NAME).end)).slice(0, MAX_NAME)
+  const { end, found } = nonSpaceEnd(raw, MAX_NAME)
+  return found ? collapseWhitespace(raw.slice(0, end)).slice(0, MAX_NAME) : ''
+}
+
+// Joins non-empty collapsed parts from `items` with one space, stopping once MAX_NAME characters have been gathered.
+function joinCapped(items, partOf) {
+  const parts = []
+  let length = 0
+  for (const item of items) {
+    const part = partOf(item)
+    if (!part) continue
+    parts.push(part)
+    length += part.length + (parts.length > 1 ? 1 : 0)
+    if (length >= MAX_NAME) break
+  }
+  return parts.join(' ').slice(0, MAX_NAME)
 }
 
 const isHidden = (node) => node.attribs['aria-hidden'] === 'true' || node.attribs.hidden !== undefined
 
 // Text, image alt, nested aria-label and svg <title> inside an element, stopping once MAX_NAME characters of
-// collapsed text have been gathered. Explicitly hidden subtrees add nothing.
-function contentText($, el, images, includeHidden = false) {
-  const parts = []
-  let length = 0
-  const add = (value) => {
-    const { end, found } = nonSpaceEnd(value, MAX_NAME - length)
-    if (!found) return
-    const chunk = collapseWhitespace(value.slice(0, end))
-    parts.push(chunk)
-    length += chunk.length + (parts.length > 1 ? 1 : 0)
-  }
-  const walk = (node) => {
-    if (length >= MAX_NAME) return
-    if (node.type === 'text') return void add(node.data)
-    if (node.type !== 'tag' || node.name === 'noscript' || (!includeHidden && isHidden(node))) return
+// collapsed text have been gathered. Explicitly hidden subtrees add nothing. Kept per element for each set of
+// options, so nested targets and elements reuse each child's capped text instead of walking its subtree again.
+function contentTextOf(images, includeHidden) {
+  const nodeText = ($, node) => {
+    if (node.type === 'text') return text(node.data)
+    if (node.type !== 'tag' || node.name === 'noscript' || (!includeHidden && isHidden(node))) return ''
     // Attributes are read from the node: a cheerio wrapper for every node walked costs more than the walk itself.
-    if (node.name === 'img') return void (images && add(node.attribs.alt ?? ''))
+    if (node.name === 'img') return images ? text(node.attribs.alt) : ''
     const label = node.attribs['aria-label']
-    if (label) return void add(label)
+    if (label) return text(label)
     if (node.name === 'svg') {
       const title = $(node).children('title').first().text()
-      if (title) return void add(title)
+      if (title) return text(title)
     }
-    for (const child of node.children) {
-      walk(child)
-      if (length >= MAX_NAME) return
-    }
+    return childrenText($, node)
   }
-  for (const child of el.children ?? []) {
-    walk(child)
-    if (length >= MAX_NAME) break
-  }
-  return parts.join(' ').slice(0, MAX_NAME)
+  const childrenText = perElement(($, el) => joinCapped(el.children, (child) => nodeText($, child)))
+  return childrenText
 }
+
+// The four content-text walks, indexed [images][includeHidden], each option read as a boolean.
+const CONTENT_TEXT = [false, true].map((images) =>
+  [false, true].map((includeHidden) => contentTextOf(images, includeHidden))
+)
+
+const contentText = ($, el, images, includeHidden = false) =>
+  CONTENT_TEXT[Number(Boolean(images))][Number(Boolean(includeHidden))]($, el)
 
 // A referenced image names with its own alt. A hidden target brings its hidden descendants along.
 const referencedText = ($, target) =>
@@ -75,18 +84,7 @@ const targetName = perElement(($, target) => text($(target).attr('aria-label')) 
 // been gathered. Targets that are empty give nothing. A referenced element's own aria-labelledby is not followed, so
 // references cannot loop. Each part is collapsed already, so joining them is enough and a long shared name is not
 // scanned again for every reference.
-function labelledByText($, el) {
-  const parts = []
-  let length = 0
-  for (const target of labelledByTargets($, el)) {
-    const part = targetName($, target)
-    if (!part) continue
-    parts.push(part)
-    length += part.length + (parts.length > 1 ? 1 : 0)
-    if (length >= MAX_NAME) break
-  }
-  return parts.join(' ').slice(0, MAX_NAME)
-}
+const labelledByText = ($, el) => joinCapped(labelledByTargets($, el), (target) => targetName($, target))
 
 // The images inside an element that are not explicitly hidden, on their own or through an ancestor within it, in
 // document order. A plain walk that skips hidden subtrees: cheerio's find sorts what it finds, comparing positions
