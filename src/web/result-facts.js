@@ -12,6 +12,7 @@ import { count } from './format.js'
 const none = (value = 'None') => ({ value, missing: true })
 const fromPage = (value, note) => ({ value, fromPage: true, note })
 const said = (value) => ({ value })
+const quoted = (text) => `"${text}"`
 
 // "N characters", or "over N characters" for text the report cut short.
 export function lengthNote(text) {
@@ -24,10 +25,10 @@ const withLength = (text) => (text ? fromPage(text, lengthNote(text)) : none())
 // The report keeps only the first main headings, so a full list may not be all of them.
 const headingNote = (h1s) => (h1sAtCap(h1s) ? `the first ${h1s.length}, there may be more` : undefined)
 
-function socialPreview({ openGraph, twitterCard }) {
+function socialPreview({ openGraph, twitterCard }, quote = quoted) {
   if (!openGraph?.title && !twitterCard) return none()
   const parts = [openGraph?.title ? `Open Graph${openGraph.image ? ' with an image' : ', no image'}` : 'No Open Graph']
-  if (twitterCard) parts.push(`X card "${twitterCard}"`)
+  if (twitterCard) parts.push(`X card ${quote(twitterCard)}`)
   return said(parts.join(', '))
 }
 
@@ -36,8 +37,8 @@ function images({ total, missingAlt }) {
   return said(`${count(total, 'image')}, ${missingAlt ? `${missingAlt} without alt text` : 'all with alt text'}`)
 }
 
-// The theme name is the page's own text, so it is quoted, as everywhere else.
-export const platformName = ({ name, theme }) => (theme ? `${name}, theme "${theme}"` : name)
+// The theme name is the page's own text, so `quote` sets it apart: quotes on the HTML page and a code span in the brief.
+export const platformName = ({ name, theme }, quote = quoted) => (theme ? `${name}, theme ${quote(theme)}` : name)
 
 // A crawler token with the product it works for, as in "ChatGPT search (OAI-SearchBot)": the token is what robots.txt
 // names, the product is what a reader knows.
@@ -66,8 +67,9 @@ const originRows = (origin) =>
       ]
     : []
 
-// `origin` is the report's entry for the origin of the page, see `origins` in the report.
-export function factRows(f, origin) {
+// `origin` is the report's entry for the origin of the page, see `origins` in the report. `quote` sets page text
+// inside a said row apart, see platformName().
+export function factRows(f, origin, quote = quoted) {
   return [
     ['Title', withLength(f.title)],
     ['Description', withLength(f.description)],
@@ -77,9 +79,9 @@ export function factRows(f, origin) {
     ['Words', said(f.wordCount.toLocaleString('en'))],
     ['Links', said(`${f.links.internal} to this site, ${f.links.external} to other sites`)],
     ['Images', images(f.images)],
-    ['Social preview', socialPreview(f)],
+    ['Social preview', socialPreview(f, quote)],
     ['Structured data', f.jsonLdTypes.length ? fromPage(f.jsonLdTypes.join(', ')) : none()],
-    ['Built with', f.platform ? said(platformName(f.platform)) : none('Not recognised')],
+    ['Built with', f.platform ? said(platformName(f.platform, quote)) : none('Not recognised')],
     ...originRows(origin)
   ]
 }
