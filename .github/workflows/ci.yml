@@ -33,3 +33,6 @@ jobs:
 
       - name: Check lint and formatting
         run: npm run lint
+
+      - name: Check types
+        run: npm run typecheck
