@@ -24,20 +24,33 @@ const cpuMs = () => {
   return (user + system) / 1000
 }
 
-// Each run gets a page of its own, so nothing a check keeps per page carries over to the next run. The page is
+// The CPU clock of a CI runner can count in whole milliseconds, so a page that takes 1.4 ms measures 1 or 2 and the
+// ratio of two such times can be off by a factor of 2. Each run checks enough copies of a page to last at least this
+// long, and the time of one copy is the average.
+const MIN_RUN_MS = 10
+const MAX_COPIES = 20
+
+// Each copy is a page of its own, so nothing a check keeps per page carries over to the next one. The pages are
 // prepared before the clock starts: parsed for a check, kept as text when parsing itself is measured.
-function timed(check, html, prepare) {
-  const input = prepare(html)
+function timed(check, html, prepare, copies = 1) {
+  const inputs = Array.from({ length: copies }, () => prepare(html))
   const start = cpuMs()
-  check(input)
-  return cpuMs() - start
+  for (const input of inputs) check(input)
+  return (cpuMs() - start) / copies
 }
 
-// The fastest time of each of two pages, after one warm-up run of each. The pages take turns.
+// The fastest time of each of two pages, after one warm-up run of each. The pages take turns. The number of copies is
+// set from the first page, and both pages use it, so the larger one runs at least as long.
 function fastestTimes(check, first, second, prepare) {
   timed(check, first, prepare)
   timed(check, second, prepare)
-  const runs = Array.from({ length: RUNS }, () => [timed(check, first, prepare), timed(check, second, prepare)])
+  const once = timed(check, first, prepare)
+  // A page that measures 0 ms gets MAX_COPIES, one that takes MIN_RUN_MS or longer gets 1.
+  const copies = Math.max(1, Math.ceil(MIN_RUN_MS / Math.max(once, MIN_RUN_MS / MAX_COPIES)))
+  const runs = Array.from({ length: RUNS }, () => [
+    timed(check, first, prepare, copies),
+    timed(check, second, prepare, copies)
+  ])
   return [Math.min(...runs.map(([time]) => time)), Math.min(...runs.map(([, time]) => time))]
 }
 
