@@ -91,6 +91,44 @@ test('large pages: aria-labelledby references are each looked up once', () => {
   )
 })
 
+test('large pages: aria-labelledby that repeats an id reads it once', () => {
+  // Many links, so the page takes long enough to time. Each repeats the id of one large element, which a name that
+  // read it every time would join over and over.
+  const ids = 'l '.repeat(20)
+  assertLinear(
+    checkLinks,
+    1500,
+    (n) => `<div id="l">${'word '.repeat(n)}</div>${repeat(n, () => `<a href="/" aria-labelledby="${ids}"></a>`)}`
+  )
+})
+
+test('large pages: nested aria-labelledby targets stop once the name is long enough', () => {
+  // At 4 times the size the targets nest 400 deep, below the depth parse() caps the page at.
+  assertLinear(checkLinks, 100, (n) => {
+    const ids = Array.from({ length: n }, (_, i) => `n${i}`)
+    const open = ids.map((id) => `<div id="${id}">${'<span>word</span> '.repeat(20)}`).join('')
+    return `<a href="/" aria-labelledby="${ids.join(' ')}"></a>${open}${'</div>'.repeat(n)}`
+  })
+})
+
+test('large pages: nested empty aria-labelledby targets reuse each child result', () => {
+  // At 4 times the size the targets nest 400 deep, below the depth parse() caps the page at.
+  assertLinear(checkLinks, 100, (n) => {
+    const ids = Array.from({ length: n }, (_, i) => `n${i}`)
+    const open = ids.map((id) => `<div id="${id}">${'<b></b>'.repeat(20)}`).join('')
+    return `<a href="/" aria-labelledby="${ids.join(' ')}"></a>${open}${'</div>'.repeat(n)}`
+  })
+})
+
+test('large pages: nested aria-labelledby targets with text only at the bottom reuse each child result', () => {
+  // At 4 times the size the targets nest 240 deep, below the depth parse() caps the page at.
+  assertLinear(checkLinks, 60, (n) => {
+    const ids = Array.from({ length: n }, (_, i) => `n${i}`)
+    const open = ids.map((id) => `<div id="${id}">${'<b></b>'.repeat(30)}`).join('')
+    return `<a href="/" aria-labelledby="${ids.join(' ')}"></a>${open}x${'</div>'.repeat(n)}`
+  })
+})
+
 test('large pages: a large element that many aria-labelledby point at is read once', () => {
   // Each field has an id, so the selector in the evidence for a nameless field is that id and only names are measured.
   const fields = (n) => repeat(n, (i) => `<input id="f${i}" aria-labelledby="l">`)

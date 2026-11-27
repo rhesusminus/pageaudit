@@ -116,6 +116,18 @@ test('names: aria-labelledby that references itself or another reference does no
   )
 })
 
+test('names: aria-labelledby reads each id once', () => {
+  assert.deepEqual(links('<span id="l">here</span><a href="/a" aria-labelledby="l l"></a>'), ['link-generic-text'])
+})
+
+test('names: long whitespace runs and long names still work past the name cap', () => {
+  assert.deepEqual(links(`<a href="/a">here${' '.repeat(600)}about pricing</a>`), [])
+  assert.deepEqual(links(`<a href="/a"><span>here</span>${' '.repeat(600)}<span>about pricing</span></a>`), [])
+  assert.deepEqual(links(`<a href="/a" aria-label="here${' '.repeat(600)}about pricing"></a>`), [])
+  assert.deepEqual(links(`<a href="/a">${'a'.repeat(600)}</a>`), [])
+  assert.deepEqual(links(`<a href="/a" aria-label="${'a'.repeat(600)}"></a>`), [])
+})
+
 test('names: explicitly hidden descendants do not name a link', () => {
   assert.deepEqual(links('<a href="/"><span aria-hidden="true">Home</span></a>'), ['link-no-name'])
   assert.deepEqual(links('<a href="/"><span hidden>Home</span></a>'), ['link-no-name'])
