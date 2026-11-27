@@ -8,10 +8,10 @@ const pipe = { isTTY: undefined }
 const ARGS = ['https://a.test/', '--html', 'report.html']
 
 // main with a wizard that gives `setup` and an audit that exits 1, both recording their calls.
-function start(t, argv, setup, { stdin = tty, stdout = tty } = {}) {
+function start(t, argv, setup, { stdin = tty, stdout = tty, env = { TERM: 'xterm-256color' } } = {}) {
   const ask = t.mock.fn(async () => setup)
   const audit = t.mock.fn(async () => 1)
-  return { code: main(argv, { stdin, stdout, ask, audit }), ask, audit }
+  return { code: main(argv, { stdin, stdout, env, ask, audit }), ask, audit }
 }
 
 test('main: runs the setup from the wizard once when told to run it now', async (t) => {
@@ -36,13 +36,14 @@ test('main: exits 130 without auditing when the wizard is cancelled', async (t) 
   assert.equal(audit.mock.callCount(), 0)
 })
 
-test('main: audits the arguments as given, without the wizard, when given any or not in a terminal', async (t) => {
-  for (const [argv, streams] of [
+test('main: audits the arguments as given, without the wizard, when given any, not in a terminal or in a dumb one', async (t) => {
+  for (const [argv, options] of [
     [ARGS, {}],
     [[], { stdin: pipe }],
-    [[], { stdout: pipe }]
+    [[], { stdout: pipe }],
+    [[], { env: { TERM: 'dumb' } }]
   ]) {
-    const { code, ask, audit } = start(t, argv, { args: ['https://b.test/'], runNow: true }, streams)
+    const { code, ask, audit } = start(t, argv, { args: ['https://b.test/'], runNow: true }, options)
     assert.equal(await code, 1)
     assert.equal(ask.mock.callCount(), 0)
     assert.deepEqual(

@@ -10,9 +10,11 @@ import { OPTIONS } from './options.js'
 import { contentPathProblem, reportPathProblem, sameFile } from './output.js'
 import { suggest } from './suggest-prompt.js'
 
-// The setup is asked only when nothing was given and a person is at the terminal, so scripts, pipes and CI keep
-// getting the usage error.
-export const wantsWizard = (argv, stdin, stdout) => argv.length === 0 && Boolean(stdin.isTTY) && Boolean(stdout.isTTY)
+// The setup is asked only when nothing was given and a person is at a capable terminal, so scripts, pipes, CI and
+// dumb terminals keep getting the usage error. In a dumb terminal readline turns off line editing and clack's redraws
+// need cursor movement.
+export const wantsWizard = (argv, stdin, stdout, env = process.env) =>
+  argv.length === 0 && Boolean(stdin.isTTY) && Boolean(stdout.isTTY) && env.TERM !== 'dumb'
 
 const words = (value = '') => value.trim().split(/\s+/).filter(Boolean)
 
