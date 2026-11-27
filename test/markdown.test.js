@@ -67,6 +67,32 @@ test('markdown: images keep their alt text, and one with no alt attribute says s
   )
 })
 
+test('markdown: an image with a non-web scheme keeps only its alt text', () => {
+  assert.equal(body('<p><img src="javascript:alert(1)" alt="a"></p>'), 'a')
+})
+
+test('markdown: an image whose src does not parse as a URL keeps only its alt text', () => {
+  assert.equal(body('<p><img src="http://[bad" alt="c"></p>'), 'c')
+})
+
+test('markdown: a data URI image target encodes characters that end or escape a Markdown destination', () => {
+  const md = body('<p><img src=\'data:image/svg+xml,<svg a="1"></svg>\' alt="icon"></p>')
+  const match = md.match(/^!\[icon\]\(([^)]+)\)$/)
+  assert.ok(match, md)
+  const target = match[1]
+  assert.ok(target.startsWith('data:image/svg+xml,'), target)
+  assert.doesNotMatch(target, /[\s<>\\]/)
+  assert.equal(body('<p><img src="data:text/plain,a\nb\u00a0c" alt="t"></p>'), '![t](data:text/plain,a%0Ab%C2%A0c)')
+  assert.equal(body('<p><img src="data:x,a&#1;b" alt="x"></p>'), '![x](data:x,a%01b)')
+  assert.equal(body('<p><img src="data:x,a&#127;b" alt="x"></p>'), '![x](data:x,a%7Fb)')
+})
+
+test('markdown: a trailing backslash in an image target does not escape the closing parenthesis', () => {
+  const md = body('<p><img src="data:text/plain,a\\" alt="x"></p>')
+  assert.ok(md.endsWith('%5C)'), md)
+  assert.equal(md, '![x](data:text/plain,a%5C)')
+})
+
 test('markdown: lists nest, ordered lists keep their start, and a paragraph in an item is indented', () => {
   const html =
     '<ul><li>One<ul><li>Nested</li></ul></li><li><p>Two</p><p>More</p></li><li></li></ul><ol start="3"><li>Three</li><li>Four</li></ol>'
