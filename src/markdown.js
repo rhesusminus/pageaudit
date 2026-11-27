@@ -57,13 +57,20 @@ export function code(text) {
 
 const attr = (node, name) => node.attribs?.[name]
 
-// A URL that cannot end a Markdown link early. Resolved URLs have no spaces, but parentheses stay as written.
-const linkTarget = (url) => url.replaceAll('(', '%28').replaceAll(')', '%29')
+// A target that cannot end or escape a Markdown destination.
+const linkTarget = (url) =>
+  url
+    .replaceAll('(', '%28')
+    .replaceAll(')', '%29')
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: CommonMark forbids ASCII control characters in link destinations
+    .replace(/[\s\\<>\x00-\x1f\x7f]/g, (ch) => encodeURIComponent(ch))
 
 function image(node, ctx) {
   const alt = attr(node, 'alt')
   const shownAlt = escapeMarkdown((alt ?? '').replace(/\s+/g, ' ').trim())
-  const src = imageSrc((attr(node, 'src') ?? '').trim(), ctx.base)
+  const raw = (attr(node, 'src') ?? '').trim()
+  const allowed = raw && (/^data:/i.test(raw) || /^https?:/.test(absolute(raw, ctx.base) ?? ''))
+  const src = allowed ? imageSrc(raw, ctx.base) : null
   if (!src) return shownAlt
   // An image with no alt attribute at all is a different finding from one with alt="".
   return alt === undefined ? `![](${linkTarget(src)} "no alt attribute")` : `![${shownAlt}](${linkTarget(src)})`
