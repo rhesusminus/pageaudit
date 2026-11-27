@@ -99,6 +99,15 @@ test('large pages: repeated aria-labelledby ids on one link are read once', () =
   )
 })
 
+test('large pages: nested aria-labelledby targets stop once the name is long enough', () => {
+  // At 4 times the size the targets nest 400 deep, below the depth parse() caps the page at.
+  assertLinear(checkLinks, 100, (n) => {
+    const ids = Array.from({ length: n }, (_, i) => `n${i}`)
+    const open = ids.map((id) => `<div id="${id}">${'<span>word</span> '.repeat(20)}`).join('')
+    return `<a href="/" aria-labelledby="${ids.join(' ')}"></a>${open}${'</div>'.repeat(n)}`
+  })
+})
+
 test('large pages: a large element that many aria-labelledby point at is read once', () => {
   // Each field has an id, so the selector in the evidence for a nameless field is that id and only names are measured.
   const fields = (n) => repeat(n, (i) => `<input id="f${i}" aria-labelledby="l">`)
